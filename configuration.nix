@@ -18,14 +18,23 @@
   networking = {
     hostName = "redline";
     networkmanager.enable = true;
-    firewall.allowedTCPPorts = [ 22 7860 8000 ];
+    firewall.allowedTCPPorts = [
+      22 # ssh
+      7860 # automatic1111
+      8000 # python -m http.server
+      8384 # syncthing GUI
+      22000 # syncthing traffic
+    ];
+    firewall.allowedUDPPorts =  [
+      22000 # syncthing traffic
+    ];
     interfaces.enp67s0f1 = {
       useDHCP = false;
       ipv4.addresses = [
-	{
-	  address = "192.168.50.201";
-	  prefixLength = 24;
-	}
+        {
+          address = "192.168.50.201";
+          prefixLength = 24;
+        }
       ];
     };
     defaultGateway = "192.168.50.1";
@@ -82,5 +91,25 @@
     layout = "au";
     xkbVariant = "";
     videoDrivers = ["nvidia"];
+  };
+  services.syncthing = {
+    enable = true;
+    user = "philpax";
+    dataDir = "/home/philpax";
+    configDir = "/home/philpax/.config/syncthing";
+    overrideDevices = true;
+    overrideFolders = true;
+    guiAddress = "0.0.0.0:8384";
+    settings = {
+      devices = {
+        "valkyrie" = { id = "YLT7IT5-EPPNEXT-XEAFQ45-JZULUBI-JER6IEI-GDSVXRA-MVCCPLD-IOHN5AH"; };
+      };
+      folders = {
+        "Documents" = {
+          path = "/home/philpax/Documents";
+          devices = [ "valkyrie" ];
+        };
+      };
+    };
   };
 }
