@@ -13,6 +13,8 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
+  powerManagement.cpuFreqGovernor = "ondemand";
+
   networking = {
     hostName = "redline";
     networkmanager.enable = true;
