@@ -78,6 +78,8 @@
     pkg-config
     screen
     lunarvim
+    ffmpeg
+    python3
   ];
   programs.neovim = {
     enable = true;
