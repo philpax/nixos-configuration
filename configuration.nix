@@ -87,6 +87,7 @@
     ffmpeg
     python3
     awscli2
+    jq
   ];
   programs.neovim = {
     enable = true;
