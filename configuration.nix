@@ -37,7 +37,7 @@ in
     firewall.allowedUDPPorts =  [
       22000 # syncthing traffic
     ];
-    interfaces.enp67s0f1 = {
+    interfaces.enp68s0f1 = {
       useDHCP = false;
       ipv4.addresses = [
         {
