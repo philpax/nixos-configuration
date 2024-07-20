@@ -15,6 +15,39 @@ in
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.supportedFilesystems = [ "ntfs" ];
+
+  fileSystems = {
+    "/mnt/ssd2" = {
+      device = "/dev/disk/by-uuid/83a6c26f-d241-4f80-8c47-c1801d211835";
+      fsType = "ext4";
+      options = [ "defaults" "nofail" ];
+    };
+
+    "/mnt/hdd1" = {
+      device = "/dev/disk/by-uuid/f6a10ed9-5d48-4289-ab7a-d3a5a171a378";
+      fsType = "ext4";
+      options = [ "defaults" "nofail" ];
+    };
+
+    "/mnt/hdd2" = {
+      device = "/dev/disk/by-uuid/0d71effe-7cd4-469f-b320-44155526c44a";
+      fsType = "ext4";
+      options = [ "defaults" "nofail" ];
+    };
+
+    "/mnt/external" = {
+      device = "/dev/disk/by-uuid/9EB67FDDB67FB47D";
+      fsType = "ntfs";
+      options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
+    };
+
+    "/mnt/programs" = {
+      device = "/dev/disk/by-uuid/30D0BD2BD0BCF7E4";
+      fsType = "ntfs";
+      options = [ "defaults" "nofail" ];
+    };
+  };
 
   powerManagement.cpuFreqGovernor = "ondemand";
 
@@ -91,6 +124,8 @@ in
     python3
     awscli2
     jq
+    rye
+    ntfs3g
   ];
   programs.neovim = {
     enable = true;
