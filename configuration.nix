@@ -153,11 +153,16 @@ in
     qemu
     OVMF
     virt-viewer
+    grim
+    slurp
+    wl-clipboard
+    mako
   ];
   programs.neovim = {
     enable = true;
     defaultEditor = true;
   };
+  programs.sway = { enable = true; wrapperFeatures.gtk = true; };
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
@@ -200,4 +205,6 @@ in
       promare.philpax.me
     '';
   };
+  services.gnome.gnome-keyring.enable = true;
+  security.polkit.enable = true;
 }
