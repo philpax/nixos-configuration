@@ -57,6 +57,7 @@ in
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
   hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
+  hardware.nvidia.modesetting.enable = true;
 
   nixpkgs.config.pulseaudio = true;
   hardware.pulseaudio.enable = true;
@@ -157,12 +158,14 @@ in
     slurp
     wl-clipboard
     mako
+    pkgs.discord
   ];
   programs.neovim = {
     enable = true;
     defaultEditor = true;
   };
   programs.sway = { enable = true; wrapperFeatures.gtk = true; };
+  programs.firefox.enable = true;
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
