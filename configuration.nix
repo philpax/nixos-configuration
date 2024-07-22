@@ -10,6 +10,7 @@ in
     ];
 
   system.stateVersion = "23.11";
+  system.autoUpgrade.enable = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
 
@@ -53,8 +54,12 @@ in
 
   powerManagement.cpuFreqGovernor = "ondemand";
 
-  hardware.opengl.enable = true;
-  hardware.opengl.driSupport32Bit = true;
+  hardware.graphics.enable = true;
+  hardware.graphics.enable32Bit = true;
+  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
+
+  nixpkgs.config.pulseaudio = true;
+  hardware.pulseaudio.enable = true;
 
   virtualisation.docker.enable = true;
   virtualisation.docker.enableNvidia = true;
@@ -158,8 +163,10 @@ in
   services.openssh.settings.PasswordAuthentication = false;
   services.hardware.openrgb.enable = true;
   services.xserver = {
-    layout = "au";
-    xkbVariant = "";
+    xkb = {
+      layout = "au";
+      variant = "";
+    };
     videoDrivers = ["nvidia"];
   };
   services.syncthing = {
