@@ -1,5 +1,3 @@
-My NixOS configuration. Very basic. May extend later.
+# NixOS configuration
 
-**2024-04-27**
-In hindsight, this was not the best time to get into NixOS. Oh well.
-Fuck Anduril, btw
+My NixOS configuration. Clone somewhere, then run `./sync.sh` to create symlinks to the relevant locations.
