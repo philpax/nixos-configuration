@@ -164,6 +164,18 @@ in
     foot.themes
     xdg-utils
     nodejs_22
+    wineWowPackages.stable
+    winetricks
+    pkgsCross.mingw32.stdenv.cc
+    pkgsCross.mingw32.windows.pthreads
+    glibc_multi.dev
+    pkgsCross.mingwW64.stdenv.cc
+    pkgsCross.mingwW64.windows.pthreads
+    llvmPackages_17.bintools
+    vscode.fhs
+    ripgrep
+    p7zip
+    clang
   ];
   fonts.packages = with pkgs; [
     cozette
@@ -218,5 +230,10 @@ in
     '';
   };
   services.gnome.gnome-keyring.enable = true;
+  services.samba = {
+    enable = true;
+    enableWinbindd = true;
+  };
+
   security.polkit.enable = true;
 }
