@@ -158,7 +158,10 @@ in
     slurp
     wl-clipboard
     mako
-    pkgs.discord
+    discord
+  ];
+  fonts.packages = with pkgs; [
+    cozette
   ];
   programs.neovim = {
     enable = true;

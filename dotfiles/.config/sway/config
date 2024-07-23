@@ -30,6 +30,7 @@ output * bg /run/current-system/sw/share/backgrounds/sway/Sway_Wallpaper_Blue_19
 #   output HDMI-A-1 resolution 1920x1080 position 1920,0
 #
 # You can get the names of your outputs by running: swaymsg -t get_outputs
+output DP-1 mode 3440x1440@144.000Hz
 
 ### Idle configuration
 #
@@ -213,5 +214,7 @@ bar {
         inactive_workspace #32323200 #32323200 #5c5c5c
     }
 }
+
+font pango:Cozette 8
 
 include /etc/sway/config.d/*
