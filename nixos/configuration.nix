@@ -159,6 +159,8 @@ in
     wl-clipboard
     mako
     discord
+    swaylock
+    swayidle
   ];
   fonts.packages = with pkgs; [
     cozette
