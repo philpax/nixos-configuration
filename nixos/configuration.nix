@@ -143,7 +143,6 @@ in
     openssl.dev
     pkg-config
     screen
-    lunarvim
     ffmpeg
     python3
     awscli2
@@ -163,6 +162,8 @@ in
     swayidle
     foot
     foot.themes
+    xdg-utils
+    nodejs_22
   ];
   fonts.packages = with pkgs; [
     cozette
