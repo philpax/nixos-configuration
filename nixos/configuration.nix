@@ -161,6 +161,8 @@ in
     discord
     swaylock
     swayidle
+    foot
+    foot.themes
   ];
   fonts.packages = with pkgs; [
     cozette
@@ -171,6 +173,7 @@ in
   };
   programs.sway = { enable = true; wrapperFeatures.gtk = true; };
   programs.firefox.enable = true;
+  environment.pathsToLink = [ "/share/foot" ];
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
