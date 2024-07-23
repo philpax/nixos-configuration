@@ -8,8 +8,6 @@ end
 -- Plugin setup
 require('packer').startup(function(use)
   use 'wbthomason/packer.nvim'
-  use 'neovim/nvim-lspconfig'
-  use 'nvim-treesitter/nvim-treesitter'
   use 'tpope/vim-surround'
   use 'kyazdani42/nvim-tree.lua'
   use {
@@ -17,19 +15,8 @@ require('packer').startup(function(use)
     requires = { {'nvim-lua/plenary.nvim'} }
   }
   use 'github/copilot.vim'
+  use 'mrcjkb/rustaceanvim'
 end)
-
--- LSP setup
-local lspconfig = require('lspconfig')
-lspconfig.rust_analyzer.setup{}
-
--- Treesitter setup
-require('nvim-treesitter.configs').setup {
-  ensure_installed = { "rust", "lua" },
-  highlight = {
-    enable = true,
-  },
-}
 
 -- nvim-tree setup
 require('nvim-tree').setup{}
