@@ -63,7 +63,7 @@ in
   hardware.pulseaudio.enable = true;
 
   virtualisation.docker.enable = true;
-  virtualisation.docker.enableNvidia = true;
+  hardware.nvidia-container-toolkit.enable = true;
   virtualisation.libvirtd = {
     enable = true;
     qemu = {
@@ -171,6 +171,7 @@ in
     ripgrep
     p7zip
     clang
+    pavucontrol
   ];
   fonts.packages = with pkgs; [
     cozette
