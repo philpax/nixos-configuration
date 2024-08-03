@@ -182,7 +182,26 @@ in
   };
   programs.sway = { enable = true; wrapperFeatures.gtk = true; };
   programs.firefox.enable = true;
+  programs.steam = {
+  enable = true;
+    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
+    dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
+    localNetworkGameTransfers.openFirewall = true; # Open ports in the firewall for Steam Local Network Game Transfers
+  };
   environment.pathsToLink = [ "/share/foot" ];
+  xdg.portal = {
+    enable = true;
+    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    wlr.enable = true;
+  };
+  # https://github.com/NixOS/nixpkgs/issues/262286
+  nixpkgs.overlays = [ (self: super: {
+    xdg-desktop-portal-gtk = super.xdg-desktop-portal-gtk.overrideAttrs {
+      postInstall = ''
+        sed -i 's/UseIn=gnome/UseIn=gnome;sway/' $out/share/xdg-desktop-portal/portals/gtk.portal
+      '';
+    };
+  } ) ];
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
