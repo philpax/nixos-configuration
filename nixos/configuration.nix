@@ -56,6 +56,9 @@ in
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
+  hardware.graphics.extraPackages = with pkgs; [
+    vulkan-validation-layers
+  ];
   hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
   hardware.nvidia.modesetting.enable = true;
 
@@ -158,8 +161,10 @@ in
     wl-clipboard
     mako
     discord
+    swayfx
     swaylock
     swayidle
+    wmenu
     foot
     foot.themes
     xdg-utils
@@ -181,7 +186,6 @@ in
     enable = true;
     defaultEditor = true;
   };
-  programs.sway = { enable = true; wrapperFeatures.gtk = true; };
   programs.firefox.enable = true;
   programs.steam = {
     enable = true;
@@ -193,6 +197,7 @@ in
   xdg.portal = {
     enable = true;
     extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    config.common.default = "*";
     wlr.enable = true;
   };
   # https://github.com/NixOS/nixpkgs/issues/262286
