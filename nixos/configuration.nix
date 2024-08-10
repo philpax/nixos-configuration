@@ -177,6 +177,8 @@ in
     p7zip
     clang
     pavucontrol
+    neovide
+    spotify
   ];
   fonts.packages = with pkgs; [
     cozette
