@@ -253,6 +253,10 @@ in
     '';
   };
   services.gnome.gnome-keyring.enable = true;
+  services.plex = {
+    enable = true;
+    openFirewall = true;
+  };
 
   security.polkit.enable = true;
   security.pam.services.swaylock = {};
