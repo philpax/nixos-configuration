@@ -181,9 +181,13 @@ in
     spotify
   ];
   fonts.packages = with pkgs; [
+    noto-fonts
+    noto-fonts-cjk
+    noto-fonts-emoji
     cozette
     iosevka
   ];
+  fonts.enableDefaultPackages = true;
   programs.neovim = {
     enable = true;
     defaultEditor = true;
