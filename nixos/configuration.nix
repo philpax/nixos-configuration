@@ -179,6 +179,7 @@ in
     pavucontrol
     neovide
     spotify
+    obsidian
   ];
   fonts.packages = with pkgs; [
     noto-fonts
