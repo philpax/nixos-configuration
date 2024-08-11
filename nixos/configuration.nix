@@ -264,6 +264,12 @@ in
     enable = true;
     openFirewall = true;
   };
+  services.navidrome = {
+    enable = true;
+    settings = {
+      MusicFolder = "/mnt/external/Music";
+    };
+  };
 
   security.polkit.enable = true;
   security.pam.services.swaylock = {};
