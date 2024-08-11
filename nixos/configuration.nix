@@ -189,6 +189,8 @@ in
     defaultEditor = true;
   };
   programs.firefox.enable = true;
+  programs.envision.enable = true;
+  programs.adb.enable = true;
   programs.steam = {
     enable = true;
     remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
