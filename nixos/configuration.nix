@@ -57,7 +57,8 @@ in
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
   hardware.graphics.extraPackages = with pkgs; [
-    vulkan-validation-layers
+   # https://github.com/NixOS/nixpkgs/issues/334822
+   # vulkan-validation-layers
   ];
   hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
   hardware.nvidia.modesetting.enable = true;
@@ -148,7 +149,8 @@ in
     screen
     ffmpeg
     python3
-    awscli2
+    # broken due to test failure, try again some other time:
+    # awscli2
     jq
     rye
     ntfs3g
@@ -196,6 +198,7 @@ in
   programs.firefox.enable = true;
   programs.envision.enable = true;
   programs.adb.enable = true;
+
   programs.steam = {
     enable = true;
     remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
