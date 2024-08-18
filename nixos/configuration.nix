@@ -182,6 +182,8 @@ in
     neovide
     spotify
     obsidian
+    pcmanfm
+    xfce.ristretto
   ];
   fonts.packages = with pkgs; [
     noto-fonts
@@ -273,6 +275,8 @@ in
       MusicFolder = "/mnt/external/Music";
     };
   };
+  services.gvfs.enable = true;
+  services.tumbler.enable = true;
 
   security.polkit.enable = true;
   security.pam.services.swaylock = {};
