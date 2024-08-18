@@ -149,6 +149,7 @@ in
     screen
     ffmpeg
     python3
+    poetry
     # broken due to test failure, try again some other time:
     # awscli2
     jq
