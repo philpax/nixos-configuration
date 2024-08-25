@@ -245,11 +245,16 @@ in
     settings = {
       devices = {
         "valkyrie" = { id = "YLT7IT5-EPPNEXT-XEAFQ45-JZULUBI-JER6IEI-GDSVXRA-MVCCPLD-IOHN5AH"; };
+        "work-mbp" = { id = "M7B25AH-7XH4Q46-MYV6HNH-Z75MNY6-ANKOHUW-FLKFCSW-7U7MCGB-YYVWGQM"; };
       };
       folders = {
         "Documents" = {
           path = "/home/philpax/Documents";
           devices = [ "valkyrie" ];
+        };
+        "Notes" = {
+          path = "/mnt/programs/Documents/Notes";
+          devices = [ "work-mbp" ];
         };
       };
     };
