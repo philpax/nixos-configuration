@@ -186,6 +186,9 @@ in
     obsidian
     pcmanfm
     xfce.ristretto
+    jellyfin
+    jellyfin-web
+    jellyfin-ffmpeg
   ];
   fonts.packages = with pkgs; [
     noto-fonts
@@ -284,6 +287,10 @@ in
   };
   services.gvfs.enable = true;
   services.tumbler.enable = true;
+  services.jellyfin = {
+    enable = true;
+    openFirewall = true;
+  };
 
   security.polkit.enable = true;
   security.pam.services.swaylock = {};
