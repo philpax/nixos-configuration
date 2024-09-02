@@ -60,14 +60,15 @@ in
    # https://github.com/NixOS/nixpkgs/issues/334822
    # vulkan-validation-layers
   ];
-  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
+  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.beta;
   hardware.nvidia.modesetting.enable = true;
+  hardware.nvidia.open = true;
+  hardware.nvidia-container-toolkit.enable = true;
 
   nixpkgs.config.pulseaudio = true;
   hardware.pulseaudio.enable = true;
 
   virtualisation.docker.enable = true;
-  hardware.nvidia-container-toolkit.enable = true;
   virtualisation.libvirtd = {
     enable = true;
     qemu = {
