@@ -189,6 +189,7 @@ in
     jellyfin
     jellyfin-web
     jellyfin-ffmpeg
+    vlc
   ];
   fonts.packages = with pkgs; [
     noto-fonts
