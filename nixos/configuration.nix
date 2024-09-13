@@ -95,6 +95,7 @@ in
       8384 # syncthing GUI
       22000 # syncthing traffic
       5900 5901 5902 # spice/vnc
+      31337 31338 # game server
     ];
     firewall.allowedUDPPorts =  [
       22000 # syncthing traffic
