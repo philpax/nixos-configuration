@@ -190,6 +190,8 @@ in
     jellyfin-web
     jellyfin-ffmpeg
     vlc
+    yt-dlp
+    (openai-whisper-cpp.override { cudaSupport = true; })
   ];
   fonts.packages = with pkgs; [
     noto-fonts
