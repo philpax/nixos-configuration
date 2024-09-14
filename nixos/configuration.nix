@@ -174,7 +174,7 @@ in
     wl-clipboard
     mako
     discord
-    swayfx
+    sway
     swaylock
     swayidle
     wmenu
