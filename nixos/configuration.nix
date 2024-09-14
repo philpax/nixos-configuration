@@ -17,8 +17,22 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.supportedFilesystems = [ "ntfs" ];
+  boot.initrd.kernelModules = [
+    "vfio_pci"
+    "vfio"
+    "vfio_iommu_type1"
+
+    "nvidia"
+    "nvidia_modeset"
+    "nvidia_uvm"
+    "nvidia_drm"
+  ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+  boot.kernelParams = [
+    "amd_iommu=on"
+    "vfio-pci.ids=10de:2204,10de:1aef"
+  ];
 
   fileSystems = {
     "/mnt/ssd2" = {
@@ -73,17 +87,12 @@ in
     enable = true;
     qemu = {
       package = pkgs.qemu_kvm;
-      runAsRoot = true;
       swtpm.enable = true;
-      ovmf = {
-        enable = true;
-        packages = [(pkgs.OVMF.override {
-          secureBoot = true;
-          tpmSupport = true;
-        }).fd];
-      };
+      ovmf.enable = true;
+      ovmf.packages = [ pkgs.OVMFFull.fd ];
     };
   };
+  virtualisation.spiceUSBRedirection.enable = true;
 
   networking = {
     hostName = "redline";
@@ -158,10 +167,8 @@ in
     jq
     rye
     ntfs3g
-    virt-manager
     qemu
     OVMF
-    virt-viewer
     grim
     slurp
     wl-clipboard
@@ -194,6 +201,12 @@ in
     vlc
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
+
+    # vm
+    virt-viewer
+    spice
+    spice-gtk
+    spice-protocol
   ];
   fonts.packages = with pkgs; [
     noto-fonts
@@ -210,7 +223,7 @@ in
   programs.firefox.enable = true;
   programs.envision.enable = true;
   programs.adb.enable = true;
-
+  programs.virt-manager.enable = true;
   programs.steam = {
     enable = true;
     remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
