@@ -202,6 +202,7 @@ in
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
     google-chrome
+    imagemagick
 
     # vm
     virt-viewer
