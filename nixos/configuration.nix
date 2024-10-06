@@ -80,7 +80,7 @@ in
   hardware.nvidia-container-toolkit.enable = true;
 
   nixpkgs.config.pulseaudio = true;
-  hardware.pulseaudio.enable = true;
+  hardware.pulseaudio.enable = false;
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd = {
@@ -201,6 +201,7 @@ in
     vlc
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
+    google-chrome
 
     # vm
     virt-viewer
@@ -220,7 +221,15 @@ in
     enable = true;
     defaultEditor = true;
   };
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    package = pkgs.firefox-wayland;
+  };
+
+  environment.sessionVariables = {
+    MOZ_ENABLE_WAYLAND = "1";
+    XDG_CURRENT_DESKTOP = "sway";
+  };
   programs.envision.enable = true;
   programs.adb.enable = true;
   programs.virt-manager.enable = true;
@@ -233,9 +242,18 @@ in
   environment.pathsToLink = [ "/share/foot" ];
   xdg.portal = {
     enable = true;
-    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-    config.common.default = "*";
+    config = {
+      common = {
+        default = "wlr";
+      };
+    };
+    extraPortals = [ pkgs.xdg-desktop-portal-gtk pkgs.xdg-desktop-portal-wlr ];
     wlr.enable = true;
+    wlr.settings.screencast = {
+      output_name = "DP-1";
+      chooser_type = "simple";
+      chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
+    };
   };
   # https://github.com/NixOS/nixpkgs/issues/262286
   nixpkgs.overlays = [ (self: super: {
@@ -336,6 +354,15 @@ in
       RestartSec = "10s";
       User = "root";  # Docker typically requires root permissions
     };
+  };
+  security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+    jack.enable = true;
+    audio.enable = true;
   };
 
   security.polkit.enable = true;
