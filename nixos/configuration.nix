@@ -74,7 +74,7 @@ in
    # https://github.com/NixOS/nixpkgs/issues/334822
    # vulkan-validation-layers
   ];
-  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.beta;
+  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.latest;
   hardware.nvidia.modesetting.enable = true;
   hardware.nvidia.open = true;
   hardware.nvidia-container-toolkit.enable = true;
@@ -200,7 +200,7 @@ in
     jellyfin-ffmpeg
     vlc
     yt-dlp
-    (openai-whisper-cpp.override { cudaSupport = true; })
+    # (openai-whisper-cpp.override { cudaSupport = true; })
     google-chrome
     imagemagick
 
