@@ -203,6 +203,7 @@ in
     # (openai-whisper-cpp.override { cudaSupport = true; })
     google-chrome
     imagemagick
+    prismlauncher
 
     # vm
     virt-viewer
@@ -327,6 +328,15 @@ in
   services.jellyfin = {
     enable = true;
     openFirewall = true;
+  };
+  services.minecraft-server = {
+    enable = true;
+    eula = true;
+    openFirewall = true;
+
+    package = pkgs.papermc;
+
+    jvmOpts = "-Xms4092M -Xmx4092M -XX:+UseG1GC";
   };
   systemd.services.comfyui = {
     description = "ComfyUI Docker Container";
