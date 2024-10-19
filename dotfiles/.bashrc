@@ -11,3 +11,5 @@ HISTCONTROL=ignoredups:erasedups
 
 # Append to history file instead of overwriting
 shopt -s histappend
+
+export PATH="$HOME/.cargo/bin:$PATH"
