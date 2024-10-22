@@ -204,6 +204,8 @@ in
     google-chrome
     imagemagick
     prismlauncher
+    darktable
+    gphoto2fs
 
     # vm
     virt-viewer
@@ -375,6 +377,8 @@ in
     jack.enable = true;
     audio.enable = true;
   };
+  services.udisks2.enable = true;
+  services.devmon.enable = true;
 
   security.polkit.enable = true;
   security.pam.services.swaylock = {};
