@@ -286,17 +286,12 @@ in
     configDir = "/home/philpax/.config/syncthing";
     overrideDevices = true;
     overrideFolders = true;
-    guiAddress = "0.0.0.0:8384";
+    guiAddress = "127.0.0.1:8384";
     settings = {
       devices = {
-        "valkyrie" = { id = "YLT7IT5-EPPNEXT-XEAFQ45-JZULUBI-JER6IEI-GDSVXRA-MVCCPLD-IOHN5AH"; };
         "work-mbp" = { id = "M7B25AH-7XH4Q46-MYV6HNH-Z75MNY6-ANKOHUW-FLKFCSW-7U7MCGB-YYVWGQM"; };
       };
       folders = {
-        "Documents" = {
-          path = "/home/philpax/Documents";
-          devices = [ "valkyrie" ];
-        };
         "Notes" = {
           path = "/mnt/programs/Documents/Notes";
           devices = [ "work-mbp" ];
