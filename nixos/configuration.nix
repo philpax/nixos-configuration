@@ -206,6 +206,7 @@ in
     prismlauncher
     darktable
     gphoto2fs
+    code-cursor
 
     # vm
     virt-viewer
