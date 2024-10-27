@@ -17,6 +17,10 @@ if [ $# -eq 0 ]; then
 fi
 # Function to load NVIDIA drivers
 load_nvidia() {
+    # Check if win11 VM is running
+    if virsh list --name | grep -q "^win11$"; then
+        error "VM 'win11' is still running. Please shut it down first."
+    fi
     echo "Loading NVIDIA drivers..."
     echo "Unbinding GPU from vfio-pci driver..."
     echo 0000:4c:00.0 > /sys/bus/pci/drivers/vfio-pci/unbind || error "Failed to unbind 0000:4c:00.0"
@@ -37,6 +41,10 @@ unload_nvidia() {
     echo "Unloading NVIDIA drivers..."
     echo "Stopping ComfyUI service..."
     systemctl stop comfyui || error "Failed to stop comfyui service"
+    RUNNING_APPS=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader | tr -d ' ')
+    if [ -n "$RUNNING_APPS" ]; then
+        error "GPU is still in use by: $(echo "$RUNNING_APPS" | awk -F, '{print $2}' | paste -sd,)"
+    fi
     echo "Unbinding GPU from NVIDIA driver..."
     echo 0000:4c:00.0 > /sys/bus/pci/drivers/nvidia/unbind || error "Failed to unbind 0000:4c:00.0 from nvidia"
     echo "Removing NVIDIA kernel modules..."
