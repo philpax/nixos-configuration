@@ -163,7 +163,7 @@ in
     python3
     poetry
     # broken due to test failure, try again some other time:
-    # awscli2
+    awscli2
     jq
     rye
     ntfs3g
