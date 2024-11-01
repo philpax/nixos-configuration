@@ -260,6 +260,13 @@ in
       chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
     };
   };
+  xdg.mime.defaultApplications = {
+    "image/jpeg" = "org.xfce.ristretto.desktop";
+    "image/png" = "org.xfce.ristretto.desktop";
+    "image/gif" = "org.xfce.ristretto.desktop";
+    "image/webp" = "org.xfce.ristretto.desktop";
+    "image/svg+xml" = "org.xfce.ristretto.desktop";
+  };
   # https://github.com/NixOS/nixpkgs/issues/262286
   nixpkgs.overlays = [ (self: super: {
     xdg-desktop-portal-gtk = super.xdg-desktop-portal-gtk.overrideAttrs {
