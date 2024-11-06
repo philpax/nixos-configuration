@@ -196,9 +196,10 @@ in
     obsidian
     pcmanfm
     xfce.ristretto
-    jellyfin
-    jellyfin-web
-    jellyfin-ffmpeg
+    # waiting for https://github.com/NixOS/nixpkgs/pull/353198 to make it into unstable
+    # jellyfin
+    # jellyfin-web
+    # jellyfin-ffmpeg
     vlc
     yt-dlp
     # (openai-whisper-cpp.override { cudaSupport = true; })
@@ -331,10 +332,11 @@ in
   };
   services.gvfs.enable = true;
   services.tumbler.enable = true;
-  services.jellyfin = {
-    enable = true;
-    openFirewall = true;
-  };
+  # waiting for https://github.com/NixOS/nixpkgs/pull/353198 to make it into unstable
+  # services.jellyfin = {
+  #   enable = true;
+  #   openFirewall = true;
+  # };
   services.minecraft-server = {
     enable = true;
     eula = true;
