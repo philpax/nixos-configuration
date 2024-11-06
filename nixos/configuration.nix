@@ -99,6 +99,7 @@ in
     networkmanager.enable = true;
     firewall.allowedTCPPorts = [
       22 # ssh
+      139 445 # smb
       7860 # automatic1111
       8000 # python -m http.server
       8384 # syncthing GUI
@@ -107,6 +108,7 @@ in
       31338 # game server
     ];
     firewall.allowedUDPPorts =  [
+      137 138 # smb
       22000 # syncthing traffic
       31337 # game server
     ];
@@ -162,7 +164,6 @@ in
     ffmpeg
     python3
     poetry
-    # broken due to test failure, try again some other time:
     awscli2
     jq
     rye
@@ -342,6 +343,32 @@ in
     package = pkgs.papermc;
 
     jvmOpts = "-Xms4092M -Xmx4092M -XX:+UseG1GC";
+  };
+  services.samba = {
+    enable = true;
+    settings = {
+      global = {
+        workgroup = "WORKGROUP";
+        "server string" = "NixOS SMB Server";
+        "server role" = "standalone server";
+        "map to guest" = "Bad User";
+        "guest account" = "nobody";
+        "security" = "user";
+        # Disable printing services
+        "load printers" = "no";
+        "printing" = "bsd";
+        "printcap name" = "/dev/null";
+      };
+      photos = {
+        path = "/mnt/external/Photos";
+        comment = "Read-only Photos Share";
+        browsable = true;
+        "read only" = true;
+        "guest ok" = true;
+        "create mask" = "0444";
+        "directory mask" = "0555";
+      };
+    };
   };
   systemd.services.comfyui = {
     description = "ComfyUI Docker Container";
