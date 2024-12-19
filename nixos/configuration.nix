@@ -334,10 +334,10 @@ in
   services.gvfs.enable = true;
   services.tumbler.enable = true;
   # waiting for https://github.com/NixOS/nixpkgs/pull/353198 to make it into unstable
-  # services.jellyfin = {
-  #   enable = true;
-  #   openFirewall = true;
-  # };
+  services.jellyfin = {
+    enable = true;
+    openFirewall = true;
+  };
   services.minecraft-server = {
     enable = true;
     eula = true;
@@ -383,34 +383,34 @@ in
     };
   };
   services.tailscale.enable = true;
-  systemd.services.comfyui = {
-    description = "ComfyUI Docker Container";
-    after = [ "docker.service" "network.target" ];
-    requires = [ "docker.service" ];
-    wantedBy = [ "multi-user.target" ];
+  # systemd.services.comfyui = {
+  #   description = "ComfyUI Docker Container";
+  #   after = [ "docker.service" "network.target" ];
+  #   requires = [ "docker.service" ];
+  #   wantedBy = [ "multi-user.target" ];
 
-    serviceConfig = {
-      ExecStart = ''
-        ${pkgs.docker}/bin/docker run \
-          --rm \
-          --name comfyui \
-          --device nvidia.com/gpu=all \
-          -v /mnt/ssd2/ai/ComfyUI:/workspace \
-          -p 8188:8188 \
-          pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel \
-          /bin/bash -c '\
-            cd /workspace && \
-            source .venv/bin/activate && \
-            apt update && \
-            apt install -y git && \
-            python main.py --listen --enable-cors-header'
-      '';
-      ExecStop = "${pkgs.docker}/bin/docker stop comfyui";
-      Restart = "always";
-      RestartSec = "10s";
-      User = "root";  # Docker typically requires root permissions
-    };
-  };
+  #   serviceConfig = {
+  #     ExecStart = ''
+  #       ${pkgs.docker}/bin/docker run \
+  #         --rm \
+  #         --name comfyui \
+  #         --device nvidia.com/gpu=all \
+  #         -v /mnt/ssd2/ai/ComfyUI:/workspace \
+  #         -p 8188:8188 \
+  #         pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel \
+  #         /bin/bash -c '\
+  #           cd /workspace && \
+  #           source .venv/bin/activate && \
+  #           apt update && \
+  #           apt install -y git && \
+  #           python main.py --listen --enable-cors-header'
+  #     '';
+  #     ExecStop = "${pkgs.docker}/bin/docker stop comfyui";
+  #     Restart = "always";
+  #     RestartSec = "10s";
+  #     User = "root";  # Docker typically requires root permissions
+  #   };
+  # };
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
