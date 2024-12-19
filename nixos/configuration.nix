@@ -209,6 +209,7 @@ in
     darktable
     gphoto2fs
     code-cursor
+    tailscale
 
     # vm
     virt-viewer
@@ -381,6 +382,7 @@ in
       };
     };
   };
+  services.tailscale.enable = true;
   systemd.services.comfyui = {
     description = "ComfyUI Docker Container";
     after = [ "docker.service" "network.target" ];
