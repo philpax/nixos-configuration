@@ -370,6 +370,15 @@ in
         "create mask" = "0444";
         "directory mask" = "0555";
       };
+      videos = {
+        path = "/mnt/external/Videos";
+        comment = "Read-only Videos Share";
+        browsable = true;
+        "read only" = true;
+        "guest ok" = true;
+        "create mask" = "0444";
+        "directory mask" = "0555";
+      };
     };
   };
   systemd.services.comfyui = {
