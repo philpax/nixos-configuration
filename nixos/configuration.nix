@@ -112,8 +112,11 @@ in
       22000 # syncthing traffic
       31337 # game server
     ];
+    useDHCP = false;
+    bridges.virbr0.interfaces = [ "enp68s0f1" ];
     interfaces.enp68s0f1 = {
-      useDHCP = false;
+    };
+    interfaces.virbr0 = {
       ipv4.addresses = [
         {
           address = "192.168.50.201";
@@ -121,10 +124,6 @@ in
         }
       ];
     };
-    interfaces.virbr0 = {
-      useDHCP = true;
-    };
-    bridges.virbr0.interfaces = [];
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
     networkmanager.unmanaged = [ "virbr0" ];
