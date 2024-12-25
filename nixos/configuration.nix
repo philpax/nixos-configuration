@@ -121,8 +121,13 @@ in
         }
       ];
     };
+    interfaces.virbr0 = {
+      useDHCP = true;
+    };
+    bridges.virbr0.interfaces = [];
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
+    networkmanager.unmanaged = [ "virbr0" ];
   };
 
   time.timeZone = "Europe/Stockholm";
@@ -379,6 +384,15 @@ in
         "guest ok" = true;
         "create mask" = "0444";
         "directory mask" = "0555";
+      };
+      games = {
+        path = "/mnt/programs/Games";
+        comment = "Games Share";
+        browsable = true;
+        "read only" = false;
+        "guest ok" = true;
+        "create mask" = "0777";
+        "directory mask" = "0777";
       };
     };
   };
