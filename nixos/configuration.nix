@@ -197,12 +197,12 @@ in
     pcmanfm
     xfce.ristretto
     # waiting for https://github.com/NixOS/nixpkgs/pull/353198 to make it into unstable
-    # jellyfin
-    # jellyfin-web
-    # jellyfin-ffmpeg
+    jellyfin
+    jellyfin-web
+    jellyfin-ffmpeg
     vlc
     yt-dlp
-    # (openai-whisper-cpp.override { cudaSupport = true; })
+    (openai-whisper-cpp.override { cudaSupport = true; })
     google-chrome
     imagemagick
     prismlauncher
