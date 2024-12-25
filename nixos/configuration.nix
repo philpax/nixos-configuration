@@ -161,7 +161,7 @@ in
     openssl.dev
     pkg-config
     screen
-    ffmpeg
+    ffmpeg-full
     python3
     poetry
     awscli2
