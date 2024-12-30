@@ -97,6 +97,7 @@ in
   networking = {
     hostName = "redline";
     networkmanager.enable = true;
+    networkmanager.unmanaged = [ "br0" "enp68s0f1"];
     firewall.allowedTCPPorts = [
       22 # ssh
       139 445 # smb
@@ -113,20 +114,22 @@ in
       31337 # game server
     ];
     useDHCP = false;
-    bridges.virbr0.interfaces = [ "enp68s0f1" ];
-    interfaces.enp68s0f1 = {
-    };
-    interfaces.virbr0 = {
-      ipv4.addresses = [
-        {
+    interfaces = {
+      enp68s0f1 = {
+        ipv4.addresses = [];  # Ensure no IP on physical interface
+      };
+      br0 = {
+        ipv4.addresses = [{
           address = "192.168.50.201";
           prefixLength = 24;
-        }
-      ];
+        }];
+      };
+    };
+    bridges.br0 = {
+      interfaces = [ "enp68s0f1" ];
     };
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
-    networkmanager.unmanaged = [ "virbr0" ];
   };
 
   time.timeZone = "Europe/Stockholm";
