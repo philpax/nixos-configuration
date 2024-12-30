@@ -1,6 +1,10 @@
 { config, pkgs, ... }:
 let
   ddclientSecrets = import /etc/nixos/ddclient-secrets.nix;
+  unstable = import
+    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/6d97d419e5a9b36e6293887a89a078cf85f5a61b)
+    # reuse the current configuration
+    { config = config.nixpkgs.config; };
 in
 {
   imports =
@@ -350,7 +354,7 @@ in
     eula = true;
     openFirewall = true;
 
-    package = pkgs.papermc;
+    package = unstable.papermc;
 
     jvmOpts = "-Xms4092M -Xmx4092M -XX:+UseG1GC";
   };
