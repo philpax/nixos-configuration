@@ -230,6 +230,7 @@ in
     spice
     spice-gtk
     spice-protocol
+    looking-glass-client
   ];
   fonts.packages = with pkgs; [
     noto-fonts
