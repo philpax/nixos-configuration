@@ -136,6 +136,8 @@ in
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
   };
+  # wait-online breaks rebuilds: https://github.com/NixOS/nixpkgs/issues/180175
+  systemd.services.NetworkManager-wait-online.enable = false;
 
   time.timeZone = "Europe/Stockholm";
   i18n.defaultLocale = "en_GB.UTF-8";
