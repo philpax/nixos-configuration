@@ -224,6 +224,7 @@ in
     code-cursor
     tailscale
     chrysalis
+    gimp
 
     # vm
     virt-viewer
