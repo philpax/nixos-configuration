@@ -107,6 +107,7 @@ in
       139 445 # smb
       7860 # automatic1111
       8000 # python -m http.server
+      8192 # http server testing
       8384 # syncthing GUI
       22000 # syncthing traffic
       5900 5901 5902 # spice/vnc
