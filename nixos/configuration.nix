@@ -434,12 +434,13 @@ in
           --device nvidia.com/gpu=all \
           -v /mnt/ssd2/ai/ComfyUI:/workspace \
           -p 8188:8188 \
-          pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel \
+          pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel \
           /bin/bash -c '\
             cd /workspace && \
             source .venv/bin/activate && \
             apt update && \
             apt install -y git && \
+            pip install -r requirements.txt && \
             python main.py --listen --enable-cors-header'
       '';
       ExecStop = "${pkgs.docker}/bin/docker stop comfyui";
