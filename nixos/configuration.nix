@@ -226,6 +226,7 @@ in
     tailscale
     chrysalis
     gimp
+    direnv
 
     # vm
     virt-viewer
