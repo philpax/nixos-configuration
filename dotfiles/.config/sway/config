@@ -52,6 +52,9 @@ exec swayidle -w \
   resume 'swaymsg "output * power on"'
 bindsym $mod+Alt+l exec swaylock -f -c 000000
 
+# Start mako for notifications
+exec mako
+
 ### Input configuration
 #
 # Example configuration:

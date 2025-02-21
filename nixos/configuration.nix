@@ -189,6 +189,7 @@ in
     slurp
     wl-clipboard
     mako
+    libnotify
     discord
     sway
     swaylock
