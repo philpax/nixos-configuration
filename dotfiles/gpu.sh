@@ -38,6 +38,12 @@ load_nvidia() {
 
 # Function to unload NVIDIA drivers
 unload_nvidia() {
+    # Check if NVIDIA drivers are loaded
+    if [ ! -e "/sys/bus/pci/drivers/nvidia/unbind" ]; then
+        echo "NVIDIA drivers are not loaded, nothing to do."
+        return 0
+    fi
+
     echo "Unloading NVIDIA drivers..."
     echo "Stopping ComfyUI service..."
     systemctl stop comfyui || error "Failed to stop comfyui service"
