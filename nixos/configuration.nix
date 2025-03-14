@@ -105,6 +105,7 @@ in
     firewall.allowedTCPPorts = [
       22 # ssh
       139 445 # smb
+      4533 # navidrome
       7860 # automatic1111
       8000 # python -m http.server
       8192 # http server testing
@@ -358,6 +359,7 @@ in
   services.navidrome = {
     enable = true;
     settings = {
+      Address = "0.0.0.0";
       MusicFolder = "/mnt/external/Music";
     };
   };
