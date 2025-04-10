@@ -329,7 +329,7 @@ in
     guiAddress = "127.0.0.1:8384";
     settings = {
       devices = {
-        "work-mbp" = { id = "M7B25AH-7XH4Q46-MYV6HNH-Z75MNY6-ANKOHUW-FLKFCSW-7U7MCGB-YYVWGQM"; };
+        "work-mbp" = { id = "755IIFA-4U6ZX4Z-MYVIMZT-6BR5MDT-UDGV42J-CDXBRC7-RVC26M2-XAEO3AB"; };
       };
       folders = {
         "Notes" = {
