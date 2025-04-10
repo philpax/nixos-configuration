@@ -2,7 +2,7 @@
 let
   ddclientSecrets = import /etc/nixos/ddclient-secrets.nix;
   unstable = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/6d97d419e5a9b36e6293887a89a078cf85f5a61b)
+    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/060577c3f0747822c128725585f8b76726abae0d)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
 in
@@ -224,7 +224,7 @@ in
     prismlauncher
     darktable
     gphoto2fs
-    code-cursor
+    unstable.code-cursor
     tailscale
     chrysalis
     gimp
@@ -366,7 +366,6 @@ in
   };
   services.gvfs.enable = true;
   services.tumbler.enable = true;
-  # waiting for https://github.com/NixOS/nixpkgs/pull/353198 to make it into unstable
   services.jellyfin = {
     enable = true;
     openFirewall = true;
