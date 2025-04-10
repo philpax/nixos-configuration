@@ -229,6 +229,7 @@ in
     chrysalis
     gimp
     direnv
+    rtorrent
 
     # vm
     virt-viewer
