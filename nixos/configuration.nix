@@ -1,6 +1,6 @@
 { config, pkgs, ... }:
 let
-  ddclientSecrets = import /etc/nixos/ddclient-secrets.nix;
+  ddclientSecrets = import ./ddclient-secrets.nix;
   unstable = import
     (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/060577c3f0747822c128725585f8b76726abae0d)
     # reuse the current configuration
@@ -13,7 +13,7 @@ in
       ./no-rgb-service.nix
     ];
 
-  system.stateVersion = "23.11";
+  system.stateVersion = "24.11";
   system.autoUpgrade.enable = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
@@ -22,21 +22,10 @@ in
   boot.loader.efi.canTouchEfiVariables = true;
   boot.supportedFilesystems = [ "ntfs" ];
   boot.initrd.kernelModules = [
-    "vfio_pci"
-    "vfio"
-    "vfio_iommu_type1"
-
     "nvidia"
-    "nvidia_modeset"
-    "nvidia_uvm"
-    "nvidia_drm"
   ];
-  boot.kernelModules = [ "kvm-amd" ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
-  boot.kernelParams = [
-    "amd_iommu=on"
-    "vfio-pci.ids=10de:2204,10de:1aef"
-  ];
+  boot.kernelParams = [ "nomodeset" ];
 
   fileSystems = {
     "/mnt/ssd2" = {
@@ -62,29 +51,16 @@ in
       fsType = "ntfs";
       options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
     };
-
-    "/mnt/programs" = {
-      device = "/dev/disk/by-uuid/30D0BD2BD0BCF7E4";
-      fsType = "ntfs";
-      options = [ "defaults" "nofail" ];
-    };
   };
 
   powerManagement.cpuFreqGovernor = "ondemand";
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
-  hardware.graphics.extraPackages = with pkgs; [
-   # https://github.com/NixOS/nixpkgs/issues/334822
-   # vulkan-validation-layers
-  ];
   hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.latest;
-  hardware.nvidia.modesetting.enable = true;
   hardware.nvidia.open = true;
+  hardware.nvidia.modesetting.enable = false;
   hardware.nvidia-container-toolkit.enable = true;
-
-  nixpkgs.config.pulseaudio = true;
-  hardware.pulseaudio.enable = false;
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd = {
@@ -100,8 +76,6 @@ in
 
   networking = {
     hostName = "redline";
-    networkmanager.enable = true;
-    networkmanager.unmanaged = [ "br0" "enp68s0f1"];
     firewall.allowedTCPPorts = [
       22 # ssh
       139 445 # smb
@@ -120,21 +94,6 @@ in
       22000 # syncthing traffic
       31337 # game server
     ];
-    useDHCP = false;
-    interfaces = {
-      enp68s0f1 = {
-        ipv4.addresses = [];  # Ensure no IP on physical interface
-      };
-      br0 = {
-        ipv4.addresses = [{
-          address = "192.168.50.201";
-          prefixLength = 24;
-        }];
-      };
-    };
-    bridges.br0 = {
-      interfaces = [ "enp68s0f1" ];
-    };
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
   };
@@ -186,140 +145,33 @@ in
     ntfs3g
     qemu
     OVMF
-    grim
-    slurp
-    wl-clipboard
-    mako
-    libnotify
-    discord
-    sway
-    swaylock
-    swayidle
-    wmenu
-    foot
-    foot.themes
     xdg-utils
     nodejs_22
     wineWowPackages.stable
     winetricks
     llvmPackages_17.bintools
-    vscode.fhs
     ripgrep
     p7zip
     clang
-    pavucontrol
-    neovide
-    spotify
-    obsidian
-    pcmanfm
-    xfce.ristretto
     jellyfin
     jellyfin-web
     jellyfin-ffmpeg
-    vlc
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
-    google-chrome
     imagemagick
-    prismlauncher
-    darktable
-    gphoto2fs
-    unstable.code-cursor
     tailscale
-    chrysalis
-    gimp
     direnv
     rtorrent
-
-    # vm
-    virt-viewer
-    spice
-    spice-gtk
-    spice-protocol
-    looking-glass-client
   ];
-  fonts.packages = with pkgs; [
-    noto-fonts
-    noto-fonts-cjk-sans
-    noto-fonts-emoji
-    cozette
-    iosevka
-  ];
-  fonts.enableDefaultPackages = true;
   programs.neovim = {
     enable = true;
     defaultEditor = true;
   };
-  programs.firefox = {
-    enable = true;
-    package = pkgs.firefox-wayland;
-  };
-
-  environment.sessionVariables = {
-    MOZ_ENABLE_WAYLAND = "1";
-    XDG_CURRENT_DESKTOP = "sway";
-  };
-  programs.envision.enable = true;
-  programs.adb.enable = true;
-  programs.virt-manager.enable = true;
-  programs.steam = {
-    enable = true;
-    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
-    dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
-    localNetworkGameTransfers.openFirewall = true; # Open ports in the firewall for Steam Local Network Game Transfers
-  };
-  environment.pathsToLink = [ "/share/foot" ];
-  xdg.portal = {
-    enable = true;
-    config = {
-      common = {
-        default = "wlr";
-      };
-    };
-    extraPortals = [ pkgs.xdg-desktop-portal-gtk pkgs.xdg-desktop-portal-wlr ];
-    wlr.enable = true;
-    wlr.settings.screencast = {
-      output_name = "DP-1";
-      chooser_type = "simple";
-      chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
-    };
-  };
-  xdg.mime.defaultApplications = {
-    "image/jpeg" = "org.xfce.ristretto.desktop";
-    "image/png" = "org.xfce.ristretto.desktop";
-    "image/gif" = "org.xfce.ristretto.desktop";
-    "image/webp" = "org.xfce.ristretto.desktop";
-    "image/svg+xml" = "org.xfce.ristretto.desktop";
-  };
-  # https://github.com/NixOS/nixpkgs/issues/262286
-  nixpkgs.overlays = [ (self: super: {
-    xdg-desktop-portal-gtk = super.xdg-desktop-portal-gtk.overrideAttrs {
-      postInstall = ''
-        sed -i 's/UseIn=gnome/UseIn=gnome;sway/' $out/share/xdg-desktop-portal/portals/gtk.portal
-      '';
-    };
-  } ) ];
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
   services.hardware.openrgb.enable = true;
-  services.xserver = {
-    xkb = {
-      layout = "au";
-      variant = "";
-    };
-    videoDrivers = ["nvidia"];
-  };
-  services.udev.extraRules = ''
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="2303", SYMLINK+="Atreus2",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="2302", SYMLINK+="Atreus2",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="2301", SYMLINK+="Model01",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="2300", SYMLINK+="Model01",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="3496", ATTRS{idProduct}=="0006", SYMLINK+="Model100",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="3496", ATTRS{idProduct}=="0005", SYMLINK+="Model100",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="3496", ATTRS{idProduct}=="00a0", SYMLINK+="Preonic",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="3496", ATTRS{idProduct}=="00a1", SYMLINK+="Preonic",  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_CANDIDATE}="0", TAG+="uaccess", TAG+="seat"
-  '';
+  services.xserver.videoDrivers = [ "nvidia" ];
   services.syncthing = {
     enable = true;
     user = "philpax";
@@ -334,7 +186,7 @@ in
       };
       folders = {
         "Notes" = {
-          path = "/mnt/programs/Documents/Notes";
+          path = "/mnt/ssd2/notes";
           devices = [ "work-mbp" ];
         };
       };
@@ -352,7 +204,6 @@ in
     '';
   };
   services.resolved.enable = true;
-  services.gnome.gnome-keyring.enable = true;
   services.plex = {
     enable = true;
     openFirewall = true;
@@ -364,8 +215,6 @@ in
       MusicFolder = "/mnt/external/Music";
     };
   };
-  services.gvfs.enable = true;
-  services.tumbler.enable = true;
   services.jellyfin = {
     enable = true;
     openFirewall = true;
@@ -412,15 +261,6 @@ in
         "create mask" = "0444";
         "directory mask" = "0555";
       };
-      games = {
-        path = "/mnt/programs/Games";
-        comment = "Games Share";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0777";
-        "directory mask" = "0777";
-      };
     };
   };
   services.tailscale.enable = true;
@@ -454,17 +294,6 @@ in
     };
   };
   security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    jack.enable = true;
-    audio.enable = true;
-  };
   services.udisks2.enable = true;
   services.devmon.enable = true;
-
-  security.polkit.enable = true;
-  security.pam.services.swaylock = {};
 }
