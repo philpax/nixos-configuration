@@ -53,7 +53,7 @@ in
     };
   };
 
-  powerManagement.cpuFreqGovernor = "ondemand";
+  powerManagement.cpuFreqGovernor = "conservative";
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
@@ -163,6 +163,7 @@ in
     direnv
     rtorrent
     croc
+    lm_sensors
   ];
   programs.neovim = {
     enable = true;
