@@ -162,6 +162,7 @@ in
     tailscale
     direnv
     rtorrent
+    croc
   ];
   programs.neovim = {
     enable = true;
@@ -183,11 +184,12 @@ in
     settings = {
       devices = {
         "work-mbp" = { id = "755IIFA-4U6ZX4Z-MYVIMZT-6BR5MDT-UDGV42J-CDXBRC7-RVC26M2-XAEO3AB"; };
+        "the-wind-rises" = { id = "NLD2NYH-SAYR2TR-GSRXTMD-EWIQCYN-RNI2UDA-52QQEZX-FVVC3NC-YSPWYAY"; };
       };
       folders = {
         "Notes" = {
           path = "/mnt/ssd2/notes";
-          devices = [ "work-mbp" ];
+          devices = [ "work-mbp" "the-wind-rises" ];
         };
       };
     };
