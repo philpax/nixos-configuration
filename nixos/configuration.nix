@@ -2,7 +2,7 @@
 let
   ddclientSecrets = import ./ddclient-secrets.nix;
   unstable = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/060577c3f0747822c128725585f8b76726abae0d)
+    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/85c3ab0195ffe0d797704c9707e4da3d925be9b9)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
 in
@@ -53,7 +53,7 @@ in
     };
   };
 
-  powerManagement.cpuFreqGovernor = "conservative";
+  powerManagement.cpuFreqGovernor = "performance";
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
@@ -80,15 +80,19 @@ in
       22 # ssh
       139 445 # smb
       4533 # navidrome
+      7070 # openai-compatible large-model-proxy server
       7860 # automatic1111
       8000 # python -m http.server
+      8188 # comfyui
       8192 # http server testing
       8384 # syncthing GUI
       22000 # syncthing traffic
       5900 5901 5902 # spice/vnc
       25565 25566 # minecraft server
       31338 # game server
-    ];
+    ]
+    # llama.cpp instances
+    ++ (builtins.genList (x: 8200 + x) 10);
     firewall.allowedUDPPorts =  [
       137 138 # smb
       22000 # syncthing traffic
@@ -131,6 +135,7 @@ in
     neofetch
     git
     rustup
+    go
     gcc
     openssl
     openssl.dev
@@ -158,6 +163,7 @@ in
     jellyfin-ffmpeg
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
+    (unstable.llama-cpp.override { cudaSupport = true; })
     imagemagick
     tailscale
     direnv
@@ -267,33 +273,17 @@ in
     };
   };
   services.tailscale.enable = true;
-  systemd.services.comfyui = {
-    description = "ComfyUI Docker Container";
+  systemd.services.largemodelproxy = {
+    description = "Large Model Proxy";
     after = [ "docker.service" "network.target" ];
     requires = [ "docker.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
-      ExecStart = ''
-        ${pkgs.docker}/bin/docker run \
-          --rm \
-          --name comfyui \
-          --device nvidia.com/gpu=all \
-          -v /mnt/ssd2/ai/ComfyUI:/workspace \
-          -p 8188:8188 \
-          pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel \
-          /bin/bash -c '\
-            cd /workspace && \
-            source .venv/bin/activate && \
-            apt update && \
-            apt install -y git && \
-            pip install -r requirements.txt && \
-            python main.py --listen --enable-cors-header'
-      '';
-      ExecStop = "${pkgs.docker}/bin/docker stop comfyui";
+      WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
+      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c /home/philpax/nixos-configuration/large-model-proxy-config.json";
       Restart = "always";
       RestartSec = "10s";
-      User = "root";  # Docker typically requires root permissions
     };
   };
   security.rtkit.enable = true;
