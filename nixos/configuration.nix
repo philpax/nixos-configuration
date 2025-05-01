@@ -263,9 +263,9 @@ in
       };
       videos = {
         path = "/mnt/external/Videos";
-        comment = "Read-only Videos Share";
+        comment = "Videos Share";
         browsable = true;
-        "read only" = true;
+        "read only" = false;
         "guest ok" = true;
         "create mask" = "0444";
         "directory mask" = "0555";
