@@ -80,13 +80,17 @@ let
   ];
 
   # Helper function to create a service configuration
-  mkService = { name, listenPort, targetPort, command, args, healthcheck ? null, restartOnConnectionFailure ? false, resourceRequirements, shutDownAfterInactivitySeconds ? 120 }: {
+  mkService = {
+    name, listenPort, targetPort, command, args, healthcheck ? null, restartOnConnectionFailure ? false,
+    resourceRequirements, shutDownAfterInactivitySeconds ? 120, openaiApi ? false
+  }: {
     Name = name;
     ListenPort = toString listenPort;
     ProxyTargetHost = "localhost";
     ProxyTargetPort = toString targetPort;
     Command = command;
     Args = args;
+    OpenAiApi = openaiApi;
     RestartOnConnectionFailure = restartOnConnectionFailure;
     ResourceRequirements = resourceRequirements;
     ShutDownAfterInactivitySeconds = shutDownAfterInactivitySeconds;
@@ -108,6 +112,7 @@ let
       listenPort = port;
       targetPort = targetPort;
       command = "llama-server";
+      openaiApi = true;
       args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.onCpu then "--threads 24" else "-ngl 100"} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
