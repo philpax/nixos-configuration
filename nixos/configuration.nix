@@ -5,6 +5,7 @@ let
     (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/85c3ab0195ffe0d797704c9707e4da3d925be9b9)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
+  llamaCppCuda = (unstable.llama-cpp.override { cudaSupport = true; });
 in
 {
   imports =
@@ -163,7 +164,7 @@ in
     jellyfin-ffmpeg
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
-    (unstable.llama-cpp.override { cudaSupport = true; })
+    llamaCppCuda
     imagemagick
     tailscale
     direnv
@@ -278,6 +279,7 @@ in
     after = [ "docker.service" "network.target" ];
     requires = [ "docker.service" ];
     wantedBy = [ "multi-user.target" ];
+    path = [ llamaCppCuda pkgs.docker pkgs.curl pkgs.bash ];
 
     serviceConfig = {
       WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
