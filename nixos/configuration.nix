@@ -283,7 +283,7 @@ in
 
     serviceConfig = {
       WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
-      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c /home/philpax/nixos-configuration/large-model-proxy-config.json";
+      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${import ./large-model-proxy-config.nix { inherit pkgs; }}";
       Restart = "always";
       RestartSec = "10s";
     };

@@ -1,0 +1,178 @@
+{ pkgs, ... }:
+pkgs.writeText "large-model-proxy-config.json" (builtins.toJSON {
+  OpenAiApi = {
+    ListenPort = "7070";
+  };
+  MaxTimeToWaitForServiceToCloseConnectionBeforeGivingUpSeconds = 1200;
+  ShutDownAfterInactivitySeconds = 120;
+  ResourcesAvailable = {
+    "VRAM-GPU-1" = 24000;
+    RAM = 96000;
+  };
+  Services = [
+    {
+      Name = "ComfyUI";
+      ListenPort = "8188";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18188";
+      Command = "docker";
+      Args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p 18188:8188 pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
+      ShutDownAfterInactivitySeconds = 600;
+      RestartOnConnectionFailure = true;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 20000;
+        RAM = 16000;
+      };
+    }
+    {
+      Name = "Qwen3-30B-A3B-UD-Q4_K_XL-CPU";
+      OpenAiApi = true;
+      ListenPort = "8200";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18200";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf -c 8192 --threads 24 --port 18200";
+      HealthcheckCommand = "curl --fail http://localhost:18200/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        RAM = 20000;
+      };
+    }
+    {
+      Name = "Qwen3-30B-A3B-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8201";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18201";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18201";
+      HealthcheckCommand = "curl --fail http://localhost:18201/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 20000;
+      };
+    }
+    {
+      Name = "gemma-3-27b-it-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8202";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18202";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/gemma-3-27b-it-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18202";
+      HealthcheckCommand = "curl --fail http://localhost:18202/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 20000;
+      };
+    }
+    {
+      Name = "GLM-4-32B-0414-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8203";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18203";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/GLM-4-32B-0414-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18203";
+      HealthcheckCommand = "curl --fail http://localhost:18203/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 20000;
+      };
+    }
+    {
+      Name = "Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8204";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18204";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18204";
+      HealthcheckCommand = "curl --fail http://localhost:18204/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 16000;
+      };
+    }
+    {
+      Name = "Phi-4-mini-reasoning-UD-Q8_K_XL-CPU";
+      OpenAiApi = true;
+      ListenPort = "8205";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18205";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Phi-4-mini-reasoning-UD-Q8_K_XL.gguf -c 8192 --threads 24 --port 18205";
+      HealthcheckCommand = "curl --fail http://localhost:18205/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        RAM = 8000;
+      };
+    }
+    {
+      Name = "Phi-4-reasoning-plus-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8206";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18206";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18206";
+      HealthcheckCommand = "curl --fail http://localhost:18206/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 12000;
+      };
+    }
+    {
+      Name = "phi-4-reasoning-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8207";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18207";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/phi-4-reasoning-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18207";
+      HealthcheckCommand = "curl --fail http://localhost:18207/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 12000;
+      };
+    }
+    {
+      Name = "Qwen3-0.6B-UD-Q8_K_XL-CPU";
+      OpenAiApi = true;
+      ListenPort = "8208";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18208";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf -c 8192 --threads 24 --port 18208";
+      HealthcheckCommand = "curl --fail http://localhost:18208/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        RAM = 2000;
+      };
+    }
+    {
+      Name = "Qwen3-32B-UD-Q4_K_XL-GPU";
+      OpenAiApi = true;
+      ListenPort = "8209";
+      ProxyTargetHost = "localhost";
+      ProxyTargetPort = "18209";
+      Command = "llama-server";
+      Args = "-m /mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf -c 8192 -ngl 100 --port 18209";
+      HealthcheckCommand = "curl --fail http://localhost:18209/health";
+      HealthcheckIntervalMilliseconds = 200;
+      RestartOnConnectionFailure = false;
+      ResourceRequirements = {
+        "VRAM-GPU-1" = 20000;
+      };
+    }
+  ];
+})
