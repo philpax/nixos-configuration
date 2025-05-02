@@ -1,71 +1,87 @@
 { pkgs, ... }:
 let
-  # List of models with their configuration
+  # List of models with their configuration and actual file sizes
   models = [
     {
       name = "Qwen3-30B-A3B-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
+      size = 17715663200;
+      ctxlen = 8192;
       onCpu = true;
     }
     {
       name = "Qwen3-30B-A3B-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
+      size = 17715663200;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "gemma-3-27b-it-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-UD-Q4_K_XL.gguf";
+      size = 16796522208;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "GLM-4-32B-0414-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/GLM-4-32B-0414-UD-Q4_K_XL.gguf";
+      size = 19918569760;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf";
+      size = 15301055392;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "Phi-4-mini-reasoning-UD-Q8_K_XL";
       file = "/mnt/ssd2/ai/llm/Phi-4-mini-reasoning-UD-Q8_K_XL.gguf";
+      size = 5088418720;
+      ctxlen = 8192;
       onCpu = true;
     }
     {
       name = "Phi-4-reasoning-plus-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf";
+      size = 8947337920;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "phi-4-reasoning-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/phi-4-reasoning-UD-Q4_K_XL.gguf";
+      size = 8947338528;
+      ctxlen = 8192;
       onCpu = false;
     }
     {
       name = "Qwen3-0.6B-UD-Q8_K_XL";
       file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
+      size = 844288480;
+      ctxlen = 8192;
       onCpu = true;
     }
     {
       name = "Qwen3-32B-UD-Q4_K_XL";
       file = "/mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf";
+      size = 20021713344;
+      ctxlen = 8192;
       onCpu = false;
     }
   ];
-
-  # Function to get file size in MB
-  getFileSize = file: builtins.readFile (pkgs.runCommand "get-file-size" {} ''
-    stat -c %s "${file}" > $out
-  '');
 
   # Function to create a service from a model
   mkLlm = index: model:
     let
       port = 8200 + index;
       targetPort = 18200 + index;
-      fileSizeMB = (builtins.fromJSON (getFileSize model.file)) / (1024 * 1024);
-      memoryMB = fileSizeMB + 2048; # Add 2GB overhead from context length
+      # Calculate memory overhead from context length (ctxlen/4 MB)
+      ctxOverheadMB = model.ctxlen / 4;
+      memoryMB = (model.size / (1024 * 1024)) + ctxOverheadMB;
     in {
       Name = "${model.name}${if model.onCpu then "-CPU" else "-GPU"}";
       OpenAiApi = true;
@@ -73,7 +89,7 @@ let
       ProxyTargetHost = "localhost";
       ProxyTargetPort = toString targetPort;
       Command = "llama-server";
-      Args = "-m ${model.file} -c 8192 ${if model.onCpu then "--threads 24" else "-ngl 100"} --port ${toString targetPort}";
+      Args = "-m ${model.file} -c ${toString model.ctxlen} ${if model.onCpu then "--threads 24" else "-ngl 100"} --port ${toString targetPort}";
       HealthcheckCommand = "curl --fail http://localhost:${toString targetPort}/health";
       HealthcheckIntervalMilliseconds = 200;
       RestartOnConnectionFailure = false;
