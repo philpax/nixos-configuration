@@ -1,5 +1,10 @@
 { pkgs, ... }:
 let
+  # Port definitions
+  openaiPort = 7070;
+  comfyuiPort = 8188;
+  comfyuiTargetPort = 18188;
+
   # List of models with their configuration and actual file sizes
   models = [
     {
@@ -103,31 +108,45 @@ let
   # Generate all LLMs
   llms = builtins.map (i: mkLlm i (builtins.elemAt models i)) (builtins.genList (x: x) (builtins.length models));
 
+  # Generate the configuration
+  config = {
+    OpenAiApi = {
+      ListenPort = toString openaiPort;
+    };
+    MaxTimeToWaitForServiceToCloseConnectionBeforeGivingUpSeconds = 1200;
+    ShutDownAfterInactivitySeconds = 120;
+    ResourcesAvailable = {
+      "VRAM-GPU-1" = 24000;
+      RAM = 96000;
+    };
+    Services = [
+      {
+        Name = "ComfyUI";
+        ListenPort = toString comfyuiPort;
+        ProxyTargetHost = "localhost";
+        ProxyTargetPort = toString comfyuiTargetPort;
+        Command = "docker";
+        Args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p ${toString comfyuiTargetPort}:${toString comfyuiPort} pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
+        ShutDownAfterInactivitySeconds = 600;
+        RestartOnConnectionFailure = true;
+        ResourceRequirements = {
+          "VRAM-GPU-1" = 20000;
+          RAM = 16000;
+        };
+      }
+    ] ++ llms;
+  };
+
+  # Generate the JSON file
+  jsonFile = pkgs.writeText "large-model-proxy-config.json" (builtins.toJSON config);
+
+  # Extract all ports from the configuration
+  ports = [
+    openaiPort # OpenAI API
+    comfyuiPort # ComfyUI
+  ] ++ (builtins.map (s: builtins.fromJSON s.ListenPort) llms);
+
 in
-pkgs.writeText "large-model-proxy-config.json" (builtins.toJSON {
-  OpenAiApi = {
-    ListenPort = "7070";
-  };
-  MaxTimeToWaitForServiceToCloseConnectionBeforeGivingUpSeconds = 1200;
-  ShutDownAfterInactivitySeconds = 120;
-  ResourcesAvailable = {
-    "VRAM-GPU-1" = 24000;
-    RAM = 96000;
-  };
-  Services = [
-    {
-      Name = "ComfyUI";
-      ListenPort = "8188";
-      ProxyTargetHost = "localhost";
-      ProxyTargetPort = "18188";
-      Command = "docker";
-      Args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p 18188:8188 pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
-      ShutDownAfterInactivitySeconds = 600;
-      RestartOnConnectionFailure = true;
-      ResourceRequirements = {
-        "VRAM-GPU-1" = 20000;
-        RAM = 16000;
-      };
-    }
-  ] ++ llms;
-})
+{
+  inherit jsonFile ports;
+}

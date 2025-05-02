@@ -6,6 +6,7 @@ let
     # reuse the current configuration
     { config = config.nixpkgs.config; };
   llamaCppCuda = (unstable.llama-cpp.override { cudaSupport = true; });
+  largeModelProxy = import ./large-model-proxy-config.nix { inherit pkgs; };
 in
 {
   imports =
@@ -81,19 +82,15 @@ in
       22 # ssh
       139 445 # smb
       4533 # navidrome
-      7070 # openai-compatible large-model-proxy server
       7860 # automatic1111
       8000 # python -m http.server
-      8188 # comfyui
       8192 # http server testing
       8384 # syncthing GUI
       22000 # syncthing traffic
       5900 5901 5902 # spice/vnc
       25565 25566 # minecraft server
       31338 # game server
-    ]
-    # llama.cpp instances
-    ++ (builtins.genList (x: 8200 + x) 10);
+    ] ++ largeModelProxy.ports;
     firewall.allowedUDPPorts =  [
       137 138 # smb
       22000 # syncthing traffic
@@ -283,7 +280,7 @@ in
 
     serviceConfig = {
       WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
-      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${import ./large-model-proxy-config.nix { inherit pkgs; }}";
+      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${largeModelProxy.jsonFile}";
       Restart = "always";
       RestartSec = "10s";
     };
