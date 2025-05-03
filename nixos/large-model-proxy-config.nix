@@ -48,6 +48,7 @@ let
       size = 5088418720;
       ctxLen = 8192;
       onCpu = true;
+      specialTokens = true;
     }
     {
       name = "Phi-4-reasoning-plus-UD-Q4_K_XL";
@@ -55,6 +56,7 @@ let
       size = 8947337920;
       ctxLen = 8192;
       onCpu = false;
+      specialTokens = true;
     }
     {
       name = "phi-4-reasoning-UD-Q4_K_XL";
@@ -62,6 +64,7 @@ let
       size = 8947338528;
       ctxLen = 8192;
       onCpu = false;
+      specialTokens = true;
     }
     {
       name = "Qwen3-0.6B-UD-Q8_K_XL";
@@ -107,13 +110,14 @@ let
       # Calculate memory overhead from context length (ctxLen/4 MB)
       ctxOverheadMB = model.ctxLen / 4;
       memoryMB = (model.size / (1024 * 1024)) + ctxOverheadMB;
+      specialTokensFlag = if model.specialTokens or false then "-sp" else "";
     in mkService {
       name = "${model.name}${if model.onCpu then "-CPU" else "-GPU"}";
       listenPort = port;
       targetPort = targetPort;
       command = "llama-server";
       openaiApi = true;
-      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.onCpu then "--threads 24" else "-ngl 100"} --port ${toString targetPort}";
+      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.onCpu then "--threads 24" else "-ngl 100"} ${specialTokensFlag} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
         intervalMilliseconds = 200;
