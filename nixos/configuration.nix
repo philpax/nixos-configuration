@@ -291,11 +291,10 @@ in
     after = [ "largemodelproxy.service" ];
     requires = [ "largemodelproxy.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.rustup ];
 
     serviceConfig = {
       WorkingDirectory = "/mnt/ssd2/ai/llmcord";
-      ExecStart = "cargo run";
+      ExecStart = "/mnt/ssd2/ai/llmcord/target/debug/llmcord";
       Restart = "always";
       RestartSec = "10s";
     };
