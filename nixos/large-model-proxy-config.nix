@@ -8,42 +8,42 @@ let
   # List of models with their configuration and actual file sizes
   models = [
     {
-      name = "Qwen3-30B-A3B-UD-Q4_K_XL";
+      name = "qwen3-30b-a3b";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
       size = 17715663200;
       ctxLen = 8192;
       onCpu = true;
     }
     {
-      name = "Qwen3-30B-A3B-UD-Q4_K_XL";
+      name = "qwen3-30b-a3b";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
       size = 17715663200;
       ctxLen = 8192;
       onCpu = false;
     }
     {
-      name = "gemma-3-27b-it-UD-Q4_K_XL";
+      name = "gemma-3-27b-it";
       file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-UD-Q4_K_XL.gguf";
       size = 16796522208;
       ctxLen = 8192;
       onCpu = false;
     }
     {
-      name = "GLM-4-32B-0414-UD-Q4_K_XL";
+      name = "glm-4-32b-0414";
       file = "/mnt/ssd2/ai/llm/GLM-4-32B-0414-UD-Q4_K_XL.gguf";
       size = 19918569760;
       ctxLen = 8192;
       onCpu = false;
     }
     {
-      name = "Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL";
+      name = "mistral-small-3.1-24b-instruct-2503";
       file = "/mnt/ssd2/ai/llm/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf";
       size = 15301055392;
       ctxLen = 8192;
       onCpu = false;
     }
     {
-      name = "Phi-4-mini-reasoning-UD-Q8_K_XL";
+      name = "phi-4-mini-reasoning";
       file = "/mnt/ssd2/ai/llm/Phi-4-mini-reasoning-UD-Q8_K_XL.gguf";
       size = 5088418720;
       ctxLen = 8192;
@@ -51,7 +51,7 @@ let
       specialTokens = true;
     }
     {
-      name = "Phi-4-reasoning-plus-UD-Q4_K_XL";
+      name = "phi-4-reasoning-plus";
       file = "/mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf";
       size = 8947337920;
       ctxLen = 8192;
@@ -59,7 +59,7 @@ let
       specialTokens = true;
     }
     {
-      name = "phi-4-reasoning-UD-Q4_K_XL";
+      name = "phi-4-reasoning";
       file = "/mnt/ssd2/ai/llm/phi-4-reasoning-UD-Q4_K_XL.gguf";
       size = 8947338528;
       ctxLen = 8192;
@@ -67,14 +67,14 @@ let
       specialTokens = true;
     }
     {
-      name = "Qwen3-0.6B-UD-Q8_K_XL";
+      name = "qwen3-0.6b";
       file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
       size = 844288480;
       ctxLen = 8192;
       onCpu = true;
     }
     {
-      name = "Qwen3-32B-UD-Q4_K_XL";
+      name = "qwen3-32b";
       file = "/mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf";
       size = 20021713344;
       ctxLen = 8192;
@@ -112,7 +112,7 @@ let
       memoryMB = (model.size / (1024 * 1024)) + ctxOverheadMB;
       specialTokensFlag = if model.specialTokens or false then "-sp" else "";
     in mkService {
-      name = "${model.name}${if model.onCpu then "-CPU" else "-GPU"}";
+      name = "${if model.onCpu then "cpu" else "gpu"}:${model.name}";
       listenPort = port;
       targetPort = targetPort;
       command = "llama-server";
@@ -130,7 +130,10 @@ let
     };
 
   # Generate all LLMs
-  llms = builtins.map (i: mkLlm i (builtins.elemAt models i)) (builtins.genList (x: x) (builtins.length models));
+  llms = let
+    # Sort models so GPU models come first (onCpu = false)
+    sortedModels = builtins.sort (a: b: !a.onCpu && b.onCpu) models;
+  in builtins.map (i: mkLlm i (builtins.elemAt sortedModels i)) (builtins.genList (x: x) (builtins.length models));
 
   # Generate the configuration
   config = {
