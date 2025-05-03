@@ -271,6 +271,7 @@ in
     };
   };
   services.tailscale.enable = true;
+
   systemd.services.largemodelproxy = {
     description = "Large Model Proxy";
     after = [ "docker.service" "network.target" ];
@@ -285,6 +286,21 @@ in
       RestartSec = "10s";
     };
   };
+  systemd.services.llmcord = {
+    description = "llmcord";
+    after = [ "largemodelproxy.service" ];
+    requires = [ "largemodelproxy.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.rustup ];
+
+    serviceConfig = {
+      WorkingDirectory = "/mnt/ssd2/ai/llmcord";
+      ExecStart = "cargo run";
+      Restart = "always";
+      RestartSec = "10s";
+    };
+  };
+
   security.rtkit.enable = true;
   services.udisks2.enable = true;
   services.devmon.enable = true;
