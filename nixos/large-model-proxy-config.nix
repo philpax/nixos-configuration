@@ -7,6 +7,35 @@ let
 
   # List of models with their configuration and actual file sizes
   models = [
+    # Qwen family
+    {
+      name = "qwen3-0.6b";
+      file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
+      size = 844288480;
+      ctxLen = 8192;
+      onCpu = true;
+    }
+    {
+      name = "qwen3-1.7b";
+      file = "/mnt/ssd2/ai/llm/Qwen3-1.7B-UD-Q8_K_XL.gguf";
+      size = 2332582368;
+      ctxLen = 8192;
+      onCpu = true;
+    }
+    {
+      name = "qwen3-4b";
+      file = "/mnt/ssd2/ai/llm/Qwen3-4B-UD-Q4_K_XL.gguf";
+      size = 2546340928;
+      ctxLen = 8192;
+      onCpu = true;
+    }
+    {
+      name = "qwen3-8b";
+      file = "/mnt/ssd2/ai/llm/Qwen3-8B-UD-Q4_K_XL.gguf";
+      size = 5148698208;
+      ctxLen = 8192;
+      onCpu = false;
+    }
     {
       name = "qwen3-30b-a3b";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
@@ -20,6 +49,29 @@ let
       size = 17715663200;
       ctxLen = 8192;
       onCpu = false;
+    }
+    {
+      name = "qwen3-32b";
+      file = "/mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf";
+      size = 20021713344;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+
+    # Gemma family
+    {
+      name = "gemma-3-1b-it";
+      file = "/mnt/ssd2/ai/llm/gemma-3-1b-it-Q8_0.gguf";
+      size = 1054929440;
+      ctxLen = 8192;
+      onCpu = true;
+    }
+    {
+      name = "gemma-3-4b-it";
+      file = "/mnt/ssd2/ai/llm/gemma-3-4b-it-UD-Q4_K_XL.gguf";
+      size = 2544288896;
+      ctxLen = 8192;
+      onCpu = true;
     }
     {
       name = "gemma-3-27b-it";
@@ -29,6 +81,15 @@ let
       onCpu = false;
     }
     {
+      name = "gemma-3-27b-it-abliterated";
+      file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-abliterated.q4_k_m.gguf";
+      size = 16546688736;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+
+    # GLM family
+    {
       name = "glm-4-32b-0414";
       file = "/mnt/ssd2/ai/llm/GLM-4-32B-0414-UD-Q4_K_XL.gguf";
       size = 19918569760;
@@ -36,26 +97,29 @@ let
       onCpu = false;
     }
     {
+      name = "glm-z1-9b-0414";
+      file = "/mnt/ssd2/ai/llm/GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
+      size = 6208387200;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+
+    # Mistral family
+    {
       name = "mistral-small-3.1-24b-instruct-2503";
       file = "/mnt/ssd2/ai/llm/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf";
       size = 15301055392;
       ctxLen = 8192;
       onCpu = false;
     }
+
+    # Phi family
     {
       name = "phi-4-mini-reasoning";
       file = "/mnt/ssd2/ai/llm/Phi-4-mini-reasoning-UD-Q8_K_XL.gguf";
       size = 5088418720;
       ctxLen = 8192;
       onCpu = true;
-      specialTokens = true;
-    }
-    {
-      name = "phi-4-reasoning-plus";
-      file = "/mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf";
-      size = 8947337920;
-      ctxLen = 8192;
-      onCpu = false;
       specialTokens = true;
     }
     {
@@ -67,16 +131,35 @@ let
       specialTokens = true;
     }
     {
-      name = "qwen3-0.6b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
-      size = 844288480;
+      name = "phi-4-reasoning-plus";
+      file = "/mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf";
+      size = 8947337920;
+      ctxLen = 8192;
+      onCpu = false;
+      specialTokens = true;
+    }
+
+    # OLMo family
+    {
+      name = "olmo-2-0425-1b-instruct";
+      file = "/mnt/ssd2/ai/llm/OLMo-2-0425-1B-Instruct-UD-Q8_K_XL.gguf";
+      size = 2242270432;
       ctxLen = 8192;
       onCpu = true;
     }
+
+    # Other models
     {
-      name = "qwen3-32b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf";
-      size = 20021713344;
+      name = "shuttleai-shuttle-3.5";
+      file = "/mnt/ssd2/ai/llm/shuttleai_shuttle-3.5-Q4_K_M.gguf";
+      size = 19762150176;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+    {
+      name = "tessa-rust-7b";
+      file = "/mnt/ssd2/ai/llm/tessa-rust-7b-q8_0.gguf";
+      size = 8098525024;
       ctxLen = 8192;
       onCpu = false;
     }
