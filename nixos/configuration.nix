@@ -1,6 +1,5 @@
 { config, pkgs, ... }:
 let
-  ddclientSecrets = import ./ddclient-secrets.nix;
   unstable = import
     (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/85c3ab0195ffe0d797704c9707e4da3d925be9b9)
     # reuse the current configuration
@@ -12,6 +11,13 @@ in
       /etc/nixos/hardware-configuration.nix
       ./no-rgb-service.nix
       (import ./ai { inherit config pkgs unstable; })
+      (import ./services/samba.nix { inherit config; })
+      (import ./services/navidrome.nix { inherit config; })
+      (import ./services/minecraft.nix { inherit config pkgs unstable; })
+      (import ./services/syncthing.nix { inherit config; })
+      (import ./services/media-servers.nix { inherit config; })
+      (import ./services/misc.nix { inherit config; })
+      (import ./services/ddclient.nix { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";
@@ -62,6 +68,7 @@ in
   hardware.nvidia.open = true;
   hardware.nvidia.modesetting.enable = false;
   hardware.nvidia-container-toolkit.enable = true;
+  services.xserver.videoDrivers = [ "nvidia" ];
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd = {
@@ -78,21 +85,13 @@ in
   networking = {
     hostName = "redline";
     firewall.allowedTCPPorts = [
-      22 # ssh
-      139 445 # smb
-      4533 # navidrome
       7860 # automatic1111
       8000 # python -m http.server
       8192 # http server testing
-      8384 # syncthing GUI
-      22000 # syncthing traffic
       5900 5901 5902 # spice/vnc
-      25565 25566 # minecraft server
       31338 # game server
     ] ++ config.ai.largeModelProxy.ports;
-    firewall.allowedUDPPorts =  [
-      137 138 # smb
-      22000 # syncthing traffic
+    firewall.allowedUDPPorts = [
       31337 # game server
     ];
     defaultGateway = "192.168.50.1";
@@ -124,24 +123,6 @@ in
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDwvEVMGi643L4ufnpEPLHgSIBs2pN1BMG7Z2SGlKPf8N/SjpjKmyUE9NJw1ACb/wQ7D83c+r1QSbW4PUgq1uIuLdOteNj6+QeTiXKW3rmDIQQy0TzV0v/KP5YxK2EXCtr1Bv7Ca/WVLcUzIkvp8xzvXXgB58FbrveRzBYMIiieQYXMvd70HkliccrczyIc0x2mE8KqXy3/TFnZHAw96AenIPcifLenQgSIDsds1JTJoyNWHNa1ac/UKrlzKqNzX2apdL8vX2W+FeR/IZ+Mi86coGR42LJvktYWexqs+876UhMvha4L5toKkqVMf/JH7E3YUt/TbXBykR2rRyxrzYpFUWrk/wL+si30YWK+6a4jD8RDtGzKy+sWM7xitJPaamE9k3bSmexBu3wSc8UCvWyOmHs/YAoFeJIKUET7b3sRKMZbt2tmR//JJdL+PdUsxX7T1JJt/z0wbFK+ENYJVPYUE/B/o8isBkpBdy0pJs7SVjT52wM0JrMqaqAN8HrfUzKt9N8HTaztCGjv86y/avH9it1gERDMTef6HaXROiQngdrChOjQ0nysfIxnsh48usD+p8VbXb54VZM0wRmPUgoUKZbro7AsHvtCNfNI1oBHYFTTIZsGHML5Ho8OlZ8XVTgaIufZc+ZkYN2lRXZPwhQwiIg3Kz0kMP5Uo4onMJOIJw== me@philpax.me"
     ];
   };
-
-  users.users.ai = {
-    isNormalUser = true;
-    description = "AI Services User";
-    home = "/mnt/ssd2/ai";
-    createHome = true;
-    group = "ai";
-    extraGroups = [ "docker" ];
-  };
-
-  users.groups.ai = {};
-
-  # Ensure the AI directory exists and has correct permissions
-  system.activationScripts.aiDir = pkgs.lib.mkAfter ''
-    mkdir -p /mnt/ssd2/ai
-    chown -R ai:ai /mnt/ssd2/ai
-    chmod -R 775 /mnt/ssd2/ai
-  '';
 
   environment.systemPackages = with pkgs; [
     wget
@@ -192,108 +173,8 @@ in
   };
   programs.nix-ld.enable = true;
 
-  services.openssh.enable = true;
-  services.openssh.settings.PasswordAuthentication = false;
-  services.hardware.openrgb.enable = true;
-  services.xserver.videoDrivers = [ "nvidia" ];
-  services.syncthing = {
-    enable = true;
-    user = "philpax";
-    dataDir = "/home/philpax";
-    configDir = "/home/philpax/.config/syncthing";
-    overrideDevices = true;
-    overrideFolders = true;
-    guiAddress = "127.0.0.1:8384";
-    settings = {
-      devices = {
-        "work-mbp" = { id = "755IIFA-4U6ZX4Z-MYVIMZT-6BR5MDT-UDGV42J-CDXBRC7-RVC26M2-XAEO3AB"; };
-        "the-wind-rises" = { id = "NLD2NYH-SAYR2TR-GSRXTMD-EWIQCYN-RNI2UDA-52QQEZX-FVVC3NC-YSPWYAY"; };
-      };
-      folders = {
-        "Notes" = {
-          path = "/mnt/ssd2/notes";
-          devices = [ "work-mbp" "the-wind-rises" ];
-        };
-      };
-    };
-  };
-  services.ddclient = {
-    enable = true;
-    configFile = pkgs.writeText "ddclient-config" ''
-      protocol=namecheap
-      use=web, web=dynamicdns.park-your-domain.com/getip
-      server=dynamicdns.park-your-domain.com
-      login=philpax.me
-      password=${ddclientSecrets.password}
-      promare.philpax.me
-    '';
-  };
-  services.resolved.enable = true;
-  services.plex = {
-    enable = true;
-    openFirewall = true;
-  };
-  services.navidrome = {
-    enable = true;
-    settings = {
-      Address = "0.0.0.0";
-      MusicFolder = "/mnt/external/Music";
-    };
-  };
-  services.jellyfin = {
-    enable = true;
-    openFirewall = true;
-  };
-  services.minecraft-server = {
-    enable = true;
-    eula = true;
-    openFirewall = true;
-
-    package = unstable.papermc;
-
-    jvmOpts = "-Xms4092M -Xmx4092M -XX:+UseG1GC";
-  };
-  services.samba = {
-    enable = true;
-    settings = {
-      global = {
-        workgroup = "WORKGROUP";
-        "server string" = "NixOS SMB Server";
-        "server role" = "standalone server";
-        "map to guest" = "Bad User";
-        "guest account" = "nobody";
-        "security" = "user";
-        # Disable printing services
-        "load printers" = "no";
-        "printing" = "bsd";
-        "printcap name" = "/dev/null";
-      };
-      photos = {
-        path = "/mnt/external/Photos";
-        comment = "Read-only Photos Share";
-        browsable = true;
-        "read only" = true;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-      videos = {
-        path = "/mnt/external/Videos";
-        comment = "Videos Share";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-    };
-  };
-  services.tailscale.enable = true;
-
   security.rtkit.enable = true;
   security.sudo.extraConfig = ''
     Defaults timestamp_timeout=60
   '';
-  services.udisks2.enable = true;
-  services.devmon.enable = true;
 }
