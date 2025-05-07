@@ -29,5 +29,8 @@ in
     ai = {
       inherit llamaCppCuda largeModelProxy;
     };
+
+    # Automatically add the ports to the firewall
+    networking.firewall.allowedTCPPorts = largeModelProxy.ports;
   };
 }

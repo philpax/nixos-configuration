@@ -81,7 +81,7 @@ in
     hostName = "redline";
     firewall.allowedTCPPorts = [
       8000 # python -m http.server
-    ] ++ config.ai.largeModelProxy.ports;
+    ];
     firewall.allowedUDPPorts = [];
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
