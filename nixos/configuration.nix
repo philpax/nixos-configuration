@@ -80,15 +80,9 @@ in
   networking = {
     hostName = "redline";
     firewall.allowedTCPPorts = [
-      7860 # automatic1111
       8000 # python -m http.server
-      8192 # http server testing
-      5900 5901 5902 # spice/vnc
-      31338 # game server
     ] ++ config.ai.largeModelProxy.ports;
-    firewall.allowedUDPPorts = [
-      31337 # game server
-    ];
+    firewall.allowedUDPPorts = [];
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
   };
