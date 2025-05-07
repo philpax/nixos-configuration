@@ -173,6 +173,7 @@ in
     enable = true;
     defaultEditor = true;
   };
+  programs.nix-ld.enable = true;
 
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = false;
