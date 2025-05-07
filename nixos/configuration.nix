@@ -119,12 +119,30 @@ in
   users.users.philpax = {
     isNormalUser = true;
     description = "philpax";
-    extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" ];
+    extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" "ai" ];
     packages = with pkgs; [];
     openssh.authorizedKeys.keys = [
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDwvEVMGi643L4ufnpEPLHgSIBs2pN1BMG7Z2SGlKPf8N/SjpjKmyUE9NJw1ACb/wQ7D83c+r1QSbW4PUgq1uIuLdOteNj6+QeTiXKW3rmDIQQy0TzV0v/KP5YxK2EXCtr1Bv7Ca/WVLcUzIkvp8xzvXXgB58FbrveRzBYMIiieQYXMvd70HkliccrczyIc0x2mE8KqXy3/TFnZHAw96AenIPcifLenQgSIDsds1JTJoyNWHNa1ac/UKrlzKqNzX2apdL8vX2W+FeR/IZ+Mi86coGR42LJvktYWexqs+876UhMvha4L5toKkqVMf/JH7E3YUt/TbXBykR2rRyxrzYpFUWrk/wL+si30YWK+6a4jD8RDtGzKy+sWM7xitJPaamE9k3bSmexBu3wSc8UCvWyOmHs/YAoFeJIKUET7b3sRKMZbt2tmR//JJdL+PdUsxX7T1JJt/z0wbFK+ENYJVPYUE/B/o8isBkpBdy0pJs7SVjT52wM0JrMqaqAN8HrfUzKt9N8HTaztCGjv86y/avH9it1gERDMTef6HaXROiQngdrChOjQ0nysfIxnsh48usD+p8VbXb54VZM0wRmPUgoUKZbro7AsHvtCNfNI1oBHYFTTIZsGHML5Ho8OlZ8XVTgaIufZc+ZkYN2lRXZPwhQwiIg3Kz0kMP5Uo4onMJOIJw== me@philpax.me"
     ];
   };
+
+  users.users.ai = {
+    isNormalUser = true;
+    description = "AI Services User";
+    home = "/mnt/ssd2/ai";
+    createHome = true;
+    group = "ai";
+    extraGroups = [ "docker" ];
+  };
+
+  users.groups.ai = {};
+
+  # Ensure the AI directory exists and has correct permissions
+  system.activationScripts.aiDir = pkgs.lib.mkAfter ''
+    mkdir -p /mnt/ssd2/ai
+    chown -R ai:ai /mnt/ssd2/ai
+    chmod -R 775 /mnt/ssd2/ai
+  '';
 
   environment.systemPackages = with pkgs; [
     wget
@@ -281,6 +299,8 @@ in
     path = [ llamaCppCuda pkgs.docker pkgs.curl pkgs.bash ];
 
     serviceConfig = {
+      User = "ai";
+      Group = "ai";
       WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
       ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${largeModelProxy.jsonFile}";
       Restart = "always";
@@ -294,6 +314,8 @@ in
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
+      User = "ai";
+      Group = "ai";
       WorkingDirectory = "/mnt/ssd2/ai/llmcord";
       ExecStart = "/mnt/ssd2/ai/llmcord/target/debug/llmcord";
       Restart = "always";
