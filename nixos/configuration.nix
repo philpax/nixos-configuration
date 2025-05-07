@@ -5,14 +5,13 @@ let
     (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/85c3ab0195ffe0d797704c9707e4da3d925be9b9)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
-  llamaCppCuda = (unstable.llama-cpp.override { cudaSupport = true; });
-  largeModelProxy = import ./large-model-proxy-config.nix { inherit pkgs; };
 in
 {
   imports =
     [
       /etc/nixos/hardware-configuration.nix
       ./no-rgb-service.nix
+      (import ./ai { inherit config pkgs unstable; })
     ];
 
   system.stateVersion = "24.11";
@@ -90,7 +89,7 @@ in
       5900 5901 5902 # spice/vnc
       25565 25566 # minecraft server
       31338 # game server
-    ] ++ largeModelProxy.ports;
+    ] ++ config.ai.largeModelProxy.ports;
     firewall.allowedUDPPorts =  [
       137 138 # smb
       22000 # syncthing traffic
@@ -179,7 +178,7 @@ in
     jellyfin-ffmpeg
     yt-dlp
     (openai-whisper-cpp.override { cudaSupport = true; })
-    llamaCppCuda
+    config.ai.llamaCppCuda
     imagemagick
     tailscale
     direnv
@@ -290,38 +289,6 @@ in
     };
   };
   services.tailscale.enable = true;
-
-  systemd.services.largemodelproxy = {
-    description = "Large Model Proxy";
-    after = [ "docker.service" "network.target" ];
-    requires = [ "docker.service" ];
-    wantedBy = [ "multi-user.target" ];
-    path = [ llamaCppCuda pkgs.docker pkgs.curl pkgs.bash ];
-
-    serviceConfig = {
-      User = "ai";
-      Group = "ai";
-      WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
-      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${largeModelProxy.jsonFile}";
-      Restart = "always";
-      RestartSec = "10s";
-    };
-  };
-  systemd.services.llmcord = {
-    description = "llmcord";
-    after = [ "largemodelproxy.service" ];
-    requires = [ "largemodelproxy.service" ];
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      User = "ai";
-      Group = "ai";
-      WorkingDirectory = "/mnt/ssd2/ai/llmcord";
-      ExecStart = "/mnt/ssd2/ai/llmcord/target/debug/llmcord";
-      Restart = "always";
-      RestartSec = "10s";
-    };
-  };
 
   security.rtkit.enable = true;
   services.udisks2.enable = true;
