@@ -291,6 +291,9 @@ in
   services.tailscale.enable = true;
 
   security.rtkit.enable = true;
+  security.sudo.extraConfig = ''
+    Defaults timestamp_timeout=60
+  '';
   services.udisks2.enable = true;
   services.devmon.enable = true;
 }
