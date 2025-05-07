@@ -18,6 +18,13 @@ in
       (import ./services/media-servers.nix { inherit config; })
       (import ./services/misc.nix { inherit config; })
       (import ./services/ddclient.nix { inherit config pkgs; })
+      (import ./programs/development.nix { inherit config pkgs; })
+      (import ./programs/system.nix { inherit config pkgs; })
+      (import ./programs/media.nix { inherit config pkgs; })
+      (import ./programs/ai.nix { inherit config pkgs; })
+      (import ./programs/virtualization.nix { inherit config pkgs; })
+      (import ./programs/network.nix { inherit config pkgs; })
+      (import ./programs/graphics.nix { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";
@@ -123,55 +130,6 @@ in
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDwvEVMGi643L4ufnpEPLHgSIBs2pN1BMG7Z2SGlKPf8N/SjpjKmyUE9NJw1ACb/wQ7D83c+r1QSbW4PUgq1uIuLdOteNj6+QeTiXKW3rmDIQQy0TzV0v/KP5YxK2EXCtr1Bv7Ca/WVLcUzIkvp8xzvXXgB58FbrveRzBYMIiieQYXMvd70HkliccrczyIc0x2mE8KqXy3/TFnZHAw96AenIPcifLenQgSIDsds1JTJoyNWHNa1ac/UKrlzKqNzX2apdL8vX2W+FeR/IZ+Mi86coGR42LJvktYWexqs+876UhMvha4L5toKkqVMf/JH7E3YUt/TbXBykR2rRyxrzYpFUWrk/wL+si30YWK+6a4jD8RDtGzKy+sWM7xitJPaamE9k3bSmexBu3wSc8UCvWyOmHs/YAoFeJIKUET7b3sRKMZbt2tmR//JJdL+PdUsxX7T1JJt/z0wbFK+ENYJVPYUE/B/o8isBkpBdy0pJs7SVjT52wM0JrMqaqAN8HrfUzKt9N8HTaztCGjv86y/avH9it1gERDMTef6HaXROiQngdrChOjQ0nysfIxnsh48usD+p8VbXb54VZM0wRmPUgoUKZbro7AsHvtCNfNI1oBHYFTTIZsGHML5Ho8OlZ8XVTgaIufZc+ZkYN2lRXZPwhQwiIg3Kz0kMP5Uo4onMJOIJw== me@philpax.me"
     ];
   };
-
-  environment.systemPackages = with pkgs; [
-    wget
-    linuxPackages.nvidia_x11
-    cudatoolkit
-    neofetch
-    git
-    rustup
-    go
-    gcc
-    openssl
-    openssl.dev
-    pkg-config
-    screen
-    ffmpeg-full
-    python3
-    poetry
-    awscli2
-    jq
-    rye
-    ntfs3g
-    qemu
-    OVMF
-    xdg-utils
-    nodejs_22
-    wineWowPackages.stable
-    winetricks
-    llvmPackages_17.bintools
-    ripgrep
-    p7zip
-    clang
-    jellyfin
-    jellyfin-web
-    jellyfin-ffmpeg
-    yt-dlp
-    (openai-whisper-cpp.override { cudaSupport = true; })
-    config.ai.llamaCppCuda
-    imagemagick
-    tailscale
-    direnv
-    rtorrent
-    croc
-    lm_sensors
-  ];
-  programs.neovim = {
-    enable = true;
-    defaultEditor = true;
-  };
-  programs.nix-ld.enable = true;
 
   security.rtkit.enable = true;
   security.sudo.extraConfig = ''
