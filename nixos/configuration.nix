@@ -11,20 +11,8 @@ in
       /etc/nixos/hardware-configuration.nix
       ./no-rgb-service.nix
       (import ./ai { inherit config pkgs unstable; })
-      (import ./services/samba.nix { inherit config; })
-      (import ./services/navidrome.nix { inherit config; })
-      (import ./services/minecraft.nix { inherit config pkgs unstable; })
-      (import ./services/syncthing.nix { inherit config; })
-      (import ./services/media-servers.nix { inherit config; })
-      (import ./services/misc.nix { inherit config; })
-      (import ./services/ddclient.nix { inherit config pkgs; })
-      (import ./programs/development.nix { inherit config pkgs; })
-      (import ./programs/system.nix { inherit config pkgs; })
-      (import ./programs/media.nix { inherit config pkgs; })
-      (import ./programs/ai.nix { inherit config pkgs; })
-      (import ./programs/virtualization.nix { inherit config pkgs; })
-      (import ./programs/network.nix { inherit config pkgs; })
-      (import ./programs/graphics.nix { inherit config pkgs; })
+      (import ./services { inherit config pkgs unstable; })
+      (import ./programs { inherit config pkgs unstable; })
     ];
 
   system.stateVersion = "24.11";
