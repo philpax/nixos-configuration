@@ -2,6 +2,7 @@
 let
   # Port definitions
   openaiPort = 7070;
+  managementPort = 7071;
   comfyuiPort = 8188;
   comfyuiTargetPort = 18188;
 
@@ -223,6 +224,9 @@ let
     OpenAiApi = {
       ListenPort = toString openaiPort;
     };
+    ManagementApi = {
+      ListenPort = toString managementPort;
+    };
     MaxTimeToWaitForServiceToCloseConnectionBeforeGivingUpSeconds = 1200;
     ShutDownAfterInactivitySeconds = 120;
     ResourcesAvailable = {
@@ -250,7 +254,7 @@ let
   jsonFile = pkgs.writeText "large-model-proxy-config.json" (builtins.toJSON config);
 
   # Extract all ports from the configuration
-  ports = [openaiPort] ++ (builtins.map (s: builtins.fromJSON s.ListenPort) config.Services);
+  ports = [openaiPort managementPort] ++ (builtins.map (s: builtins.fromJSON s.ListenPort) config.Services);
 in
 {
   inherit jsonFile ports;
