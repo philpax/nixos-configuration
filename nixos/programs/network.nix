@@ -10,4 +10,5 @@
     # Torrent client
     rtorrent
   ];
+  programs.ssh.startAgent = true;
 }
