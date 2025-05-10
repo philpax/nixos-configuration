@@ -164,6 +164,13 @@ let
       ctxLen = 8192;
       onCpu = false;
     }
+    {
+      name = "mn-12b-mag-mell-r1";
+      file = "/mnt/ssd2/ai/llm/MN-12B-Mag-Mell-R1.i1-Q4_K_M.gguf";
+      size = 7477206400;
+      ctxLen = 8192;
+      onCpu = false;
+    }
   ];
 
   # Helper function to create a service configuration
