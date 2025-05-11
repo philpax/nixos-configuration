@@ -12,49 +12,49 @@ let
     {
       name = "qwen3-0.6b";
       file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
-      size = 844288480;
+      size = 844288576;
       ctxLen = 8192;
       onCpu = true;
     }
     {
       name = "qwen3-1.7b";
       file = "/mnt/ssd2/ai/llm/Qwen3-1.7B-UD-Q8_K_XL.gguf";
-      size = 2332582368;
+      size = 2332582464;
       ctxLen = 8192;
       onCpu = true;
     }
     {
       name = "qwen3-4b";
       file = "/mnt/ssd2/ai/llm/Qwen3-4B-UD-Q4_K_XL.gguf";
-      size = 2546340928;
+      size = 2332582464;
       ctxLen = 8192;
       onCpu = true;
     }
     {
       name = "qwen3-8b";
       file = "/mnt/ssd2/ai/llm/Qwen3-8B-UD-Q4_K_XL.gguf";
-      size = 5148698208;
+      size = 5135722176;
       ctxLen = 8192;
       onCpu = false;
     }
     {
       name = "qwen3-30b-a3b";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
-      size = 17715663200;
+      size = 17715663296;
       ctxLen = 8192;
       onCpu = true;
     }
     {
       name = "qwen3-30b-a3b";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
-      size = 17715663200;
+      size = 17715663296;
       ctxLen = 8192;
       onCpu = false;
     }
     {
       name = "qwen3-32b";
       file = "/mnt/ssd2/ai/llm/Qwen3-32B-UD-Q4_K_XL.gguf";
-      size = 20021713344;
+      size = 20021713440;
       ctxLen = 8192;
       onCpu = false;
     }
@@ -101,6 +101,22 @@ let
       name = "glm-z1-9b-0414";
       file = "/mnt/ssd2/ai/llm/GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
       size = 6208387200;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+
+    # Llama family
+    {
+      name = "llama-3.2-3b-instruct";
+      file = "/mnt/ssd2/ai/llm/Llama-3.2-3B-Instruct-UD-Q4_K_XL.gguf";
+      size = 2060886464;
+      ctxLen = 8192;
+      onCpu = true;
+    }
+    {
+      name = "llama-3.3-70b-instruct-abliterated";
+      file = "/mnt/ssd2/ai/llm/Llama-3.3-70B-Instruct-abliterated-IQ2_XS.gguf";
+      size = 21142113344;
       ctxLen = 8192;
       onCpu = false;
     }
@@ -250,7 +266,7 @@ let
         args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p ${toString comfyuiTargetPort}:${toString comfyuiPort} pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
         killCommand = "docker kill comfyui";
         restartOnConnectionFailure = true;
-        shutDownAfterInactivitySeconds = 600;
+        shutDownAfterInactivitySeconds = 30;
         resourceRequirements = {
           "VRAM-GPU-1" = 20000;
           RAM = 16000;
