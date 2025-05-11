@@ -1,4 +1,4 @@
-{ pkgs, comfyuiPort, comfyuiTargetPort }:
+{ pkgs, comfyuiPort, comfyuiTargetPort, utils }:
 let
   # ComfyUI Docker image configuration
   comfyuiImageName = "comfyui-custom";
@@ -86,7 +86,27 @@ let
         ${comfyuiImage}
     '';
   };
+
+  # ComfyUI service configuration
+  service = utils.mkService {
+    name = "ComfyUI";
+    listenPort = comfyuiPort;
+    targetPort = comfyuiTargetPort;
+    command = "${comfyuiScript}/bin/comfyui-service";
+    args = "";
+    killCommand = "docker kill comfyui";
+    healthcheck = {
+      command = "curl --fail http://localhost:${toString comfyuiTargetPort}/system_stats";
+      intervalMilliseconds = 200;
+    };
+    restartOnConnectionFailure = true;
+    shutDownAfterInactivitySeconds = 30;
+    resourceRequirements = {
+      "VRAM-GPU-1" = 20000;
+      RAM = 16000;
+    };
+  };
 in
 {
-  inherit comfyuiScript comfyuiPort comfyuiTargetPort;
+  inherit comfyuiScript comfyuiPort comfyuiTargetPort service;
 }

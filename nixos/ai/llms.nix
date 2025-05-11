@@ -1,4 +1,4 @@
-{ pkgs, utils, ... }:
+{ pkgs, utils, llmBasePort, llmBaseTargetPort, ... }:
 let
   # List of models with their configuration and actual file sizes
   models = [
@@ -186,8 +186,8 @@ let
   # Function to create an LLM service from a model
   mkLlm = index: model:
     let
-      port = 8200 + index;
-      targetPort = 18200 + index;
+      port = llmBasePort + index;
+      targetPort = llmBaseTargetPort + index;
       # Calculate memory overhead from context length (ctxLen/4 MB)
       ctxOverheadMB = model.ctxLen / 4;
       memoryMB = (model.size / (1024 * 1024)) + ctxOverheadMB;

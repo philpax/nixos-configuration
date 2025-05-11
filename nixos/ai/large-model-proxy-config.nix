@@ -5,11 +5,13 @@ let
   managementPort = 7071;
   comfyuiPort = 8188;
   comfyuiTargetPort = 18188;
+  llmBasePort = 8200;
+  llmBaseTargetPort = 18200;
 
   # Import modules
   utils = import ./utils.nix { inherit pkgs; };
-  llms = import ./llms.nix { inherit pkgs utils; };
-  comfyui = import ./comfyui.nix { inherit pkgs comfyuiPort comfyuiTargetPort; };
+  llms = import ./llms.nix { inherit pkgs utils llmBasePort llmBaseTargetPort; };
+  comfyui = import ./comfyui.nix { inherit pkgs comfyuiPort comfyuiTargetPort utils; };
 
   # Generate the configuration
   config = {
@@ -25,26 +27,7 @@ let
       "VRAM-GPU-1" = 24000;
       RAM = 96000;
     };
-    Services = [
-      (utils.mkService {
-        name = "ComfyUI";
-        listenPort = comfyuiPort;
-        targetPort = comfyuiTargetPort;
-        command = "${comfyui.comfyuiScript}/bin/comfyui-service";
-        args = "";
-        killCommand = "docker kill comfyui";
-        healthcheck = {
-          command = "curl --fail http://localhost:${toString comfyuiTargetPort}/system_stats";
-          intervalMilliseconds = 200;
-        };
-        restartOnConnectionFailure = true;
-        shutDownAfterInactivitySeconds = 30;
-        resourceRequirements = {
-          "VRAM-GPU-1" = 20000;
-          RAM = 16000;
-        };
-      })
-    ] ++ llms.llms;
+    Services = [comfyui.service] ++ llms.llms;
   };
 
   # Generate the JSON file
