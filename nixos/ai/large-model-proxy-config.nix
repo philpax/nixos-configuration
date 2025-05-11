@@ -175,7 +175,7 @@ let
 
   # Helper function to create a service configuration
   mkService = {
-    name, listenPort, targetPort, command, args, healthcheck ? null, restartOnConnectionFailure ? false,
+    name, listenPort, targetPort, command, killCommand ? null, args, healthcheck ? null, restartOnConnectionFailure ? false,
     resourceRequirements, shutDownAfterInactivitySeconds ? 120, openaiApi ? false
   }: {
     Name = name;
@@ -184,6 +184,7 @@ let
     ProxyTargetPort = toString targetPort;
     Command = command;
     Args = args;
+    KillCommand = killCommand;
     OpenAiApi = openaiApi;
     RestartOnConnectionFailure = restartOnConnectionFailure;
     ResourceRequirements = resourceRequirements;
@@ -247,6 +248,7 @@ let
         targetPort = comfyuiTargetPort;
         command = "docker";
         args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p ${toString comfyuiTargetPort}:${toString comfyuiPort} pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
+        killCommand = "docker kill comfyui";
         restartOnConnectionFailure = true;
         shutDownAfterInactivitySeconds = 600;
         resourceRequirements = {
