@@ -265,6 +265,10 @@ let
         command = "docker";
         args = "run --rm --name comfyui --device nvidia.com/gpu=all -v /mnt/ssd2/ai/ComfyUI:/workspace -p ${toString comfyuiTargetPort}:${toString comfyuiPort} pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel /bin/bash -c 'cd /workspace && source .venv/bin/activate && apt update && apt install -y git && pip install -r requirements.txt && python main.py --listen --enable-cors-header'";
         killCommand = "docker kill comfyui";
+        healthcheck = {
+          command = "curl --fail http://localhost:${toString comfyuiTargetPort}/system_stats";
+          intervalMilliseconds = 200;
+        };
         restartOnConnectionFailure = true;
         shutDownAfterInactivitySeconds = 30;
         resourceRequirements = {
