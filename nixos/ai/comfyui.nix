@@ -53,8 +53,8 @@ let
         cat << EOF > /tmp/Dockerfile
       FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
 
-      # Install git
-      RUN apt-get update && apt-get install -y git
+      # Install dependencies
+      RUN apt-get update && apt-get install -y git libgl1-mesa-glx libglib2.0-0
 
       # Set up workspace
       WORKDIR /workspace
