@@ -31,6 +31,7 @@
       ExecStart = "/mnt/ssd2/ai/llmcord/target/debug/llmcord";
       Restart = "always";
       RestartSec = "10s";
+      Environment = [ "RUST_BACKTRACE=1" ];
     };
   };
 }
