@@ -21,6 +21,7 @@ let
     ManagementApi = {
       ListenPort = toString managementPort;
     };
+    DefaultServiceUrl = "http://192.168.50.201:{{.PORT}}";
     MaxTimeToWaitForServiceToCloseConnectionBeforeGivingUpSeconds = 1200;
     ShutDownAfterInactivitySeconds = 120;
     ResourcesAvailable = {
