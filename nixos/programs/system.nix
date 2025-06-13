@@ -4,7 +4,7 @@
   environment.systemPackages = with pkgs; [
     # Basic system tools
     wget
-    neofetch
+    fastfetch
     screen
     jq
 
