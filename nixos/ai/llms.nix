@@ -18,13 +18,6 @@ let
       onCpu = true;
     }
     {
-      name = "qwen3-4b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-4B-UD-Q4_K_XL.gguf";
-      size = 2332582464;
-      ctxLen = 8192;
-      onCpu = true;
-    }
-    {
       name = "qwen3-8b";
       file = "/mnt/ssd2/ai/llm/Qwen3-8B-UD-Q4_K_XL.gguf";
       size = 5135722176;
@@ -117,11 +110,20 @@ let
 
     # Mistral family
     {
-      name = "mistral-small-3.1-24b-instruct-2503";
-      file = "/mnt/ssd2/ai/llm/Mistral-Small-3.1-24B-Instruct-2503-UD-Q4_K_XL.gguf";
-      size = 15301055392;
+      name = "mistral-small-3.2-24b-instruct-2506";
+      file = "/mnt/ssd2/ai/llm/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf";
+      size = 16765840768;
       ctxLen = 8192;
       onCpu = false;
+      jinja = true;
+    }
+    {
+      name = "magistral-small-2506";
+      file = "/mnt/ssd2/ai/llm/Magistral-Small-2506-UD-Q5_K_XL.gguf";
+      size = 16765828640;
+      ctxLen = 8192;
+      onCpu = false;
+      jinja = true;
     }
 
     # Phi family
@@ -137,14 +139,6 @@ let
       name = "phi-4-reasoning";
       file = "/mnt/ssd2/ai/llm/phi-4-reasoning-UD-Q4_K_XL.gguf";
       size = 8947338528;
-      ctxLen = 8192;
-      onCpu = false;
-      specialTokens = true;
-    }
-    {
-      name = "phi-4-reasoning-plus";
-      file = "/mnt/ssd2/ai/llm/Phi-4-reasoning-plus-UD-Q4_K_XL.gguf";
-      size = 8947337920;
       ctxLen = 8192;
       onCpu = false;
       specialTokens = true;
@@ -174,13 +168,6 @@ let
       ctxLen = 8192;
       onCpu = false;
     }
-    {
-      name = "mn-12b-mag-mell-r1";
-      file = "/mnt/ssd2/ai/llm/MN-12B-Mag-Mell-R1.i1-Q4_K_M.gguf";
-      size = 7477206400;
-      ctxLen = 8192;
-      onCpu = false;
-    }
   ];
 
   # Function to create an LLM service from a model
@@ -191,6 +178,7 @@ let
       # Calculate memory overhead from context length (ctxLen/4 MB)
       ctxOverheadMB = model.ctxLen / 4;
       memoryMB = (model.size / (1024 * 1024)) + ctxOverheadMB;
+      jinjaFlag = if model.jinja or false then "--jinja" else "";
       specialTokensFlag = if model.specialTokens or false then "-sp" else "";
     in utils.mkService {
       name = "${if model.onCpu then "cpu" else "gpu"}:${model.name}";
@@ -198,7 +186,7 @@ let
       targetPort = targetPort;
       command = "llama-server";
       openaiApi = true;
-      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.onCpu then "--threads 24" else "-ngl 100"} ${specialTokensFlag} --port ${toString targetPort}";
+      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.onCpu then "--threads 24" else "-ngl 100"} ${jinjaFlag} ${specialTokensFlag} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
         intervalMilliseconds = 200;
