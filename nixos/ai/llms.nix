@@ -55,13 +55,6 @@ let
       onCpu = true;
     }
     {
-      name = "gemma-3-4b-it";
-      file = "/mnt/ssd2/ai/llm/gemma-3-4b-it-UD-Q4_K_XL.gguf";
-      size = 2544288896;
-      ctxLen = 8192;
-      onCpu = true;
-    }
-    {
       name = "gemma-3-27b-it";
       file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-UD-Q4_K_XL.gguf";
       size = 16796522208;
@@ -73,6 +66,20 @@ let
       file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-abliterated.q4_k_m.gguf";
       size = 16546688736;
       ctxLen = 8192;
+      onCpu = false;
+    }
+    {
+      name = "gemma-3-glitter-27b";
+      file = "/mnt/ssd2/ai/llm/Gemma-3-Glitter-27B.i1-Q5_K_M.gguf";
+      size = 19271392672;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+    {
+      name = "gemma-3n-e4b-it";
+      file = "/mnt/ssd2/ai/llm/gemma-3n-E4B-it-Q6_K.gguf";
+      size = 6272219264;
+      ctxLen = 16384;
       onCpu = false;
     }
 
@@ -88,6 +95,13 @@ let
       name = "glm-z1-9b-0414";
       file = "/mnt/ssd2/ai/llm/GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
       size = 6208387200;
+      ctxLen = 8192;
+      onCpu = false;
+    }
+    {
+      name = "glm-4-32b-neon-v2";
+      file = "/mnt/ssd2/ai/llm/allura-org_GLM4-32B-Neon-v2-Q4_K_M.gguf";
+      size = 19680022720;
       ctxLen = 8192;
       onCpu = false;
     }
@@ -118,30 +132,20 @@ let
       jinja = true;
     }
     {
+      name = "mistral-small-3.2-24b-angel";
+      file = "/mnt/ssd2/ai/llm/allura-org_MS3.2-24b-Angel-Q5_K_M.gguf";
+      size = 16763989696;
+      ctxLen = 8192;
+      onCpu = false;
+      jinja = true;
+    }
+    {
       name = "magistral-small-2506";
       file = "/mnt/ssd2/ai/llm/Magistral-Small-2506-UD-Q5_K_XL.gguf";
       size = 16765828640;
       ctxLen = 8192;
       onCpu = false;
       jinja = true;
-    }
-
-    # Phi family
-    {
-      name = "phi-4-mini-reasoning";
-      file = "/mnt/ssd2/ai/llm/Phi-4-mini-reasoning-UD-Q8_K_XL.gguf";
-      size = 5088418720;
-      ctxLen = 8192;
-      onCpu = true;
-      specialTokens = true;
-    }
-    {
-      name = "phi-4-reasoning";
-      file = "/mnt/ssd2/ai/llm/phi-4-reasoning-UD-Q4_K_XL.gguf";
-      size = 8947338528;
-      ctxLen = 8192;
-      onCpu = false;
-      specialTokens = true;
     }
 
     # OLMo family
