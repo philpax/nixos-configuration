@@ -20,7 +20,7 @@
         path = "/mnt/external/Photos";
         comment = "Read-only Photos Share";
         browsable = true;
-        "read only" = true;
+        "read only" = false;
         "guest ok" = true;
         "create mask" = "0444";
         "directory mask" = "0555";
@@ -37,6 +37,15 @@
       music = {
         path = "/mnt/external/Music";
         comment = "Music Share";
+        browsable = true;
+        "read only" = false;
+        "guest ok" = true;
+        "create mask" = "0444";
+        "directory mask" = "0555";
+      };
+      written = {
+        path = "/mnt/external/Written";
+        comment = "Written Share";
         browsable = true;
         "read only" = false;
         "guest ok" = true;
