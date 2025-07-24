@@ -26,6 +26,7 @@ let
     ShutDownAfterInactivitySeconds = 120;
     ResourcesAvailable = {
       "VRAM-GPU-1" = 24000;
+      "VRAM-GPU-2" = 24000;
       RAM = 96000;
     };
     Services = [comfyui.service] ++ llms.llms;
