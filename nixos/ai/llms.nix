@@ -25,16 +25,16 @@ let
       mode = "gpu";
     }
     {
-      name = "qwen3-30b-a3b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
-      size = 17715663296;
+      name = "qwen3-30b-a3b-instruct-2507";
+      file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
+      size = 17690497440;
       ctxLen = 8192;
       mode = "cpu";
     }
     {
-      name = "qwen3-30b-a3b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-UD-Q4_K_XL.gguf";
-      size = 17715663296;
+      name = "qwen3-30b-a3b-instruct-2507";
+      file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
+      size = 17690497440;
       ctxLen = 8192;
       mode = "gpu";
     }
