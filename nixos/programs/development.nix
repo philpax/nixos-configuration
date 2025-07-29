@@ -10,6 +10,7 @@
     poetry
     nodejs_22
     rye
+    uv
 
     # Development utilities
     git
