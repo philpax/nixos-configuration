@@ -54,7 +54,8 @@ let
       split = true;
       memoryOverride = {
         cpu = 87 * 1024; # 87GB in MB
-        gpu = 18.5 * 1024; # 18.5GB per GPU in MB
+        gpu1 = 18.5 * 1024; # 18.5GB on GPU-1 in MB
+        gpu2 = 18.5 * 1024; # 18.5GB on GPU-2 in MB
       };
       extraArgs = "--threads 24 -ot \".ffn_(up|down)_exps.=CPU\" --prio 3 --temp 0.7 --min-p 0.0 --top-p 0.8 --top-k 20";
     }
@@ -205,7 +206,7 @@ let
       ctxOverheadMB = model.ctxLen / 4;
       # Use memory override if provided, otherwise calculate from file size
       memoryMB = if model.memoryOverride or null != null then
-        (if model.mode == "cpu" then model.memoryOverride.cpu else model.memoryOverride.gpu)
+        (if model.mode == "cpu" then model.memoryOverride.cpu else model.memoryOverride.gpu or model.memoryOverride.gpu1 or 0)
       else
         (model.size / (1024 * 1024)) + ctxOverheadMB;
       # Calculate CPU and GPU memory requirements
@@ -213,8 +214,12 @@ let
         (if model.mode == "cpu" then memoryMB else model.memoryOverride.cpu or 0)
       else
         memoryMB;
-      gpuMemoryMB = if model.memoryOverride or null != null then
-        (if model.mode == "cpu" then 0 else model.memoryOverride.gpu or memoryMB)
+      gpu1MemoryMB = if model.memoryOverride or null != null then
+        (if model.mode == "cpu" then 0 else model.memoryOverride.gpu1 or model.memoryOverride.gpu or memoryMB)
+      else
+        (if model.mode == "cpu" then 0 else memoryMB);
+      gpu2MemoryMB = if model.memoryOverride or null != null then
+        (if model.mode == "cpu" then 0 else model.memoryOverride.gpu2 or model.memoryOverride.gpu or memoryMB)
       else
         (if model.mode == "cpu" then 0 else memoryMB);
 
@@ -245,15 +250,21 @@ let
         RAM = builtins.ceil cpuMemoryMB;
       } else if model.mode == "gpu" then
         if model.split or false then {
-          "VRAM-GPU-1" = builtins.ceil (gpuMemoryMB / 2);
-          "VRAM-GPU-2" = builtins.ceil (gpuMemoryMB / 2);
+          "VRAM-GPU-1" = builtins.ceil (gpu1MemoryMB / 2);
+          "VRAM-GPU-2" = builtins.ceil (gpu2MemoryMB / 2);
         } else {
-          "VRAM-GPU-1" = builtins.ceil gpuMemoryMB;
+          "VRAM-GPU-1" = builtins.ceil gpu1MemoryMB;
         }
-      else if model.mode == "hybrid" then {
-        RAM = builtins.ceil cpuMemoryMB;
-        "VRAM-GPU-1" = builtins.ceil gpuMemoryMB;
-      } else {
+      else if model.mode == "hybrid" then
+        if model.memoryOverride or null != null && model.memoryOverride.gpu1 or null != null && model.memoryOverride.gpu2 or null != null then {
+          RAM = builtins.ceil cpuMemoryMB;
+          "VRAM-GPU-1" = builtins.ceil gpu1MemoryMB;
+          "VRAM-GPU-2" = builtins.ceil gpu2MemoryMB;
+        } else {
+          RAM = builtins.ceil cpuMemoryMB;
+          "VRAM-GPU-1" = builtins.ceil gpu1MemoryMB;
+        }
+      else {
 
       };
     };
