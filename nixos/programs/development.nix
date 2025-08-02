@@ -7,6 +7,7 @@
     go
     gcc
     python3
+    python3Packages.pip
     poetry
     nodejs_22
     rye
@@ -16,6 +17,9 @@
     git
     ripgrep
     direnv
+    gnumake
+    cmake
+    extra-cmake-modules
 
     # Build dependencies
     openssl
@@ -23,6 +27,7 @@
     pkg-config
     clang
     llvmPackages_17.bintools
+    libgcc
   ];
 
   programs.neovim = {
