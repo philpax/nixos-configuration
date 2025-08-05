@@ -39,5 +39,5 @@ let
   ports = [openaiPort managementPort] ++ (builtins.map (s: builtins.fromJSON s.ListenPort) config.Services);
 in
 {
-  inherit jsonFile ports;
+  inherit jsonFile ports comfyui;
 }

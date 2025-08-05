@@ -3,6 +3,7 @@
 let
   llamaCppCuda = (unstable.llama-cpp.override { cudaSupport = true; });
   largeModelProxy = import ./large-model-proxy-config.nix { inherit pkgs; };
+  comfyui = largeModelProxy.comfyui;
 in
 {
   imports = [
@@ -32,5 +33,8 @@ in
 
     # Automatically add the ports to the firewall
     networking.firewall.allowedTCPPorts = largeModelProxy.ports;
+
+    # Add ComfyUI rebuild command to system environment
+    environment.systemPackages = [ comfyui.comfyuiRebuildScript ];
   };
 }
