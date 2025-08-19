@@ -4,23 +4,9 @@ let
   models = [
     # Qwen family
     {
-      name = "qwen3-0.6b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-0.6B-UD-Q8_K_XL.gguf";
-      size = 844288576;
-      ctxLen = 8192;
-      mode = "cpu";
-    }
-    {
-      name = "qwen3-1.7b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-1.7B-UD-Q8_K_XL.gguf";
-      size = 2332582464;
-      ctxLen = 8192;
-      mode = "cpu";
-    }
-    {
-      name = "qwen3-8b";
-      file = "/mnt/ssd2/ai/llm/Qwen3-8B-UD-Q4_K_XL.gguf";
-      size = 5135722176;
+      name = "qwen3-4b-instruct";
+      file = "/mnt/ssd2/ai/llm/Qwen3-4B-Instruct-2507-UD-Q5_K_XL.gguf";
+      size = 2899221600;
       ctxLen = 8192;
       mode = "gpu";
     }
@@ -35,6 +21,20 @@ let
       name = "qwen3-30b-a3b-instruct-2507";
       file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
       size = 17690497440;
+      ctxLen = 8192;
+      mode = "gpu";
+    }
+    {
+      name = "qwen3-30b-a3b-thinking-2507";
+      file = "/mnt/ssd2/ai/llm/Qwen3-30B-A3B-Thinking-2507-UD-Q4_K_XL.gguf";
+      size = 17715663264;
+      ctxLen = 8192;
+      mode = "gpu";
+    }
+    {
+      name = "qwen3-30b-a3b-coder-2507";
+      file = "/mnt/ssd2/ai/llm/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
+      size = 17665334432;
       ctxLen = 8192;
       mode = "gpu";
     }
@@ -62,13 +62,6 @@ let
 
     # Gemma family
     {
-      name = "gemma-3-1b-it";
-      file = "/mnt/ssd2/ai/llm/gemma-3-1b-it-Q8_0.gguf";
-      size = 1054929440;
-      ctxLen = 8192;
-      mode = "cpu";
-    }
-    {
       name = "gemma-3-27b-it";
       file = "/mnt/ssd2/ai/llm/gemma-3-27b-it-UD-Q4_K_XL.gguf";
       size = 16796522208;
@@ -91,8 +84,8 @@ let
     }
     {
       name = "gemma-3n-e4b-it";
-      file = "/mnt/ssd2/ai/llm/gemma-3n-E4B-it-Q6_K.gguf";
-      size = 6272219264;
+      file = "/mnt/ssd2/ai/llm/gemma-3n-E4B-it-UD-Q4_K_XL.gguf";
+      size = 5385042048;
       ctxLen = 16384;
       mode = "gpu";
     }
@@ -113,27 +106,35 @@ let
       mode = "gpu";
     }
     {
-      name = "glm-4-32b-neon-v2";
-      file = "/mnt/ssd2/ai/llm/allura-org_GLM4-32B-Neon-v2-Q4_K_M.gguf";
-      size = 19680022720;
-      ctxLen = 8192;
-      mode = "gpu";
+      name = "glm-4-5-air";
+      file = "/mnt/ssd2/ai/llm/GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf";
+      size = 0;
+      ctxLen = 16384;
+      mode = "hybrid";
+      split = true;
+      memoryOverride = {
+        cpu = 20 * 1024;
+        gpu1 = 21 * 1024;
+        gpu2 = 14 * 1024;
+      };
+      extraArgs = "--threads 24 -ot \"\\.([0-9][0-9])\\.ffn_(up|down)_exps.=CPU\"";
     }
 
     # Llama family
-    {
-      name = "llama-3.2-3b-instruct";
-      file = "/mnt/ssd2/ai/llm/Llama-3.2-3B-Instruct-UD-Q4_K_XL.gguf";
-      size = 2060886464;
-      ctxLen = 8192;
-      mode = "cpu";
-    }
     {
       name = "llama-3.3-70b-instruct-abliterated";
       file = "/mnt/ssd2/ai/llm/Llama-3.3-70B-Instruct-abliterated-IQ2_XS.gguf";
       size = 21142113344;
       ctxLen = 8192;
       mode = "gpu";
+    }
+    {
+      name = "llama-3.3-nemotron-super-49b-v1_5";
+      file = "/mnt/ssd2/ai/llm/Llama-3_3-Nemotron-Super-49B-v1_5-UD-Q4_K_XL.gguf";
+      size = 30363166624;
+      ctxLen = 8192;
+      mode = "gpu";
+      split = true;
     }
 
     # Mistral family
@@ -143,56 +144,15 @@ let
       size = 16765840768;
       ctxLen = 8192;
       mode = "gpu";
-      jinja = true;
-    }
-    {
-      name = "mistral-small-3.2-24b-angel";
-      file = "/mnt/ssd2/ai/llm/allura-org_MS3.2-24b-Angel-Q5_K_M.gguf";
-      size = 16763989696;
-      ctxLen = 8192;
-      mode = "gpu";
-      jinja = true;
-    }
-    {
-      name = "magistral-small-2506";
-      file = "/mnt/ssd2/ai/llm/Magistral-Small-2506-UD-Q5_K_XL.gguf";
-      size = 16765828640;
-      ctxLen = 8192;
-      mode = "gpu";
-      jinja = true;
     }
 
-    # OLMo family
+    # GPT OSS family
     {
-      name = "olmo-2-0425-1b-instruct";
-      file = "/mnt/ssd2/ai/llm/OLMo-2-0425-1B-Instruct-UD-Q8_K_XL.gguf";
-      size = 2242270432;
-      ctxLen = 8192;
-      mode = "cpu";
-    }
-
-    # Other models
-    {
-      name = "shuttleai-shuttle-3.5";
-      file = "/mnt/ssd2/ai/llm/shuttleai_shuttle-3.5-Q4_K_M.gguf";
-      size = 19762150176;
+      name = "gpt-oss-20b";
+      file = "/mnt/ssd2/ai/llm/gpt-oss-20b-UD-Q4_K_XL.gguf";
+      size = 11872347328;
       ctxLen = 8192;
       mode = "gpu";
-    }
-    {
-      name = "tessa-rust-7b";
-      file = "/mnt/ssd2/ai/llm/tessa-rust-7b-q8_0.gguf";
-      size = 8098525024;
-      ctxLen = 8192;
-      mode = "gpu";
-    }
-    {
-      name = "cassiopeia-70b";
-      file = "/mnt/ssd2/ai/llm/ddh0_Cassiopeia-70B-Q4_K_M.gguf";
-      size = 42520399072;
-      ctxLen = 8192;
-      mode = "gpu";
-      split = true;
     }
   ];
 
@@ -223,7 +183,6 @@ let
       else
         (if model.mode == "cpu" then 0 else memoryMB);
 
-      jinjaFlag = if model.jinja or false then "--jinja" else "";
       specialTokensFlag = if model.specialTokens or false then "-sp" else "";
 
       # Validate that split is only used with gpu mode
@@ -241,7 +200,7 @@ let
       targetPort = targetPort;
       command = "llama-server";
       openaiApi = true;
-      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} ${jinjaFlag} ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
+      args = "-m ${model.file} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} --jinja ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
         intervalMilliseconds = 200;
