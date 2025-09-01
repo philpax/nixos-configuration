@@ -17,14 +17,17 @@ DOTFILES_TARGET="$HOME"
 usage() {
     echo "Usage: $0 <folder_name>"
     echo ""
-    echo "Creates all symlinks for NixOS and dotfiles, then creates a symlink"
-    echo "from /etc/nixos/configuration.nix to \$NIXOS_SOURCE/<folder_name>/configuration.nix"
+    echo "Creates symlinks for NixOS (only 'common' and '<folder_name>' folders) and dotfiles,"
+    echo "then creates a symlink from /etc/nixos/configuration.nix to \$NIXOS_SOURCE/<folder_name>/configuration.nix"
+    echo ""
+    echo "Note: Only the 'common' folder and the specified '<folder_name>' folder will be symlinked"
+    echo "from the NixOS source directory to avoid symlinking other machines' configurations."
     echo ""
     echo "Available targets:"
     list_available_targets
     echo ""
     echo "Examples:"
-    echo "  $0 <target>   # Create all symlinks + <target> configuration"
+    echo "  $0 <target>   # Create symlinks for 'common' + '<target>' + dotfiles"
 }
 
 # Function to list available targets (folders in NIXOS_SOURCE)
@@ -81,9 +84,19 @@ create_config_symlink() {
 build_symlink_list() {
     local source_dir="$1"
     local target_dir="$2"
+    local folder_name="$3"
 
     find "$source_dir" -type f | while read -r source_path; do
         local relative_path="${source_path#$source_dir/}"
+
+        # For NixOS source, only include files from 'common' and the specified folder
+        if [ "$source_dir" = "$NIXOS_SOURCE" ]; then
+            local first_dir=$(echo "$relative_path" | cut -d'/' -f1)
+            if [ "$first_dir" != "common" ] && [ "$first_dir" != "$folder_name" ]; then
+                continue
+            fi
+        fi
+
         local target_path="$target_dir/$relative_path"
         echo "$target_path -> $source_path"
     done
@@ -133,8 +146,8 @@ fi
 FOLDER_NAME="$1"
 
 # Build the lists of proposed symlinks
-nixos_symlinks=$(build_symlink_list "$NIXOS_SOURCE" "$NIXOS_TARGET")
-dotfiles_symlinks=$(build_symlink_list "$DOTFILES_SOURCE" "$DOTFILES_TARGET")
+nixos_symlinks=$(build_symlink_list "$NIXOS_SOURCE" "$NIXOS_TARGET" "$FOLDER_NAME")
+dotfiles_symlinks=$(build_symlink_list "$DOTFILES_SOURCE" "$DOTFILES_TARGET" "$FOLDER_NAME")
 
 # Display the proposed symlinks
 echo "Proposed symlinks for NixOS configuration:"
@@ -150,8 +163,8 @@ read -p "Are these symlinks OK? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
-    # Create/Update symlinks for NixOS configuration
-    echo "Creating/Updating symlinks for NixOS configuration..."
+    # Create/Update symlinks for NixOS configuration (only 'common' and specified folder)
+    echo "Creating/Updating symlinks for NixOS configuration (common + $FOLDER_NAME)..."
     create_or_update_symlinks "$nixos_symlinks" true
 
     # Create/Update symlinks for dotfiles
