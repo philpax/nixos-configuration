@@ -34,7 +34,7 @@ list_available_targets() {
         return 1
     fi
 
-    local targets=$(find "$NIXOS_SOURCE" -maxdepth 1 -type d -name "*" | grep -v "^$NIXOS_SOURCE$" | sort)
+    local targets=$(find "$NIXOS_SOURCE" -maxdepth 1 -type d -name "*" | grep -v "^$NIXOS_SOURCE$" | grep -v "common" | sort)
 
     if [ -z "$targets" ]; then
         echo "  No targets found in $NIXOS_SOURCE"

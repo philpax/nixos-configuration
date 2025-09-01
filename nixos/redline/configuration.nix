@@ -8,7 +8,7 @@ in
 {
   imports =
     [
-      ../common.nix
+      ../common/configuration.nix
       (import ./ai { inherit config pkgs unstable; })
       (import ./services { inherit config pkgs unstable; })
       (import ./programs { inherit config pkgs unstable; })

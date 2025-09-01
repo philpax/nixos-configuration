@@ -9,6 +9,7 @@ in
   imports =
     [
       /etc/nixos/hardware-configuration.nix
+      (import ./programs { inherit config pkgs unstable; })
     ];
 
   system.autoUpgrade.enable = true;
