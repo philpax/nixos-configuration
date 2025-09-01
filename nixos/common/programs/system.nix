@@ -14,6 +14,9 @@
 
     # System monitoring
     lm_sensors
+
+    # Misc
+    xdg-utils
   ];
 
   programs.nix-ld.enable = true;

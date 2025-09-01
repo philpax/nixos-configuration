@@ -5,8 +5,5 @@
     # NVIDIA packages
     linuxPackages.nvidia_x11
     cudatoolkit
-
-    # Desktop utilities
-    xdg-utils
   ];
 }

@@ -9,16 +9,13 @@ in
   imports =
     [
       /etc/nixos/hardware-configuration.nix
+      (import ./services { inherit config pkgs unstable; })
       (import ./programs { inherit config pkgs unstable; })
     ];
 
   system.autoUpgrade.enable = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
-
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.supportedFilesystems = [ "ntfs" ];
 
   time.timeZone = "Europe/Stockholm";
   i18n.defaultLocale = "en_AU.UTF-8";

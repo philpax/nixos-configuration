@@ -14,9 +14,6 @@
     uv
 
     # Development utilities
-    git
-    ripgrep
-    direnv
     gnumake
     cmake
     extra-cmake-modules
