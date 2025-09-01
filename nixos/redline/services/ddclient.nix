@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  ddclientSecrets = import ../ddclient-secrets.nix;
+  ddclientSecrets = import ../secrets/ddclient.nix;
 in
 {
   services.ddclient = {

@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 let
   no-rgb = pkgs.writeScriptBin "no-rgb" ''
     #!/bin/sh
