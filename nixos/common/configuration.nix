@@ -21,6 +21,8 @@ in
   i18n.defaultLocale = "en_AU.UTF-8";
   i18n.supportedLocales = ["en_AU.UTF-8/UTF-8"];
   i18n.extraLocaleSettings = {
+    LC_ALL = "en_AU.UTF-8";
+    LC_CTYPE = "en_AU.UTF-8";
     LC_ADDRESS = "en_AU.UTF-8";
     LC_IDENTIFICATION = "en_AU.UTF-8";
     LC_MEASUREMENT = "en_AU.UTF-8";

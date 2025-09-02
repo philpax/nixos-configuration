@@ -7,6 +7,7 @@
     fastfetch
     screen
     jq
+    parallel
 
     # File system tools
     ntfs3g
