@@ -37,6 +37,35 @@
     kdePackages.kate
   ];
 
+  # Install fonts
+  fonts.packages = with pkgs; [
+    corefonts
+    noto-fonts
+    noto-fonts-cjk-sans
+    noto-fonts-emoji
+    noto-fonts-extra
+    ipafont
+    iosevka
+  ];
+
+  # Set default fonts
+  fonts.fontconfig.defaultFonts = {
+    monospace = [
+      "Iosevka"
+      "Noto Sans Mono CJK JP"
+    ];
+
+    sansSerif = [
+      "Noto Sans"
+      "Noto Sans CJK JP"
+    ];
+
+    serif = [
+      "Noto Serif"
+      "Noto Serif CJK JP"
+    ];
+  };
+
   # Enable automatic login for the user.
   services.displayManager.autoLogin.enable = true;
   services.displayManager.autoLogin.user = "philpax";
