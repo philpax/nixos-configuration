@@ -33,22 +33,28 @@
     #jack.enable = true;
   };
 
+  environment.systemPackages = with pkgs; [
+    goldendict-ng
+    anki-bin
+  ];
+
   users.users.philpax.packages = with pkgs; [
     kdePackages.kate
   ];
 
-  # Install fonts
+  fonts.enableDefaultPackages = true;
   fonts.packages = with pkgs; [
     corefonts
     noto-fonts
     noto-fonts-cjk-sans
     noto-fonts-emoji
     noto-fonts-extra
+    liberation_ttf
+    dejavu_fonts
+    ubuntu_font_family
     ipafont
     iosevka
   ];
-
-  # Set default fonts
   fonts.fontconfig.defaultFonts = {
     monospace = [
       "Iosevka"
