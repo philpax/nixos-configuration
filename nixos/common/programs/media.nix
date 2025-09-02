@@ -5,5 +5,6 @@
     ffmpeg-full
     yt-dlp
     imagemagick
+    mpv
   ];
 }

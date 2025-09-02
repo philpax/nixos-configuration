@@ -31,6 +31,10 @@ in
     LC_TIME = "en_AU.UTF-8";
   };
 
+  environment.systemPackages = [
+    pkgs.anki-bin
+  ];
+
   users.users.philpax = {
     isNormalUser = true;
     description = "philpax";
