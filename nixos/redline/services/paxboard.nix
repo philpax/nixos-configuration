@@ -10,7 +10,7 @@ in
   users.users.${paxboardUser} = {
     isSystemUser = true;
     group = paxboardGroup;
-    description = "Paxboard service user";
+    description = "paxboard service user";
     home = "/var/lib/paxboard";
     createHome = true;
     shell = "${pkgs.bash}/bin/bash";
@@ -20,7 +20,7 @@ in
 
   # Create the systemd service
   systemd.services.paxboard = {
-    description = "Paxboard service";
+    description = "paxboard";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
@@ -28,7 +28,7 @@ in
       Type = "simple";
       User = paxboardUser;
       Group = paxboardGroup;
-      ExecStart = "/mnt/ssd2/paxboard/target/debug/paxboard";
+      ExecStart = "/mnt/ssd2/paxboard/target/release/paxboard";
       WorkingDirectory = "/mnt/ssd2/paxboard";
       Restart = "always";
       RestartSec = "10";
