@@ -1,11 +1,14 @@
 { config, ... }:
 
+let
+  folders = import ../folders.nix;
+in
 {
   services.navidrome = {
     enable = true;
     settings = {
       Address = "0.0.0.0";
-      MusicFolder = "/mnt/external/Music";
+      MusicFolder = folders.music;
     };
   };
 

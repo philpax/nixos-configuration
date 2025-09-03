@@ -1,5 +1,8 @@
 { config, ... }:
 
+let
+  folders = import ../folders.nix;
+in
 {
   services.samba = {
     enable = true;
@@ -35,7 +38,7 @@
         "directory mask" = "0555";
       };
       music = {
-        path = "/mnt/external/Music";
+        path = folders.music;
         comment = "Music Share";
         browsable = true;
         "read only" = false;
