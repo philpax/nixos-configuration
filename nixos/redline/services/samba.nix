@@ -21,7 +21,7 @@ in
       };
       photos = {
         path = "/mnt/external/Photos";
-        comment = "Read-only Photos Share";
+        comment = "Photos";
         browsable = true;
         "read only" = false;
         "guest ok" = true;
@@ -30,7 +30,7 @@ in
       };
       videos = {
         path = "/mnt/external/Videos";
-        comment = "Videos Share";
+        comment = "Videos";
         browsable = true;
         "read only" = false;
         "guest ok" = true;
@@ -39,16 +39,25 @@ in
       };
       music = {
         path = folders.music;
-        comment = "Music Share";
+        comment = "Music";
         browsable = true;
         "read only" = false;
         "guest ok" = true;
         "create mask" = "0444";
         "directory mask" = "0555";
       };
+      music_inbox = {
+        path = folders.music_inbox;
+        comment = "Music Inbox";
+        browsable = true;
+        "read only" = false;
+        "guest ok" = true;
+        "create mask" = "0777";
+        "directory mask" = "0777";
+      };
       written = {
         path = "/mnt/external/Written";
-        comment = "Written Share";
+        comment = "Written";
         browsable = true;
         "read only" = false;
         "guest ok" = true;
