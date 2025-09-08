@@ -2,6 +2,31 @@
 
 let
   folders = import ../folders.nix;
+
+  # Define shares with their names, paths, and comments
+  shares = [
+    { name = "Photos"; path = folders.photos; }
+    { name = "Videos"; path = folders.videos; }
+    { name = "Written"; path = folders.written; }
+    { name = "Music"; path = folders.music; }
+    { name = "Music Inbox"; path = folders.music_inbox; }
+  ];
+
+  # Function to create share configuration with music_inbox permissions
+  createShare = share: {
+    ${share.name} = {
+      path = share.path;
+      comment = share.name;
+      browsable = true;
+      "read only" = false;
+      "guest ok" = true;
+      "create mask" = "0777";
+      "directory mask" = "0777";
+    };
+  };
+
+  # Generate all share configurations
+  shareConfigs = builtins.foldl' (acc: share: acc // (createShare share)) {} shares;
 in
 {
   services.samba = {
@@ -19,52 +44,7 @@ in
         "printing" = "bsd";
         "printcap name" = "/dev/null";
       };
-      photos = {
-        path = "/mnt/external/Photos";
-        comment = "Photos";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-      videos = {
-        path = "/mnt/external/Videos";
-        comment = "Videos";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-      music = {
-        path = folders.music;
-        comment = "Music";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-      music_inbox = {
-        path = folders.music_inbox;
-        comment = "Music Inbox";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0777";
-        "directory mask" = "0777";
-      };
-      written = {
-        path = "/mnt/external/Written";
-        comment = "Written";
-        browsable = true;
-        "read only" = false;
-        "guest ok" = true;
-        "create mask" = "0444";
-        "directory mask" = "0555";
-      };
-    };
+    } // shareConfigs;
   };
 
   # Samba ports
