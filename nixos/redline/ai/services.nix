@@ -17,21 +17,4 @@
       RestartSec = "10s";
     };
   };
-
-  systemd.services.llmcord = {
-    description = "llmcord";
-    after = [ "largemodelproxy.service" ];
-    requires = [ "largemodelproxy.service" ];
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      User = "ai";
-      Group = "ai";
-      WorkingDirectory = "/mnt/ssd2/ai/llmcord";
-      ExecStart = "/mnt/ssd2/ai/llmcord/target/debug/llmcord";
-      Restart = "always";
-      RestartSec = "10s";
-      Environment = [ "RUST_BACKTRACE=1" ];
-    };
-  };
 }
