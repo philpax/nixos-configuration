@@ -1,0 +1,6 @@
+directory: /data/music
+library: /data/music/musiclibrary.db
+artist_credit: yes
+
+paths:
+  singleton: $albumartist/Singles/$title
