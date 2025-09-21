@@ -35,6 +35,12 @@
   environment.systemPackages = with pkgs; [
     goldendict-ng
     anki-bin
+
+    # Blackbird compilation
+    rustup
+    clang
+    lld
+    pkg-config
   ];
 
   users.users.philpax.packages = with pkgs; [
