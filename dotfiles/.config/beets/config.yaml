@@ -1,6 +1,7 @@
 directory: /data/music
 library: /data/music/musiclibrary.db
 artist_credit: yes
+plugins: fetchart
 
 paths:
   singleton: $albumartist/Singles/$title
