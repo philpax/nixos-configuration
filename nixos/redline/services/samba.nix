@@ -10,6 +10,7 @@ let
     { name = "Written"; path = folders.written; }
     { name = "Music"; path = folders.music; }
     { name = "Music Inbox"; path = folders.music_inbox; }
+    { name = "Backups"; path = folders.backups; }
   ];
 
   # Function to create share configuration with music_inbox permissions
