@@ -8,7 +8,8 @@ let
     { src = "/mnt/external/Sample Packs"; dst = "/mnt/hdd1/Sample Packs"; }
     { src = "/mnt/external/Datasets"; dst = "/mnt/hdd2/Datasets"; }
     { src = "/mnt/external/Installers"; dst = "/mnt/hdd1/Installers"; }
-    { src = "/mnt/external/Photos"; dst = "/mnt/hdd2/Photos"; }
+    { src = "/data/photos"; dst = "/mnt/external/Photos"; }
+    { src = "/data/photos"; dst = "/mnt/hdd2/Photos"; }
     { src = "/mnt/external/Downloads"; dst = "/mnt/hdd1/Downloads"; }
     { src = "/mnt/external/Games"; dst = "/mnt/hdd1/Games"; }
     { src = "/mnt/external/Videos"; dst = "/mnt/hdd2/Videos"; }
