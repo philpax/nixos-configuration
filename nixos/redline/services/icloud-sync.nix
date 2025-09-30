@@ -27,16 +27,6 @@ let
     fi
 
     echo "iCloud sync completed successfully"
-
-    # Set permissions on the synced directory
-    echo "Setting permissions on $ICLOUD_DIR..."
-    if ! chmod -R 777 "$ICLOUD_DIR"; then
-        echo "WARNING: Failed to set permissions on $ICLOUD_DIR"
-    else
-        echo "Permissions set successfully"
-    fi
-
-    echo "iCloud sync process finished"
   '';
 
 in {
