@@ -1,11 +1,13 @@
 { config, pkgs, ... }:
 let
   unstable = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/ac3d8f2073f945eb21fa9a5324b2c5fd3a18d49a)
+    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/b838241a669f01eaab69e3d4ffae8f81e67e653a)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
 in
 {
+  _module.args = { inherit unstable; };
+
   imports =
     [
       /etc/nixos/hardware-configuration.nix
