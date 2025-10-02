@@ -33,8 +33,8 @@ let
         # Set environment variables
         export IMMICH_API_KEY="${immichSecrets.apiKey}"
         export IMMICH_ENDPOINT="http://localhost:${toString port}/api"
-        export IMMICH_MATCH="\.(JP[E]?G|RW2|RAF|NEF)$"
-        export IMMICH_PARENT="\.JP[E]?G$"
+        export IMMICH_MATCH="(?i)\.(JP[E]?G|RW2|RAF|NEF|DNG)$"
+        export IMMICH_PARENT="(?i)\.JP[E]?G$"
 
         # Run immich-stacker
         echo "Running immich-stacker with endpoint: $IMMICH_ENDPOINT"
