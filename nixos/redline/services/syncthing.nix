@@ -8,7 +8,6 @@
     configDir = "/home/philpax/.config/syncthing";
     overrideDevices = true;
     overrideFolders = true;
-    guiAddress = "127.0.0.1:8384";
     settings = {
       devices = {
         "iphone" = { id = "CTLWMSO-UZTMF6D-DKMOSXI-4DST6YP-W2GN3YW-Y5AV4UD-LUXBIBV-WBJXXQ6"; };
@@ -19,6 +18,12 @@
           path = "/mnt/ssd2/notes/Main";
           devices = [ "iphone" "the-wind-rises" ];
         };
+      };
+    };
+    options = {
+      minHomeDiskFree = {
+        unit = "GB";
+        value = 1;
       };
     };
   };
