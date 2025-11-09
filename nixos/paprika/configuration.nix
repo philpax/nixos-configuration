@@ -66,6 +66,8 @@
     xwayland-satellite
     volantes-cursors
     swaybg
+
+    unstable.claude-code
   ];
 
   fonts.enableDefaultPackages = true;
