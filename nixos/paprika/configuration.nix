@@ -64,6 +64,8 @@
     networkmanagerapplet
     blueman
     xwayland-satellite
+    volantes-cursors
+    swaybg
   ];
 
   fonts.enableDefaultPackages = true;

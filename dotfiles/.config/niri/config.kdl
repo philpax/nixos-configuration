@@ -96,6 +96,11 @@ output "eDP-1" {
     position x=1280 y=0
 }
 
+cursor {
+    xcursor-theme "volantes_light_cursors"
+    xcursor-size 24
+}
+
 gestures {
     hot-corners {
         off
@@ -255,6 +260,7 @@ layout {
 // spawn-at-startup "alacritty" "-e" "fish"
 spawn-at-startup "waybar"
 spawn-at-startup "mako"
+spawn-at-startup "swaybg" "-i" "/home/philpax/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
