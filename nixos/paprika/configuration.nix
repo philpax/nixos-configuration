@@ -1,9 +1,10 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstable, ... }:
 
 {
   imports =
     [
       ../common/configuration.nix
+      (import ./services { inherit config pkgs unstable; })
     ];
 
   system.stateVersion = "24.11";
