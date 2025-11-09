@@ -11,6 +11,7 @@
         "custom/media"
     ],
     "modules-center": [
+        "clock"
     ],
     "modules-right": [
         "mpd",
@@ -26,7 +27,6 @@
         "sway/language",
         "battery",
         "battery#bat2",
-        "clock",
         "tray"
     ],
     // Modules configuration
@@ -100,8 +100,9 @@
     },
     "clock": {
         // "timezone": "America/New_York",
+        "format": "{:%Y-%m-%d %H:%M:%S}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
-        "format-alt": "{:%Y-%m-%d}"
+        "interval": 1
     },
     "cpu": {
         "format": "cpu {usage}%",
