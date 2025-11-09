@@ -6,6 +6,7 @@
     git
     ripgrep
     direnv
+    helix
   ];
 
   programs.neovim = {
