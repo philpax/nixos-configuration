@@ -1,5 +1,5 @@
 [font]
-size = 10
+normal = { family = "Cozette", style = "Regular" }
 
 [window]
 opacity = 0.8

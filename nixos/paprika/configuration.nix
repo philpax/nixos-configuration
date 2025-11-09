@@ -82,6 +82,7 @@
     iosevka
     font-awesome
     nerd-fonts.meslo-lg
+    cozette
   ];
   fonts.fontconfig.defaultFonts = {
     monospace = [
