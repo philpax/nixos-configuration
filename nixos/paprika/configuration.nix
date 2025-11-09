@@ -3,6 +3,7 @@
 {
   imports =
     [
+      <nixos-hardware/lenovo/thinkpad/t480s>
       ../common/configuration.nix
       (import ./services { inherit config pkgs unstable; })
     ];
