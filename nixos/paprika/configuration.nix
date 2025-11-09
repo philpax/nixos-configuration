@@ -21,7 +21,8 @@
   services.displayManager.sddm.enable = true;
   services.displayManager.sddm.theme = "where-is-my-sddm-theme";
   services.displayManager.sddm.wayland.enable = true;
-  programs.niri.enable = true;
+  programs.niri = { enable = true; package = unstable.niri; };
+  programs.xwayland.enable = true;
 
   # Enable sound with pipewire.
   # services.pulseaudio.enable = false;
@@ -40,6 +41,7 @@
     goldendict-ng
     anki-bin
     where-is-my-sddm-theme
+    obsidian
 
     # Blackbird compilation
     rustup
@@ -61,6 +63,7 @@
     file-roller
     networkmanagerapplet
     blueman
+    xwayland-satellite
   ];
 
   fonts.enableDefaultPackages = true;
