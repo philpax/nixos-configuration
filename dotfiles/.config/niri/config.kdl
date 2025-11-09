@@ -101,6 +101,13 @@ cursor {
     xcursor-size 24
 }
 
+workspace "main"
+workspace "music"
+workspace "study"
+workspace "website"
+workspace "genresin.space"
+workspace "pyxis"
+
 gestures {
     hot-corners {
         off
@@ -112,7 +119,7 @@ gestures {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Layout
 layout {
     // Set gaps around windows in logical pixels.
-    gaps 8
+    gaps 4
 
     // When to center a column when changing focus, options are:
     // - "never", default behavior, focusing an off-screen column will keep at the left
@@ -160,7 +167,7 @@ layout {
         // off
 
         // How many logical pixels the ring extends out from the windows.
-        width 1
+        width 2
 
         // Colors can be set in a variety of ways:
         // - CSS named colors: "red"
@@ -326,7 +333,7 @@ window-rule {
 // Example: enable rounded corners for all windows.
 // (This example rule is commented out with a "/-" in front.)
 window-rule {
-    geometry-corner-radius 0
+    geometry-corner-radius 4
     clip-to-geometry true
 }
 
