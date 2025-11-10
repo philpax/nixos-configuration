@@ -2,8 +2,18 @@
 normal = { family = "Cozette", style = "Regular" }
 
 [window]
-opacity = 0.8
+opacity = 0.85
 padding = { x = 4, y = 4 }
 
 [colors.primary]
 background = "#000000"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Control|Shift"
+action = "SpawnNewInstance"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\n"
