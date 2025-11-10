@@ -69,6 +69,7 @@
     swaybg
 
     unstable.claude-code
+    unstable.discord
   ];
 
   fonts.enableDefaultPackages = true;
