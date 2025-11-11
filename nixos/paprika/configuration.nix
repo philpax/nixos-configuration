@@ -67,6 +67,7 @@
     xwayland-satellite
     volantes-cursors
     swaybg
+    unstable.sunsetr
 
     unstable.claude-code
     unstable.discord
