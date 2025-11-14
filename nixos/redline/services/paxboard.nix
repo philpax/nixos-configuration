@@ -28,8 +28,19 @@ in
       Type = "simple";
       User = paxboardUser;
       Group = paxboardGroup;
-      ExecStart = "/mnt/ssd2/paxboard/target/release/paxboard";
+
+      # Set up the environment
+      Environment = [
+        "NODE_ENV=development"
+        "PATH=${pkgs.nodejs}/bin:${pkgs.nodePackages.npm}/bin:/run/current-system/sw/bin"
+      ];
+
+      # The actual command
+      ExecStart = "${pkgs.nodejs}/bin/npm run dev";
       WorkingDirectory = "/mnt/ssd2/paxboard";
+      ReadWritePaths = [
+        "/mnt/ssd2/paxboard"
+      ];
       Restart = "always";
       RestartSec = "10";
 
@@ -48,11 +59,6 @@ in
       # Limit resource usage
       LimitNOFILE = 65536;
       LimitNPROC = 1024;
-    };
-
-    environment = {
-      # Set any environment variables the service might need
-      RUST_LOG = "info";
     };
   };
 
