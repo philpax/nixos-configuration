@@ -22,6 +22,7 @@
     enable = true;
     nssmdns4 = true;  # Enable mDNS in NSS
   };
+  services.udisks2.enable = true;
 
   # Enable Niri and such.
   services.displayManager.sddm.enable = true;
