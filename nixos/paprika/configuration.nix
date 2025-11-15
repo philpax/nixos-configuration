@@ -17,6 +17,11 @@
 
   # Enable networking
   networking.networkmanager.enable = true;
+  services.gvfs.enable = true;
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;  # Enable mDNS in NSS
+  };
 
   # Enable Niri and such.
   services.displayManager.sddm.enable = true;
@@ -68,10 +73,26 @@
     volantes-cursors
     swaybg
     unstable.sunsetr
+    polkit_gnome
+    gvfs
 
     unstable.claude-code
     unstable.discord
   ];
+
+  systemd.user.services.polkit-gnome-authentication-agent-1 = {
+    description = "polkit-gnome-authentication-agent-1";
+    wantedBy = [ "graphical-session.target" ];
+    wants = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+        Restart = "on-failure";
+        RestartSec = 1;
+        TimeoutStopSec = 10;
+      };
+  };
 
   fonts.enableDefaultPackages = true;
   fonts.packages = with pkgs; [
