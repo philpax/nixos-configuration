@@ -258,6 +258,12 @@ layout {
         // top 64
         // bottom 64
     }
+
+    tab-indicator {
+        width 4
+        gap 0
+        position "left"
+    }
 }
 
 // Add lines like this to spawn processes at startup.
