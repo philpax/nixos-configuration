@@ -78,6 +78,7 @@
 
     unstable.claude-code
     unstable.discord
+    foliate
   ];
 
   systemd.user.services.polkit-gnome-authentication-agent-1 = {
