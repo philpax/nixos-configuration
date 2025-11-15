@@ -1,27 +1,29 @@
+# Take a look at the mako manpage with the command:
+#   man 5 mako
+# To view all configuration options.
+
+font=Cozette 11
+format=<b>%a ⏵</b> %s\n%b
 sort=-time
+output=DP-2
 layer=overlay
+anchor=top-right
 background-color=#2e3440
 width=300
 height=110
+margin=2
+padding=0,5,10
 border-size=2
-border-color=#88c0d0
-border-radius=15
+border-color=#6f4c9a
+border-radius=4
 icons=0
 max-icon-size=64
 default-timeout=5000
 ignore-timeout=1
-font=monospace 14
-
-[urgency=low]
-border-color=#cccccc
 
 [urgency=normal]
-border-color=#d08770
+border-color=#6f4c9a
 
 [urgency=high]
 border-color=#bf616a
 default-timeout=0
-
-[category=mpd]
-default-timeout=2000
-group-by=category
