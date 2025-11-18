@@ -17,17 +17,18 @@ DOTFILES_TARGET="$HOME"
 usage() {
     echo "Usage: $0 <folder_name>"
     echo ""
-    echo "Creates symlinks for NixOS (only 'common' and '<folder_name>' folders) and dotfiles,"
-    echo "then creates a symlink from /etc/nixos/configuration.nix to \$NIXOS_SOURCE/<folder_name>/configuration.nix"
+    echo "Creates symlinks for NixOS (only 'common' and '<folder_name>' folders) and dotfiles"
+    echo "(only 'common' and '<folder_name>' folders), then creates a symlink from"
+    echo "/etc/nixos/configuration.nix to \$NIXOS_SOURCE/<folder_name>/configuration.nix"
     echo ""
     echo "Note: Only the 'common' folder and the specified '<folder_name>' folder will be symlinked"
-    echo "from the NixOS source directory to avoid symlinking other machines' configurations."
+    echo "from both the NixOS and dotfiles source directories to avoid symlinking other machines' configurations."
     echo ""
     echo "Available targets:"
     list_available_targets
     echo ""
     echo "Examples:"
-    echo "  $0 <target>   # Create symlinks for 'common' + '<target>' + dotfiles"
+    echo "  $0 <target>   # Create symlinks for 'common' + '<target>' for NixOS and dotfiles"
 }
 
 # Function to list available targets (folders in NIXOS_SOURCE)
@@ -88,16 +89,22 @@ build_symlink_list() {
 
     find "$source_dir" -type f | while read -r source_path; do
         local relative_path="${source_path#$source_dir/}"
+        local target_path
 
-        # For NixOS source, only include files from 'common' and the specified folder
-        if [ "$source_dir" = "$NIXOS_SOURCE" ]; then
+        # For NixOS and dotfiles sources, only include files from 'common' and the specified folder
+        if [ "$source_dir" = "$NIXOS_SOURCE" ] || [ "$source_dir" = "$DOTFILES_SOURCE" ]; then
             local first_dir=$(echo "$relative_path" | cut -d'/' -f1)
             if [ "$first_dir" != "common" ] && [ "$first_dir" != "$folder_name" ]; then
                 continue
             fi
+
+            # For dotfiles, remove the first directory (common or machine name) from the path
+            if [ "$source_dir" = "$DOTFILES_SOURCE" ]; then
+                relative_path="${relative_path#*/}"
+            fi
         fi
 
-        local target_path="$target_dir/$relative_path"
+        target_path="$target_dir/$relative_path"
         echo "$target_path -> $source_path"
     done
 }
@@ -167,8 +174,8 @@ then
     echo "Creating/Updating symlinks for NixOS configuration (common + $FOLDER_NAME)..."
     create_or_update_symlinks "$nixos_symlinks" true
 
-    # Create/Update symlinks for dotfiles
-    echo "Creating/Updating symlinks for dotfiles..."
+    # Create/Update symlinks for dotfiles (only 'common' and specified folder)
+    echo "Creating/Updating symlinks for dotfiles (common + $FOLDER_NAME)..."
     create_or_update_symlinks "$dotfiles_symlinks" false
 
     echo "Symlinking complete!"
