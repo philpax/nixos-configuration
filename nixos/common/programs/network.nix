@@ -5,7 +5,6 @@
     tailscale
     croc
   ];
-  programs.ssh.startAgent = true;
   services.tailscale.enable = true;
   services.tailscale.useRoutingFeatures = "both";
 }
