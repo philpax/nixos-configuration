@@ -1,0 +1,33 @@
+# Swaylock configuration
+# Display settings
+daemonize
+show-failed-attempts
+clock
+datestr=%a, %B %d
+timestr=%I:%M %p
+
+# Appearance
+color=1a1b26
+bs-hl-color=f7768e
+key-hl-color=9ece6a
+inside-color=1a1b2688
+inside-clear-color=1a1b2688
+inside-caps-lock-color=1a1b2688
+inside-ver-color=1a1b2688
+inside-wrong-color=1a1b2688
+ring-color=565f89
+ring-clear-color=e0af68
+ring-caps-lock-color=e0af68
+ring-ver-color=7aa2f7
+ring-wrong-color=f7768e
+text-color=c0caf5
+text-clear-color=c0caf5
+text-caps-lock-color=e0af68
+text-ver-color=c0caf5
+text-wrong-color=c0caf5
+separator-color=00000000
+
+# Effects
+effect-blur=7x5
+fade-in=0.2
+grace=2

@@ -26,7 +26,7 @@
 
   # Enable Niri and such.
   services.displayManager.sddm.enable = true;
-  services.displayManager.sddm.theme = "where-is-my-sddm-theme";
+  services.displayManager.sddm.theme = "sugar-dark";
   services.displayManager.sddm.wayland.enable = true;
   programs.niri = { enable = true; package = unstable.niri; };
   programs.xwayland.enable = true;
@@ -47,7 +47,7 @@
   environment.systemPackages = with pkgs; [
     goldendict-ng
     anki-bin
-    where-is-my-sddm-theme
+    sddm-sugar-dark
     obsidian
 
     # Blackbird compilation
