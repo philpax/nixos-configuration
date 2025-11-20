@@ -1,9 +1,11 @@
 { config, pkgs, ... }:
 
 {
-  # Most development tools are now configured in nixos/common/programs/development.nix
-  # This file is kept for redline-specific development tools and overrides
+  imports = [
+    ../../shared/programs/development.nix
+  ];
+
+  # Add redline-specific development tools here if needed
   environment.systemPackages = with pkgs; [
-    # Add redline-specific development tools here
   ];
 }

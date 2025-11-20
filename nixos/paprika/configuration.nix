@@ -5,6 +5,7 @@
     [
       <nixos-hardware/lenovo/thinkpad/t480s>
       ../common/configuration.nix
+      ../shared/programs/development.nix
       (import ./services { inherit config pkgs unstable; })
     ];
 
