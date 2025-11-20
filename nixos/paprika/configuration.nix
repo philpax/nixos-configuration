@@ -5,6 +5,7 @@
     [
       <nixos-hardware/lenovo/thinkpad/t480s>
       ../common/configuration.nix
+      ../shared/programs/development.nix
       (import ./services { inherit config pkgs unstable; })
     ];
 
@@ -49,12 +50,6 @@
     anki-bin
     sddm-sugar-dark
     obsidian
-
-    # Blackbird compilation
-    rustup
-    clang
-    lld
-    pkg-config
 
     # Desktop environment
     mako
