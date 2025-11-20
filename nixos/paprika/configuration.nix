@@ -63,6 +63,7 @@
     waybar
     polkit_gnome
     swaylock
+    swayidle
     pavucontrol
     brightnessctl
     playerctl

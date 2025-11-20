@@ -275,6 +275,7 @@ spawn-at-startup "waybar"
 spawn-at-startup "mako"
 spawn-at-startup "swaybg" "-i" "/home/philpax/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg"
 spawn-at-startup "sunsetr"
+spawn-at-startup "sh" "-c" "swayidle -w timeout 900 'swaylock -f' timeout 1800 'systemctl suspend'"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
