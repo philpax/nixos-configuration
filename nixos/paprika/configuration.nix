@@ -50,12 +50,6 @@
     sddm-sugar-dark
     obsidian
 
-    # Blackbird compilation
-    rustup
-    clang
-    lld
-    pkg-config
-
     # Desktop environment
     mako
     alacritty

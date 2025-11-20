@@ -1,34 +1,9 @@
 { config, pkgs, ... }:
 
 {
+  # Most development tools are now configured in nixos/common/programs/development.nix
+  # This file is kept for redline-specific development tools and overrides
   environment.systemPackages = with pkgs; [
-    # Programming languages and build tools
-    rustup
-    go
-    gcc
-    python3
-    python3Packages.pip
-    poetry
-    nodejs_22
-    rye
-    uv
-
-    # Development utilities
-    gnumake
-    cmake
-    extra-cmake-modules
-
-    # Build dependencies
-    openssl
-    openssl.dev
-    pkg-config
-    clang
-    llvmPackages_17.bintools
-    libgcc
+    # Add redline-specific development tools here
   ];
-
-  programs.neovim = {
-    enable = true;
-    defaultEditor = true;
-  };
 }
