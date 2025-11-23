@@ -72,6 +72,7 @@
     unstable.sunsetr
     polkit_gnome
     gvfs
+    wl-clipboard
 
     unstable.claude-code
     unstable.discord
