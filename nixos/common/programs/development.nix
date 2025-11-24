@@ -8,9 +8,4 @@
     direnv
     helix
   ];
-
-  programs.neovim = {
-    enable = true;
-    defaultEditor = true;
-  };
 }

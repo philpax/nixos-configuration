@@ -13,4 +13,5 @@ HISTCONTROL=ignoredups:erasedups
 shopt -s histappend
 
 export PATH="$HOME/.cargo/bin:$PATH"
+export EDITOR=hx
 eval "$(direnv hook bash)"
