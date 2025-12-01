@@ -19,11 +19,11 @@
           devices = [ "iphone" "the-wind-rises" ];
         };
       };
-    };
-    options = {
-      minHomeDiskFree = {
-        unit = "GB";
-        value = 1;
+      options = {
+        minHomeDiskFree = {
+          unit = "GB";
+          value = 1;
+        };
       };
     };
   };
