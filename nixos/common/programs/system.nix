@@ -10,8 +10,10 @@
     parallel
 
     # File system tools
+    parted
     ntfs3g
     p7zip
+    btrfs-progs
 
     # System monitoring
     lm_sensors
