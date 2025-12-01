@@ -19,9 +19,17 @@
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.supportedFilesystems = [ "ntfs" ];
+  boot.supportedFilesystems = [ "ntfs" "zfs" ];
+  boot.zfs.forceImportRoot = true;
+  boot.zfs.extraPools = [ "storage" ];
 
   fileSystems = {
+    "/mnt/ssd0" = {
+      device = "/dev/disk/by-uuid/d7e8a9c2-47c7-485b-b443-51d0dd4f7991";
+      fsType = "btrfs";
+      options = [ "compress=zstd" "noatime" ];
+    };
+
     "/mnt/ssd2" = {
       device = "/dev/disk/by-uuid/83a6c26f-d241-4f80-8c47-c1801d211835";
       fsType = "ext4";
@@ -45,6 +53,19 @@
       fsType = "ntfs";
       options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
     };
+  };
+
+  # Auto-scrub monthly
+  services.zfs.autoScrub.enable = true;
+
+  # Auto-snapshots (optional but recommended)
+  services.zfs.autoSnapshot = {
+    enable = true;
+    frequent = 4;
+    hourly = 24;
+    daily = 7;
+    weekly = 4;
+    monthly = 12;
   };
 
   powerManagement.cpuFreqGovernor = "performance";
@@ -71,6 +92,7 @@
 
   networking = {
     hostName = "redline";
+    hostId = "9d649414";
     firewall.allowedTCPPorts = [
       8000 # python -m http.server
     ];
