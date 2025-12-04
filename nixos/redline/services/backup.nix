@@ -3,17 +3,32 @@
 let
   # Define backup mappings in order of execution
   backupMappings = [
-    { src = "/mnt/external/Music Mixes"; dst = "/mnt/hdd1/Music Mixes"; }
-    { src = "/mnt/external/Screenshots"; dst = "/mnt/hdd1/Screenshots"; }
-    { src = "/mnt/external/Sample Packs"; dst = "/mnt/hdd1/Sample Packs"; }
-    { src = "/mnt/external/Datasets"; dst = "/mnt/hdd2/Datasets"; }
-    { src = "/mnt/external/Installers"; dst = "/mnt/hdd1/Installers"; }
-    { src = "/data/photos"; dst = "/mnt/external/Photos"; }
-    { src = "/data/photos"; dst = "/mnt/hdd2/Photos"; }
-    { src = "/mnt/external/Downloads"; dst = "/mnt/hdd1/Downloads"; }
-    { src = "/mnt/external/Games"; dst = "/mnt/hdd1/Games"; }
-    { src = "/mnt/external/Videos"; dst = "/mnt/hdd2/Videos"; }
-    { src = "/mnt/external/Backup"; dst = "/mnt/hdd1/Backup"; }
+    # Backup all to storage, which will eventually become the primary storage drive
+    { src = "/data/photos"; dst = "/storage/photos"; }
+    { src = "/data/music"; dst = "/storage/music"; }
+    { src = "/data/written"; dst = "/storage/written"; }
+    { src = "/mnt/external/Backup"; dst = "/storage/backup"; }
+    { src = "/mnt/external/Datasets"; dst = "/storage/datasets"; }
+    { src = "/mnt/external/Downloads"; dst = "/storage/downloads"; }
+    { src = "/mnt/external/Games"; dst = "/storage/games"; }
+    { src = "/mnt/external/Installers"; dst = "/storage/installers"; }
+    { src = "/mnt/external/Music Mixes"; dst = "/storage/music_mixes"; }
+    { src = "/mnt/external/Sample Packs"; dst = "/storage/sample_packs"; }
+    { src = "/mnt/external/Videos"; dst = "/storage/videos"; }
+    { src = "/mnt/external/Written"; dst = "/storage/written"; }
+
+    # Legacy backups, will figure out later
+    # { src = "/mnt/external/Music Mixes"; dst = "/mnt/hdd1/Music Mixes"; }
+    # { src = "/mnt/external/Screenshots"; dst = "/mnt/hdd1/Screenshots"; }
+    # { src = "/mnt/external/Sample Packs"; dst = "/mnt/hdd1/Sample Packs"; }
+    # { src = "/mnt/external/Datasets"; dst = "/mnt/hdd2/Datasets"; }
+    # { src = "/mnt/external/Installers"; dst = "/mnt/hdd1/Installers"; }
+    # { src = "/data/photos"; dst = "/mnt/external/Photos"; }
+    # { src = "/data/photos"; dst = "/mnt/hdd2/Photos"; }
+    # { src = "/mnt/external/Downloads"; dst = "/mnt/hdd1/Downloads"; }
+    # { src = "/mnt/external/Games"; dst = "/mnt/hdd1/Games"; }
+    # { src = "/mnt/external/Videos"; dst = "/mnt/hdd2/Videos"; }
+    # { src = "/mnt/external/Backup"; dst = "/mnt/hdd1/Backup"; }
   ];
 
   # Create the backup script
@@ -157,7 +172,6 @@ in {
     after = [ "multi-user.target" ];
 
     serviceConfig = {
-      Type = "oneshot";
       ExecStart = "${backupScript}";
       User = "root";
       Group = "root";
@@ -169,6 +183,7 @@ in {
         "/mnt/external"
         "/mnt/hdd1"
         "/mnt/hdd2"
+        "/storage"
         "/var/run"
         "/dev/pts"  # For write command
       ];
