@@ -12,7 +12,7 @@ let
     text = ''
       set -e
 
-      COMFYUI_DIR="/mnt/ssd2/ai/ComfyUI"
+      COMFYUI_DIR="/mnt/ssd0/ai/ComfyUI"
       cd "$COMFYUI_DIR"
 
       # Configure Git to trust this directory
@@ -67,7 +67,7 @@ let
     text = ''
       set -e
 
-      COMFYUI_DIR="/mnt/ssd2/ai/ComfyUI"
+      COMFYUI_DIR="/mnt/ssd0/ai/ComfyUI"
       cd "$COMFYUI_DIR"
 
       # Check if image exists

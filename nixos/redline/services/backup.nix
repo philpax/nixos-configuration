@@ -3,32 +3,19 @@
 let
   # Define backup mappings in order of execution
   backupMappings = [
-    # Backup all to storage, which will eventually become the primary storage drive
-    { src = "/data/photos"; dst = "/storage/photos"; }
-    { src = "/data/music"; dst = "/storage/music"; }
-    { src = "/data/written"; dst = "/storage/written"; }
-    { src = "/mnt/external/Backup"; dst = "/storage/backup"; }
-    { src = "/mnt/external/Datasets"; dst = "/storage/datasets"; }
-    { src = "/mnt/external/Downloads"; dst = "/storage/downloads"; }
-    { src = "/mnt/external/Games"; dst = "/storage/games"; }
-    { src = "/mnt/external/Installers"; dst = "/storage/installers"; }
-    { src = "/mnt/external/Music Mixes"; dst = "/storage/music_mixes"; }
-    { src = "/mnt/external/Sample Packs"; dst = "/storage/sample_packs"; }
-    { src = "/mnt/external/Videos"; dst = "/storage/videos"; }
-    { src = "/mnt/external/Written"; dst = "/storage/written"; }
-
-    # Legacy backups, will figure out later
-    # { src = "/mnt/external/Music Mixes"; dst = "/mnt/hdd1/Music Mixes"; }
-    # { src = "/mnt/external/Screenshots"; dst = "/mnt/hdd1/Screenshots"; }
-    # { src = "/mnt/external/Sample Packs"; dst = "/mnt/hdd1/Sample Packs"; }
-    # { src = "/mnt/external/Datasets"; dst = "/mnt/hdd2/Datasets"; }
-    # { src = "/mnt/external/Installers"; dst = "/mnt/hdd1/Installers"; }
-    # { src = "/data/photos"; dst = "/mnt/external/Photos"; }
-    # { src = "/data/photos"; dst = "/mnt/hdd2/Photos"; }
-    # { src = "/mnt/external/Downloads"; dst = "/mnt/hdd1/Downloads"; }
-    # { src = "/mnt/external/Games"; dst = "/mnt/hdd1/Games"; }
-    # { src = "/mnt/external/Videos"; dst = "/mnt/hdd2/Videos"; }
-    # { src = "/mnt/external/Backup"; dst = "/mnt/hdd1/Backup"; }
+    { src = "/mnt/ssd0/photos"; dst = "/data/photos"; }
+    { src = "/mnt/ssd0/music"; dst = "/data/music"; }
+    { src = "/mnt/ssd0/written"; dst = "/data/written"; }
+    { src = "/mnt/ssd0/photos"; dst = "/storage/photos"; }
+    { src = "/mnt/ssd0/music"; dst = "/storage/music"; }
+    { src = "/mnt/ssd0/written"; dst = "/storage/written"; }
+    { src = "/storage/photos"; dst = "/mnt/external/Photos"; }
+    { src = "/storage/music"; dst = "/mnt/external/Music"; }
+    { src = "/storage/written"; dst = "/mnt/external/Written"; }
+    { src = "/storage/backup"; dst = "/mnt/external/Backup"; }
+    { src = "/storage/downloads"; dst = "/mnt/external/Downloads"; }
+    { src = "/storage/games"; dst = "/mnt/external/Games"; }
+    { src = "/storage/videos"; dst = "/mnt/external/Videos"; }
   ];
 
   # Create the backup script
@@ -181,6 +168,7 @@ in {
       ProtectSystem = "strict";
       ReadWritePaths = [
         "/mnt/external"
+        "/mnt/ssd0"
         "/mnt/hdd1"
         "/mnt/hdd2"
         "/storage"

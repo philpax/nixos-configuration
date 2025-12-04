@@ -15,7 +15,7 @@
       };
       folders = {
         "Main" = {
-          path = "/mnt/ssd2/notes/Main";
+          path = "/mnt/ssd0/notes/Main";
           devices = [ "iphone" "the-wind-rises" ];
         };
       };

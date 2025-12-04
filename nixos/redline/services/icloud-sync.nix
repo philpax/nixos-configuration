@@ -6,7 +6,7 @@ let
     set -euo pipefail
 
     # Configuration
-    ICLOUD_DIR="/data/photos/iCloud"
+    ICLOUD_DIR="/mnt/ssd0/photos/iCloud"
     USERNAME="me@philpax.me"
 
     echo "Starting iCloud sync process"
@@ -55,7 +55,7 @@ in {
       PrivateTmp = true;
       ProtectSystem = "strict";
       ReadWritePaths = [
-        "/data/photos"
+        "/mnt/ssd0/photos"
         "/var/lib/icloudpd"
       ];
       ProtectHome = false;

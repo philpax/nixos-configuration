@@ -11,8 +11,8 @@
     serviceConfig = {
       User = "ai";
       Group = "ai";
-      WorkingDirectory = "/mnt/ssd2/ai/large-model-proxy";
-      ExecStart = "/mnt/ssd2/ai/large-model-proxy/large-model-proxy -c ${config.ai.largeModelProxy.jsonFile}";
+      WorkingDirectory = "/mnt/ssd0/ai/large-model-proxy";
+      ExecStart = "/mnt/ssd0/ai/large-model-proxy/large-model-proxy -c ${config.ai.largeModelProxy.jsonFile}";
       Restart = "always";
       RestartSec = "10s";
     };

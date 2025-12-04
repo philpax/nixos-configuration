@@ -1,8 +1,8 @@
 {
-  music = "/data/music";
-  music_inbox = "/data/music_inbox";
-  written = "/data/written";
-  photos = "/data/photos";
-  videos = "/mnt/external/Videos";
-  backups = "/mnt/external/Backup";
+  music = "/mnt/ssd0/music";
+  music_inbox = "/mnt/ssd0/music_inbox";
+  written = "/mnt/ssd0/written";
+  photos = "/mnt/ssd0/photos";
+  videos = "/storage/videos";
+  backups = "/storage/backup";
 }

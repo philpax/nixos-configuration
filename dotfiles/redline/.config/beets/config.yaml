@@ -1,5 +1,5 @@
-directory: /data/music
-library: /data/music/musiclibrary.db
+directory: /mnt/ssd0/music
+library: /mnt/ssd0/music/musiclibrary.db
 artist_credit: yes
 plugins: fetchart lyrics
 

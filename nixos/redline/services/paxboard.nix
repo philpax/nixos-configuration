@@ -37,9 +37,9 @@ in
 
       # The actual command
       ExecStart = "${pkgs.nodejs}/bin/npm run dev";
-      WorkingDirectory = "/mnt/ssd2/paxboard";
+      WorkingDirectory = "/mnt/ssd0/paxboard";
       ReadWritePaths = [
-        "/mnt/ssd2/paxboard"
+        "/mnt/ssd0/paxboard"
       ];
       Restart = "always";
       RestartSec = "10";
