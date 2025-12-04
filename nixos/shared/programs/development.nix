@@ -24,7 +24,6 @@
     pkg-config
     clang
     lld
-    llvmPackages_17.bintools
     libgcc
   ];
 }
