@@ -30,12 +30,6 @@
       options = [ "compress=zstd" "noatime" ];
     };
 
-    "/mnt/ssd2" = {
-      device = "/dev/disk/by-uuid/83a6c26f-d241-4f80-8c47-c1801d211835";
-      fsType = "ext4";
-      options = [ "defaults" "nofail" ];
-    };
-
     "/mnt/hdd1" = {
       device = "/dev/disk/by-uuid/f6a10ed9-5d48-4289-ab7a-d3a5a171a378";
       fsType = "ext4";
