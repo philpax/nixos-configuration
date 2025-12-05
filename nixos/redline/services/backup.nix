@@ -195,8 +195,8 @@ in {
     timerConfig = {
       # Run every Sunday at 2 AM
       OnCalendar = "Sun *-*-* 02:00:00";
-      # If the system was off, run as soon as possible
-      Persistent = true;
+      # Do not run if the system was off
+      Persistent = false;
       # Add some randomization to avoid issues if multiple systems run this
       RandomizedDelaySec = "30m";
     };
