@@ -1,27 +1,29 @@
 { config, pkgs, unstable, ... }:
 
 let
+  # Configuration
+  icloudDir = "/mnt/ssd0/photos/iCloud";
+  username = "me@philpax.me";
+  serviceUser = "icloudpd";
+  serviceGroup = "icloudpd";
+
   # Create the iCloud sync script
   icloudSyncScript = pkgs.writeShellScript "icloud-sync" ''
     set -euo pipefail
 
-    # Configuration
-    ICLOUD_DIR="/mnt/ssd0/photos/iCloud"
-    USERNAME="me@philpax.me"
-
     echo "Starting iCloud sync process"
 
     # Create the iCloud directory if it doesn't exist
-    if ! mkdir -p "$ICLOUD_DIR"; then
-        echo "ERROR: Failed to create iCloud directory $ICLOUD_DIR"
+    if ! mkdir -p "${icloudDir}"; then
+        echo "ERROR: Failed to create iCloud directory ${icloudDir}"
         exit 1
     fi
 
     # Run icloudpd
     echo "Running icloudpd sync..."
     if ! ${unstable.icloudpd}/bin/icloudpd \
-        --directory "$ICLOUD_DIR" \
-        --username "$USERNAME"; then
+        --directory "${icloudDir}" \
+        --username "${username}"; then
         echo "ERROR: icloudpd sync failed"
         exit 1
     fi
@@ -31,14 +33,14 @@ let
 
 in {
   # Create the icloudpd user
-  users.users.icloudpd = {
+  users.users.${serviceUser} = {
     isSystemUser = true;
-    group = "icloudpd";
-    home = "/var/lib/icloudpd";
+    group = serviceGroup;
+    home = "/var/lib/${serviceUser}";
     createHome = true;
   };
 
-  users.groups.icloudpd = {};
+  users.groups.${serviceGroup} = {};
 
   # Create the systemd service
   systemd.services.icloud-sync = {
@@ -48,15 +50,15 @@ in {
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${icloudSyncScript}";
-      User = "icloudpd";
-      Group = "icloudpd";
+      User = serviceUser;
+      Group = serviceGroup;
 
       # Security settings
       PrivateTmp = true;
       ProtectSystem = "strict";
       ReadWritePaths = [
-        "/mnt/ssd0/photos"
-        "/var/lib/icloudpd"
+        icloudDir
+        "/var/lib/${serviceUser}"
       ];
       ProtectHome = false;
       NoNewPrivileges = true;
