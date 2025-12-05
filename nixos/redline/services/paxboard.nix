@@ -49,7 +49,7 @@ in
       ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
-      PrivateDevices = true;
+      PrivateDevices = false;  # Required for nvidia-smi access
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
       ProtectControlGroups = true;
