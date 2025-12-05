@@ -94,6 +94,26 @@ in {
 
   # Create a global command to run the iCloud sync manually
   environment.systemPackages = [
+    (pkgs.writeShellScriptBin "icloud-auth" ''
+      if [ "$(id -u)" -ne 0 ]; then
+          echo "This command requires root privileges. Use: sudo icloud-auth"
+          exit 1
+      fi
+
+      echo "Starting iCloud authentication for ${unstable.icloudpd}/bin/icloudpd..."
+      echo "You will be prompted for your password and 2FA code."
+      echo
+
+      # Run icloudpd auth interactively as the icloudpd user
+      sudo -u ${serviceUser} ${unstable.icloudpd}/bin/icloudpd \
+        --username "${username}" \
+        --directory "${icloudDir}" \
+        --auth-only
+
+      echo
+      echo "Authentication complete. You can now run icloud-sync to start syncing."
+    '')
+
     (pkgs.writeShellScriptBin "icloud-sync" ''
       if [ "$(id -u)" -ne 0 ]; then
           echo "This command requires root privileges. Use: sudo icloud-sync"
