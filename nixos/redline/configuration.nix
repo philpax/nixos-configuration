@@ -47,6 +47,11 @@
       fsType = "ntfs";
       options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
     };
+
+    "/var/lib/immich" = {
+      device = "/mnt/ssd0/immich";
+      options = [ "bind" ];
+    };
   };
 
   # Auto-scrub monthly
@@ -71,6 +76,14 @@
   hardware.nvidia.modesetting.enable = false;
   hardware.nvidia-container-toolkit.enable = true;
   services.xserver.videoDrivers = [ "nvidia" ];
+  nixpkgs.overlays = [
+    (final: prev: {
+      onnxruntime = prev.onnxruntime.override { cudaSupport = true; };
+    })
+  ];
+  services.immich.machine-learning = {
+    environment.LD_LIBRARY_PATH = "${pkgs.python312Packages.onnxruntime}/lib/python3.12/site-packages/onnxruntime/capi";
+  };
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd = {
