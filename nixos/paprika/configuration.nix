@@ -74,7 +74,6 @@
     gvfs
     wl-clipboard
 
-    unstable.claude-code
     unstable.discord
     foliate
   ];

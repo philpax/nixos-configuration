@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstable, ... }:
 
 {
   environment.systemPackages = with pkgs; [
@@ -17,6 +17,7 @@
     gnumake
     cmake
     extra-cmake-modules
+    unstable.claude-code
 
     # Build dependencies and toolchain
     openssl
