@@ -104,6 +104,10 @@
     firewall.allowedUDPPorts = [];
     defaultGateway = "192.168.50.1";
     nameservers = ["1.1.1.1" "1.0.0.1"];
+    interfaces.enp68s0f0.ipv4.addresses = [{
+      address = "192.168.50.201";
+      prefixLength = 24;
+    }];
   };
   # wait-online breaks rebuilds: https://github.com/NixOS/nixpkgs/issues/180175
   systemd.services.NetworkManager-wait-online.enable = false;
