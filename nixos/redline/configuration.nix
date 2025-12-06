@@ -67,7 +67,8 @@
     monthly = 12;
   };
 
-  powerManagement.cpuFreqGovernor = "performance";
+  # Use powersave governor for quieter operation
+  powerManagement.cpuFreqGovernor = "powersave";
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
