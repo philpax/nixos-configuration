@@ -1,5 +1,7 @@
 { pkgs, ... }:
 let
+  folders = import ../folders.nix;
+
   # Port definitions
   openaiPort = 7070;
   managementPort = 7071;
@@ -10,8 +12,8 @@ let
 
   # Import modules
   utils = import ./utils.nix { inherit pkgs; };
-  llms = import ./llms.nix { inherit pkgs utils llmBasePort llmBaseTargetPort; };
-  comfyui = import ./comfyui.nix { inherit pkgs comfyuiPort comfyuiTargetPort utils; };
+  llms = import ./llms.nix { inherit pkgs utils llmBasePort llmBaseTargetPort folders; };
+  comfyui = import ./comfyui.nix { inherit pkgs comfyuiPort comfyuiTargetPort utils folders; };
 
   # Generate the configuration
   config = {

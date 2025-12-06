@@ -1,21 +1,29 @@
 { config, pkgs, ... }:
 
 let
+  folders = import ../folders.nix;
+
   # Define backup mappings in order of execution
+  # Source of truth: primary SSD and ZFS pool
+  # Backup destinations: secondary SSD, ZFS pool, and external drive
   backupMappings = [
-    { src = "/mnt/ssd0/photos"; dst = "/data/photos"; }
-    { src = "/mnt/ssd0/music"; dst = "/data/music"; }
-    { src = "/mnt/ssd0/written"; dst = "/data/written"; }
-    { src = "/mnt/ssd0/photos"; dst = "/storage/photos"; }
-    { src = "/mnt/ssd0/music"; dst = "/storage/music"; }
-    { src = "/mnt/ssd0/written"; dst = "/storage/written"; }
-    { src = "/storage/photos"; dst = "/mnt/external/Photos"; }
-    { src = "/storage/music"; dst = "/mnt/external/Music"; }
-    { src = "/storage/written"; dst = "/mnt/external/Written"; }
-    { src = "/storage/backup"; dst = "/mnt/external/Backup"; }
-    { src = "/storage/downloads"; dst = "/mnt/external/Downloads"; }
-    { src = "/storage/games"; dst = "/mnt/external/Games"; }
-    { src = "/storage/videos"; dst = "/mnt/external/Videos"; }
+    # Primary SSD -> secondary SSD (local backup)
+    { src = folders.photos; dst = "${folders.backups.data}/photos"; }
+    { src = folders.music; dst = "${folders.backups.data}/music"; }
+    { src = folders.written; dst = "${folders.backups.data}/written"; }
+    # Primary SSD -> ZFS pool (local backup)
+    { src = folders.photos; dst = folders.storage.photos; }
+    { src = folders.music; dst = folders.storage.music; }
+    { src = folders.written; dst = folders.storage.written; }
+    # Primary SSD -> external drive (offsite backup)
+    { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
+    { src = folders.music; dst = "${folders.backups.external}/Music"; }
+    { src = folders.written; dst = "${folders.backups.external}/Written"; }
+    # ZFS pool -> external drive (offsite backup)
+    { src = folders.backup; dst = "${folders.backups.external}/Backup"; }
+    { src = folders.downloads; dst = "${folders.backups.external}/Downloads"; }
+    { src = folders.games; dst = "${folders.backups.external}/Games"; }
+    { src = folders.videos; dst = "${folders.backups.external}/Videos"; }
   ];
 
   # Create the backup script
@@ -60,9 +68,9 @@ let
 
     echo "Starting backup sync process"
 
-    # Check if source mount exists
-    if [ ! -d "/mnt/external" ]; then
-        notify_error "Source directory /mnt/external not found or not mounted"
+    # Check if external mount exists
+    if [ ! -d "${folders.backups.external}" ]; then
+        notify_error "External backup directory ${folders.backups.external} not found or not mounted"
     fi
 
     # Backup mappings
@@ -167,11 +175,12 @@ in {
       PrivateTmp = true;
       ProtectSystem = "strict";
       ReadWritePaths = [
-        "/mnt/external"
-        "/mnt/ssd0"
+        folders.backups.external
+        folders.backups.data
+        folders.mounts.ssd0
+        folders.mounts.storage
         "/mnt/hdd1"
         "/mnt/hdd2"
-        "/storage"
         "/var/run"
         "/dev/pts"  # For write command
       ];

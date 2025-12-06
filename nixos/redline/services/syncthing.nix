@@ -1,6 +1,8 @@
 { config, ... }:
 
-{
+let
+  folders = import ../folders.nix;
+in {
   users.users.syncthing = {
     isSystemUser = true;
     group = "syncthing";
@@ -26,7 +28,7 @@
       };
       folders = {
         "Main" = {
-          path = "/mnt/ssd0/notes/Main";
+          path = folders.notes;
           devices = [ "iphone" "the-wind-rises" "paprika" ];
         };
       };

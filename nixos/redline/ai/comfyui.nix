@@ -1,4 +1,4 @@
-{ pkgs, comfyuiPort, comfyuiTargetPort, utils }:
+{ pkgs, comfyuiPort, comfyuiTargetPort, utils, folders }:
 let
   # ComfyUI Docker image configuration
   comfyuiImageName = "comfyui-custom";
@@ -12,7 +12,7 @@ let
     text = ''
       set -e
 
-      COMFYUI_DIR="/mnt/ssd0/ai/ComfyUI"
+      COMFYUI_DIR="${folders.ai.comfyui}"
       cd "$COMFYUI_DIR"
 
       # Configure Git to trust this directory
@@ -67,7 +67,7 @@ let
     text = ''
       set -e
 
-      COMFYUI_DIR="/mnt/ssd0/ai/ComfyUI"
+      COMFYUI_DIR="${folders.ai.comfyui}"
       cd "$COMFYUI_DIR"
 
       # Check if image exists

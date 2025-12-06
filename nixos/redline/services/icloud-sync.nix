@@ -1,8 +1,10 @@
 { config, pkgs, unstable, ... }:
 
 let
+  folders = import ../folders.nix;
+
   # Configuration
-  icloudDir = "/mnt/ssd0/photos/iCloud";
+  icloudDir = folders.icloud;
   username = "me@philpax.me";
   serviceUser = "icloudpd";
   serviceGroup = "icloudpd";

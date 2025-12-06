@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 
-{
+let
+  folders = import ../folders.nix;
+in {
   systemd.services.largemodelproxy = {
     description = "Large Model Proxy";
     after = [ "docker.service" "network.target" ];
@@ -11,8 +13,8 @@
     serviceConfig = {
       User = "ai";
       Group = "ai";
-      WorkingDirectory = "/mnt/ssd0/ai/large-model-proxy";
-      ExecStart = "/mnt/ssd0/ai/large-model-proxy/large-model-proxy -c ${config.ai.largeModelProxy.jsonFile}";
+      WorkingDirectory = folders.ai.largeModelProxy;
+      ExecStart = "${folders.ai.largeModelProxy}/large-model-proxy -c ${config.ai.largeModelProxy.jsonFile}";
       Restart = "always";
       RestartSec = "10s";
     };

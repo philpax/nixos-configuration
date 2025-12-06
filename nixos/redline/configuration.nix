@@ -1,6 +1,8 @@
 { config, pkgs, unstable, ... }:
 
-{
+let
+  folders = import ./folders.nix;
+in {
   imports =
     [
       ../common/configuration.nix
@@ -24,7 +26,7 @@
   boot.zfs.extraPools = [ "storage" ];
 
   fileSystems = {
-    "/mnt/ssd0" = {
+    ${folders.mounts.ssd0} = {
       device = "/dev/disk/by-uuid/d7e8a9c2-47c7-485b-b443-51d0dd4f7991";
       fsType = "btrfs";
       options = [ "compress=zstd" "noatime" ];
@@ -42,14 +44,14 @@
       options = [ "defaults" "nofail" ];
     };
 
-    "/mnt/external" = {
+    ${folders.backups.external} = {
       device = "/dev/disk/by-uuid/9EB67FDDB67FB47D";
       fsType = "ntfs";
       options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
     };
 
     "/var/lib/immich" = {
-      device = "/mnt/ssd0/immich";
+      device = folders.immich;
       options = [ "bind" ];
     };
   };

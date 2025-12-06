@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 
-{
+let
+  folders = import ../folders.nix;
+in {
   users.users.ai.extraGroups = [ "editabledata" ];
 
   systemd.services.paxcord = {
@@ -12,8 +14,8 @@
     serviceConfig = {
       User = "ai";
       Group = "ai";
-      WorkingDirectory = "/mnt/ssd0/ai/paxcord";
-      ExecStart = "/mnt/ssd0/ai/paxcord/target/debug/paxcord";
+      WorkingDirectory = folders.ai.paxcord;
+      ExecStart = "${folders.ai.paxcord}/target/debug/paxcord";
       Restart = "always";
       RestartSec = "10s";
       Environment = [ "RUST_BACKTRACE=1" ];

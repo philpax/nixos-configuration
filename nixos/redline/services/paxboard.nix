@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 
 let
+  folders = import ../folders.nix;
+
   # Create a dedicated user for paxboard
   paxboardUser = "paxboard";
   paxboardGroup = "paxboard";
@@ -38,9 +40,9 @@ in
 
       # The actual command
       ExecStart = "${pkgs.nodejs}/bin/npm run dev";
-      WorkingDirectory = "/mnt/ssd0/paxboard";
+      WorkingDirectory = folders.paxboard;
       ReadWritePaths = [
-        "/mnt/ssd0/paxboard"
+        folders.paxboard
       ];
       Restart = "always";
       RestartSec = "10";
