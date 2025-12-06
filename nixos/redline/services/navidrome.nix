@@ -12,6 +12,8 @@ in
     };
   };
 
+  users.users.navidrome.extraGroups = [ "editabledata" ];
+
   # Navidrome port
   networking.firewall.allowedTCPPorts = [ 4533 ];
 }

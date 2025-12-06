@@ -11,4 +11,6 @@
     enable = true;
     openFirewall = true;
   };
+
+  users.users.jellyfin.extraGroups = [ "editabledata" ];
 }

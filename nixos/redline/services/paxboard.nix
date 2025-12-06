@@ -10,6 +10,7 @@ in
   users.users.${paxboardUser} = {
     isSystemUser = true;
     group = paxboardGroup;
+    extraGroups = [ "editabledata" ];
     description = "paxboard service user";
     home = "/var/lib/paxboard";
     createHome = true;

@@ -55,7 +55,7 @@ in
     accelerationDevices = null;
   };
 
-  users.users.immich.extraGroups = [ "video" "render" ];
+  users.users.immich.extraGroups = [ "video" "render" "editabledata" ];
   networking.firewall.allowedTCPPorts = [ port ];
 
   # Create the systemd service for immich-stacker

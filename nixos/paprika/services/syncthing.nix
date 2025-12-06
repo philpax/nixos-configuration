@@ -1,11 +1,21 @@
 { config, ... }:
 
 {
+  users.users.syncthing = {
+    isSystemUser = true;
+    group = "syncthing";
+    extraGroups = [ "editabledata" ];
+    home = "/var/lib/syncthing";
+    createHome = true;
+  };
+  users.groups.syncthing = {};
+
   services.syncthing = {
     enable = true;
-    user = "philpax";
-    dataDir = "/home/philpax";
-    configDir = "/home/philpax/.config/syncthing";
+    user = "syncthing";
+    group = "syncthing";
+    dataDir = "/var/lib/syncthing";
+    configDir = "/var/lib/syncthing/.config/syncthing";
     overrideDevices = true;
     overrideFolders = true;
     settings = {

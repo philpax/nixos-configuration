@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 
 {
+  users.users.ai.extraGroups = [ "editabledata" ];
+
   systemd.services.paxcord = {
     description = "paxcord";
     after = [ "largemodelproxy.service" ];

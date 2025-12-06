@@ -36,6 +36,7 @@ in {
   users.users.${serviceUser} = {
     isSystemUser = true;
     group = serviceGroup;
+    extraGroups = [ "editabledata" ];
     home = "/var/lib/${serviceUser}";
     createHome = true;
   };
