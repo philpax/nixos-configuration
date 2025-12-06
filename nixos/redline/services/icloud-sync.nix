@@ -4,7 +4,7 @@ let
   folders = import ../folders.nix;
 
   # Configuration
-  icloudDir = folders.icloud;
+  icloudDir = folders.photos_icloud;
   username = "me@philpax.me";
   serviceUser = "icloudpd";
   serviceGroup = "icloudpd";

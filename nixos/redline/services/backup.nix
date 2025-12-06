@@ -12,9 +12,9 @@ let
     { src = folders.music; dst = "${folders.backups.data}/music"; }
     { src = folders.written; dst = "${folders.backups.data}/written"; }
     # Primary SSD -> ZFS pool (local backup)
-    { src = folders.photos; dst = folders.storage.photos; }
-    { src = folders.music; dst = folders.storage.music; }
-    { src = folders.written; dst = folders.storage.written; }
+    { src = folders.photos; dst = folders.storageBackup.photos; }
+    { src = folders.music; dst = folders.storageBackup.music; }
+    { src = folders.written; dst = folders.storageBackup.written; }
     # Primary SSD -> external drive (offsite backup)
     { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
     { src = folders.music; dst = "${folders.backups.external}/Music"; }

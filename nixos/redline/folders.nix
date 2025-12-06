@@ -12,22 +12,25 @@ rec {
   };
 
   # User data directories (on primary SSD)
+  immich = "${mounts.ssd0}/immich";
   music = "${mounts.ssd0}/music";
   music_inbox = "${mounts.ssd0}/music_inbox";
-  written = "${mounts.ssd0}/written";
   notes = "${mounts.ssd0}/notes/Main";
-  immich = "${mounts.ssd0}/immich";
   photos = "${mounts.ssd0}/photos";
-  icloud = "${photos}/iCloud";
+  photos_icloud = "${photos}/iCloud";
+  written = "${mounts.ssd0}/written";
 
   # User data directories (on ZFS pool - primary)
-  videos = "${mounts.storage}/videos";
+  backup = "${mounts.storage}/backup";
+  datasets = "${mounts.storage}/datasets";
+  documents = "${mounts.storage}/documents";
   downloads = "${mounts.storage}/downloads";
   games = "${mounts.storage}/games";
-  backup = "${mounts.storage}/backup";
+  installers = "${mounts.storage}/installers";
+  videos = "${mounts.storage}/videos";
 
   # User data directories (on ZFS pool - backup copies from SSD)
-  storage = {
+  storageBackup = {
     photos = "${mounts.storage}/photos";
     music = "${mounts.storage}/music";
     written = "${mounts.storage}/written";

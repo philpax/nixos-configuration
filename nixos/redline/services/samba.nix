@@ -5,12 +5,17 @@ let
 
   # Define shares with their names, paths, and comments
   shares = [
-    { name = "Photos"; path = folders.photos; }
-    { name = "Videos"; path = folders.videos; }
-    { name = "Written"; path = folders.written; }
-    { name = "Music"; path = folders.music; }
-    { name = "Music Inbox"; path = folders.music_inbox; }
-    { name = "Backups"; path = folders.backup; }
+    { name = "backup"; path = folders.backup; }
+    { name = "datasets"; path = folders.datasets; }
+    { name = "documents"; path = folders.documents; }
+    { name = "downloads"; path = folders.downloads; }
+    { name = "games"; path = folders.games; }
+    { name = "installers"; path = folders.installers; }
+    { name = "music_inbox"; path = folders.music_inbox; }
+    { name = "music"; path = folders.music; }
+    { name = "photos"; path = folders.photos; }
+    { name = "videos"; path = folders.videos; }
+    { name = "written"; path = folders.written; }
   ];
 
   # Function to create share configuration with music_inbox permissions
