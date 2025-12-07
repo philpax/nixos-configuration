@@ -32,18 +32,6 @@ in {
       options = [ "compress=zstd" "noatime" ];
     };
 
-    "/mnt/hdd1" = {
-      device = "/dev/disk/by-uuid/f6a10ed9-5d48-4289-ab7a-d3a5a171a378";
-      fsType = "ext4";
-      options = [ "defaults" "nofail" ];
-    };
-
-    "/mnt/hdd2" = {
-      device = "/dev/disk/by-uuid/0d71effe-7cd4-469f-b320-44155526c44a";
-      fsType = "ext4";
-      options = [ "defaults" "nofail" ];
-    };
-
     ${folders.backups.external} = {
       device = "/dev/disk/by-uuid/9EB67FDDB67FB47D";
       fsType = "ntfs";
