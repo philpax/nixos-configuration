@@ -22,8 +22,10 @@ let
     # ZFS pool -> external drive (offsite backup)
     { src = folders.backup; dst = "${folders.backups.external}/Backup"; }
     { src = folders.downloads; dst = "${folders.backups.external}/Downloads"; }
+    { src = folders.documents; dst = "${folders.backups.external}/Documents"; }
     { src = folders.games; dst = "${folders.backups.external}/Games"; }
     { src = folders.videos; dst = "${folders.backups.external}/Videos"; }
+    # TODO: consider backing up: others (immich, notes, datasets, installers)
   ];
 
   # Create the backup script
@@ -168,6 +170,7 @@ in {
 
     serviceConfig = {
       ExecStart = "${backupScript}";
+      ExecStopPost = "-${pkgs.coreutils}/bin/rm -f /var/run/backup-sync.lock";
       User = "root";
       Group = "root";
 
@@ -179,8 +182,6 @@ in {
         folders.backups.data
         folders.mounts.ssd0
         folders.mounts.storage
-        "/mnt/hdd1"
-        "/mnt/hdd2"
         "/var/run"
         "/dev/pts"  # For write command
       ];
