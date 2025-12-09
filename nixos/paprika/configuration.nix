@@ -13,7 +13,7 @@
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-
+  time.timeZone = "Australia/Melbourne";
   networking.hostName = "paprika";
 
   # Enable networking

@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 let
   unstable = import
     (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/d08257cad70d6f4ed4023ec5f454ff9cb3a256f9)
@@ -19,7 +19,7 @@ in
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
 
-  time.timeZone = "Europe/Stockholm";
+  time.timeZone = lib.mkDefault "Europe/Stockholm";
   i18n.defaultLocale = "en_AU.UTF-8";
   i18n.supportedLocales = ["en_AU.UTF-8/UTF-8"];
   i18n.extraLocaleSettings = {
