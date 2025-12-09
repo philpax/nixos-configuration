@@ -70,7 +70,6 @@
     volantes-cursors
     swaybg
     unstable.sunsetr
-    polkit_gnome
     gvfs
     wl-clipboard
 
@@ -91,17 +90,17 @@
         TimeoutStopSec = 10;
       };
   };
+  services.gnome.gcr-ssh-agent.enable = false;
 
   fonts.enableDefaultPackages = true;
   fonts.packages = with pkgs; [
     corefonts
     noto-fonts
     noto-fonts-cjk-sans
-    noto-fonts-emoji
-    noto-fonts-extra
+    noto-fonts-color-emoji
     liberation_ttf
     dejavu_fonts
-    ubuntu_font_family
+    ubuntu-classic
     ipafont
     iosevka
     font-awesome
