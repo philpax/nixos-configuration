@@ -15,3 +15,7 @@ shopt -s histappend
 export PATH="$HOME/.cargo/bin:$PATH"
 export EDITOR=hx
 eval "$(direnv hook bash)"
+
+# Tailscale exit node aliases
+alias ts-exit-on='sudo tailscale set --exit-node=redline.tail2ec174.ts.net.'
+alias ts-exit-off='sudo tailscale set --exit-node='
