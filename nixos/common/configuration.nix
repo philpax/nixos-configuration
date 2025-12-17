@@ -41,6 +41,7 @@ in
   users.users.philpax = {
     isNormalUser = true;
     description = "philpax";
+    shell = pkgs.fish;
     extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" "ai" "editabledata" ];
     packages = with pkgs; [];
     openssh.authorizedKeys.keys = [
