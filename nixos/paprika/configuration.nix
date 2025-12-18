@@ -32,6 +32,9 @@
   programs.niri = { enable = true; package = unstable.niri; };
   programs.xwayland.enable = true;
 
+  # Enable 32-bit graphics support for Wine etc.
+  hardware.graphics.enable32Bit = true;
+
   # Enable sound with pipewire.
   # services.pulseaudio.enable = false;
   security.rtkit.enable = true;
@@ -75,6 +78,10 @@
 
     unstable.discord
     foliate
+
+    # Wine (Full variant includes wine-mono)
+    wineWowPackages.stableFull
+    winetricks
   ];
 
   systemd.user.services.polkit-gnome-authentication-agent-1 = {
