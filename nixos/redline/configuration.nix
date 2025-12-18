@@ -5,7 +5,7 @@ let
 in {
   imports =
     [
-      ../common/configuration.nix
+      ../common-all/configuration.nix
       (import ./ai { inherit config pkgs unstable; })
       (import ./services { inherit config pkgs unstable; })
       (import ./programs { inherit config pkgs unstable; })

@@ -3,7 +3,7 @@
 {
   imports =
     [
-      ../common/configuration.nix
+      ../common-all/configuration.nix
     ];
 
   system.stateVersion = "24.11";

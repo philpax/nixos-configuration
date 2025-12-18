@@ -4,8 +4,8 @@
   imports =
     [
       <nixos-hardware/lenovo/thinkpad/t480s>
-      ../common/configuration.nix
-      ../shared/programs/development.nix
+      ../common-all/configuration.nix
+      ../common-dev/programs/development.nix
       (import ./services { inherit config pkgs unstable; })
     ];
 

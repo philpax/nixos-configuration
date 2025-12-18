@@ -2,7 +2,7 @@
 
 {
   imports = [
-    ../../shared/programs/development.nix
+    ../../common-dev/programs/development.nix
   ];
 
   # Add redline-specific development tools here if needed
