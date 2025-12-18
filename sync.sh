@@ -17,18 +17,18 @@ DOTFILES_TARGET="$HOME"
 usage() {
     echo "Usage: $0 <folder_name>"
     echo ""
-    echo "Creates symlinks for NixOS (only 'common-all', 'common-dev' and '<folder_name>' folders) and dotfiles"
-    echo "(only 'common-all', 'common-dev' and '<folder_name>' folders), then creates a symlink from"
+    echo "Creates symlinks for NixOS (only 'common-*' and '<folder_name>' folders) and dotfiles"
+    echo "(only 'common-*' and '<folder_name>' folders), then creates a symlink from"
     echo "/etc/nixos/configuration.nix to \$NIXOS_SOURCE/<folder_name>/configuration.nix"
     echo ""
-    echo "Note: Only the 'common-all', 'common-dev' and specified '<folder_name>' folders will be symlinked"
+    echo "Note: Only the 'common-*' and specified '<folder_name>' folders will be symlinked"
     echo "from both the NixOS and dotfiles source directories to avoid symlinking other machines' configurations."
     echo ""
     echo "Available targets:"
     list_available_targets
     echo ""
     echo "Examples:"
-    echo "  $0 <target>   # Create symlinks for 'common-all' + '<target>' for NixOS and dotfiles"
+    echo "  $0 <target>   # Create symlinks for 'common-*' + '<target>' for NixOS and dotfiles"
 }
 
 # Function to list available targets (folders in NIXOS_SOURCE)
@@ -38,7 +38,7 @@ list_available_targets() {
         return 1
     fi
 
-    local targets=$(find "$NIXOS_SOURCE" -maxdepth 1 -type d -name "*" | grep -v "^$NIXOS_SOURCE$" | grep -v "common-all" | grep -v "common-dev" | sort)
+    local targets=$(find "$NIXOS_SOURCE" -maxdepth 1 -type d -name "*" | grep -v "^$NIXOS_SOURCE$" | grep -v "^$NIXOS_SOURCE/common" | sort)
 
     if [ -z "$targets" ]; then
         echo "  No targets found in $NIXOS_SOURCE"
@@ -91,14 +91,14 @@ build_symlink_list() {
         local relative_path="${source_path#$source_dir/}"
         local target_path
 
-        # For NixOS and dotfiles sources, only include files from 'common-all', 'common-dev' and the specified folder
+        # For NixOS and dotfiles sources, only include files from 'common-*' and the specified folder
         if [ "$source_dir" = "$NIXOS_SOURCE" ] || [ "$source_dir" = "$DOTFILES_SOURCE" ]; then
             local first_dir=$(echo "$relative_path" | cut -d'/' -f1)
-            if [ "$first_dir" != "common-all" ] && [ "$first_dir" != "common-dev" ] && [ "$first_dir" != "$folder_name" ]; then
+            if [[ "$first_dir" != common-* ]] && [ "$first_dir" != "$folder_name" ]; then
                 continue
             fi
 
-            # For dotfiles, remove the first directory (common-all or machine name) from the path
+            # For dotfiles, remove the first directory (common-* or machine name) from the path
             if [ "$source_dir" = "$DOTFILES_SOURCE" ]; then
                 relative_path="${relative_path#*/}"
             fi
@@ -170,12 +170,12 @@ read -p "Are these symlinks OK? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
-    # Create/Update symlinks for NixOS configuration (only 'common-all' and specified folder)
-    echo "Creating/Updating symlinks for NixOS configuration (common-all + $FOLDER_NAME)..."
+    # Create/Update symlinks for NixOS configuration (only 'common-*' and specified folder)
+    echo "Creating/Updating symlinks for NixOS configuration (common-* + $FOLDER_NAME)..."
     create_or_update_symlinks "$nixos_symlinks" true
 
-    # Create/Update symlinks for dotfiles (only 'common-all' and specified folder)
-    echo "Creating/Updating symlinks for dotfiles (common-all + $FOLDER_NAME)..."
+    # Create/Update symlinks for dotfiles (only 'common-*' and specified folder)
+    echo "Creating/Updating symlinks for dotfiles (common-* + $FOLDER_NAME)..."
     create_or_update_symlinks "$dotfiles_symlinks" false
 
     echo "Symlinking complete!"

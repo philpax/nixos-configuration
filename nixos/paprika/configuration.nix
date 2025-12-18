@@ -5,19 +5,17 @@
     [
       <nixos-hardware/lenovo/thinkpad/t480s>
       ../common-all/configuration.nix
+      ../common-desktop/configuration.nix
       ../common-dev/programs/development.nix
       (import ./services { inherit config pkgs unstable; })
     ];
 
   system.stateVersion = "24.11";
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
   time.timeZone = "Australia/Melbourne";
   networking.hostName = "paprika";
 
-  # Enable networking
-  networking.networkmanager.enable = true;
+  # Desktop services
   services.gvfs.enable = true;
   services.avahi = {
     enable = true;
@@ -25,8 +23,7 @@
   };
   services.udisks2.enable = true;
 
-  # Enable Niri and such.
-  services.displayManager.sddm.enable = true;
+  # Niri compositor
   services.displayManager.sddm.theme = "sugar-dark";
   services.displayManager.sddm.wayland.enable = true;
   programs.niri = { enable = true; package = unstable.niri; };
@@ -35,22 +32,9 @@
   # Enable 32-bit graphics support for Wine etc.
   hardware.graphics.enable32Bit = true;
 
-  # Enable sound with pipewire.
-  # services.pulseaudio.enable = false;
-  security.rtkit.enable = true;
   security.polkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-  };
 
   environment.systemPackages = with pkgs; [
-    goldendict-ng
-    anki-bin
     sddm-sugar-dark
     obsidian
 
@@ -98,38 +82,4 @@
       };
   };
   services.gnome.gcr-ssh-agent.enable = false;
-
-  fonts.enableDefaultPackages = true;
-  fonts.packages = with pkgs; [
-    corefonts
-    noto-fonts
-    noto-fonts-cjk-sans
-    noto-fonts-color-emoji
-    liberation_ttf
-    dejavu_fonts
-    ubuntu-classic
-    ipafont
-    iosevka
-    font-awesome
-    nerd-fonts.meslo-lg
-    cozette
-  ];
-  fonts.fontconfig.defaultFonts = {
-    monospace = [
-      "Iosevka"
-      "Noto Sans Mono CJK JP"
-    ];
-
-    sansSerif = [
-      "Noto Sans"
-      "Noto Sans CJK JP"
-    ];
-
-    serif = [
-      "Noto Serif"
-      "Noto Serif CJK JP"
-    ];
-  };
-
-  programs.firefox.enable = true;
 }
