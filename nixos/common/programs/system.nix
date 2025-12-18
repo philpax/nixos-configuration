@@ -18,6 +18,23 @@
     # System monitoring
     lm_sensors
 
+    # Better utilities
+    fd
+    bat
+    eza
+    zoxide
+    dust
+    duf
+    bottom
+    procs
+    delta
+    tldr
+    hyperfine
+    tokei
+    fzf
+    zellij
+    broot
+
     # Misc
     xdg-utils
   ];

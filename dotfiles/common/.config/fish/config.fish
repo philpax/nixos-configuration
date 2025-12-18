@@ -43,3 +43,6 @@ alias ts-exit-off 'sudo tailscale set --exit-node='
 
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
+
+# Initialize zoxide
+zoxide init fish | source
