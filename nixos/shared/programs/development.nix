@@ -12,6 +12,7 @@
     nodejs_22
     rye
     uv
+    stylua
 
     # Development utilities
     gnumake
