@@ -10,9 +10,7 @@
         "niri/workspaces",
         "custom/media"
     ],
-    "modules-center": [
-        "clock"
-    ],
+    "modules-center": [],
     "modules-right": [
         "mpd",
         "idle_inhibitor",
@@ -27,7 +25,8 @@
         "sway/language",
         "battery",
         "battery#bat2",
-        "tray"
+        "tray",
+        "clock"
     ],
     // Modules configuration
     // "sway/workspaces": {
@@ -46,6 +45,9 @@
     //         "default": ""
     //     }
     // },
+    "niri/workspaces": {
+        "format": "{name}<span alpha=\"80%\" size=\"80%\" rise=\"-2pt\">{index}</span>"
+    },
     "keyboard-state": {
         "numlock": true,
         "capslock": true,
