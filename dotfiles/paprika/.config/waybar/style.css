@@ -88,6 +88,7 @@ button:hover {
 #pulseaudio,
 #wireplumber,
 #custom-media,
+#custom-tailscale,
 #tray,
 #mode,
 #idle_inhibitor,
@@ -310,4 +311,20 @@ label:focus {
 
 #privacy-item.audio-out {
     background-color: rgba(0, 105, 212, 0.5);
+}
+
+#custom-tailscale {
+    background-color: rgba(100, 114, 125, 0.5);
+}
+
+#custom-tailscale.on {
+    background-color: rgba(46, 204, 113, 0.5);
+}
+
+#custom-tailscale.off {
+    background-color: rgba(100, 114, 125, 0.5);
+}
+
+#custom-tailscale.error {
+    background-color: rgba(245, 60, 60, 0.5);
 }

@@ -14,6 +14,7 @@
     "modules-right": [
         "mpd",
         "idle_inhibitor",
+        "custom/tailscale",
         "pulseaudio",
         "network",
         "power-profiles-daemon",
@@ -184,5 +185,13 @@
 			"suspend": "systemctl suspend",
 			"hibernate": "systemctl hibernate"
 		}
+    },
+    "custom/tailscale": {
+        "format": "{}",
+        "return-type": "json",
+        "interval": 5,
+        "exec": "$HOME/.config/waybar/tailscale-exit.fish",
+        "on-click": "$HOME/.config/waybar/tailscale-exit.fish toggle",
+        "tooltip": true
     }
 }

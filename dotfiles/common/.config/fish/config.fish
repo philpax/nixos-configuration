@@ -37,8 +37,9 @@ set -gx EDITOR hx
 # Initialize direnv
 direnv hook fish | source
 
-# Tailscale exit node aliases
-alias ts-exit-on 'sudo tailscale set --exit-node=redline.tail2ec174.ts.net.'
+# Tailscale exit node configuration
+set -gx TAILSCALE_EXIT_NODE 'redline.tail2ec174.ts.net.'
+alias ts-exit-on "sudo tailscale set --exit-node=$TAILSCALE_EXIT_NODE"
 alias ts-exit-off 'sudo tailscale set --exit-node='
 
 # Other miscellaneous aliases
