@@ -189,7 +189,7 @@
     "custom/tailscale": {
         "format": "{}",
         "return-type": "json",
-        "interval": 5,
+        "interval": 1,
         "exec": "$HOME/.config/waybar/tailscale-exit.fish",
         "on-click": "$HOME/.config/waybar/tailscale-exit.fish toggle",
         "tooltip": true
