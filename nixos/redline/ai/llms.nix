@@ -61,6 +61,13 @@ let
       };
       extraArgs = "--threads 24 -ot \".ffn_(up|down)_exps.=CPU\" --prio 3 --temp 0.7 --min-p 0.0 --top-p 0.8 --top-k 20";
     }
+    {
+      name = "qwen3-vl-30b-a3b-instruct";
+      file = "Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
+      size = 17715664480;
+      ctxLen = 8192;
+      mode = "gpu";
+    }
 
     # Gemma family
     {
