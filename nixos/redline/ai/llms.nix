@@ -154,6 +154,13 @@ let
       ctxLen = 8192;
       mode = "gpu";
     }
+    {
+      name = "magidonia-24b-v4.3";
+      file = "TheDrummer_Magidonia-24B-v4.3-Q5_K_M.gguf";
+      size = 16763987360;
+      ctxLen = 8192;
+      mode = "gpu";
+    }
 
     # GPT OSS family
     {
