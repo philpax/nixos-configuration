@@ -64,6 +64,8 @@ let
     {
       name = "qwen3-vl-30b-a3b-instruct";
       file = "Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
+      mmproj = "Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL-mmproj-F16.gguf";
+      mmprojSize = 1083500096;
       size = 17715664480;
       ctxLen = 8192;
       mode = "gpu";
@@ -180,11 +182,13 @@ let
 
       # Calculate memory overhead from context length (ctxLen/4 MB)
       ctxOverheadMB = model.ctxLen / 4;
+      # Include mmproj size if present
+      totalModelSize = model.size + (model.mmprojSize or 0);
       # Use memory override if provided, otherwise calculate from file size
       memoryMB = if model.memoryOverride or null != null then
         (if model.mode == "cpu" then model.memoryOverride.cpu else model.memoryOverride.gpu or model.memoryOverride.gpu1 or 0)
       else
-        (model.size / (1024 * 1024)) + ctxOverheadMB;
+        (totalModelSize / (1024 * 1024)) + ctxOverheadMB;
       # Calculate CPU and GPU memory requirements
       cpuMemoryMB = if model.memoryOverride or null != null then
         (if model.mode == "cpu" then memoryMB else model.memoryOverride.cpu or 0)
@@ -210,13 +214,16 @@ let
 
       # Extra arguments
       extraArgs = model.extraArgs or "";
+
+      # Multimodal projector argument
+      mmprojArg = if model.mmproj or null != null then "--mmproj ${llmDir}/${model.mmproj}" else "";
     in utils.mkService {
       name = "${model.mode}:${model.name}";
       listenPort = port;
       targetPort = targetPort;
       command = "llama-server";
       openaiApi = true;
-      args = "-m ${llmDir}/${model.file} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} --jinja ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
+      args = "-m ${llmDir}/${model.file} ${mmprojArg} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} --jinja ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
         intervalMilliseconds = 200;
