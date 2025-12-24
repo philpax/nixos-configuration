@@ -69,6 +69,7 @@ let
       size = 17715664480;
       ctxLen = 8192;
       mode = "gpu";
+      gpu = 2;
     }
 
     # Gemma family
@@ -217,13 +218,18 @@ let
 
       # Multimodal projector argument
       mmprojArg = if model.mmproj or null != null then "--mmproj ${llmDir}/${model.mmproj}" else "";
+
+      # Main GPU argument (for non-split GPU mode)
+      mainGpuArg = if model.mode == "gpu" && !(model.split or false) && (model.gpu or 1) != 1
+        then "--main-gpu ${toString ((model.gpu or 1) - 1)}"  # llama.cpp uses 0-indexed GPUs
+        else "";
     in utils.mkService {
       name = "${model.mode}:${model.name}";
       listenPort = port;
       targetPort = targetPort;
       command = "llama-server";
       openaiApi = true;
-      args = "-m ${llmDir}/${model.file} ${mmprojArg} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} --jinja ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
+      args = "-m ${llmDir}/${model.file} ${mmprojArg} -c ${toString model.ctxLen} ${if model.mode == "cpu" then "--threads 24" else "-ngl 100"} ${mainGpuArg} --jinja ${specialTokensFlag} ${splitMemoryFlag} ${extraArgs} --port ${toString targetPort}";
       healthcheck = {
         command = "curl --fail http://localhost:${toString targetPort}/health";
         intervalMilliseconds = 200;
@@ -235,7 +241,7 @@ let
           "VRAM-GPU-1" = builtins.ceil (gpu1MemoryMB / 2);
           "VRAM-GPU-2" = builtins.ceil (gpu2MemoryMB / 2);
         } else {
-          "VRAM-GPU-1" = builtins.ceil gpu1MemoryMB;
+          "VRAM-GPU-${toString (model.gpu or 1)}" = builtins.ceil gpu1MemoryMB;
         }
       else if model.mode == "hybrid" then
         if model.memoryOverride or null != null && model.memoryOverride.gpu1 or null != null && model.memoryOverride.gpu2 or null != null then {
