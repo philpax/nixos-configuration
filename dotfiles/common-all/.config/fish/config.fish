@@ -42,6 +42,39 @@ set -gx TAILSCALE_EXIT_NODE 'redline.tail2ec174.ts.net.'
 alias ts-exit-on "sudo tailscale set --exit-node=$TAILSCALE_EXIT_NODE"
 alias ts-exit-off 'sudo tailscale set --exit-node='
 
+# Git aliases (oh-my-zsh style)
+alias ga 'git add'
+alias gaa 'git add --all'
+alias gap 'git add -p'
+alias gb 'git branch'
+alias gbr 'git branch --remote'
+alias gc 'git commit'
+alias gca 'git commit -a'
+alias gcamend 'git commit --amend'
+alias gcam 'git commit -a -m'
+alias gcm 'git commit -m'
+alias gco 'git checkout'
+alias gcop 'git checkout -p'
+alias gd 'git diff'
+alias gdc 'git diff --cached'
+alias gf 'git fetch'
+alias gfa 'git fetch --all'
+alias gl 'git pull'
+alias glr 'git pull --rebase'
+alias glog 'git log'
+alias gm 'git merge'
+alias gp 'git push'
+alias gpf 'git push -f'
+alias grbc 'git rebase --continue'
+alias grh 'git reset --hard'
+alias gst 'git status'
+alias gsta 'git stash'
+alias gstp 'git stash pop'
+
+function gfp --description 'Force pull from origin (fetch + reset --hard)'
+    git fetch origin && git reset --hard origin/(git branch --show-current)
+end
+
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
 
