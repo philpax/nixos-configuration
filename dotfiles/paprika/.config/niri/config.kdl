@@ -571,6 +571,9 @@ binds {
     // Set or unset workspace name via popup prompt (enter "-" to clear)
     Mod+N { spawn "sh" "-c" "name=$(fuzzel --dmenu --prompt 'Workspace name (-=clear): '); [ -n \"$name\" ] && { [ \"$name\" = \"-\" ] && niri msg action unset-workspace-name || niri msg action set-workspace-name \"$name\"; }"; }
 
+    // Move current column to a workspace selected from a list
+    Mod+M { spawn "sh" "-c" "ws=$(niri msg workspaces | fuzzel --dmenu --prompt 'Move to workspace: '); [ -n \"$ws\" ] && niri msg action move-column-to-workspace $(echo \"$ws\" | awk '{print $1}')"; }
+
     // Actions to switch layouts.
     // Note: if you uncomment these, make sure you do NOT have
     // a matching layout switch hotkey configured in xkb options above.
