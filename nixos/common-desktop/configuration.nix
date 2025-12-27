@@ -21,10 +21,18 @@
     pulse.enable = true;
   };
 
+  # Printing
+  services.printing.enable = true;
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;  # for .local hostname resolution
+  };
+
   # Common desktop packages
   environment.systemPackages = with pkgs; [
     goldendict-ng
     anki-bin
+    gthumb
   ];
 
   # Fonts
