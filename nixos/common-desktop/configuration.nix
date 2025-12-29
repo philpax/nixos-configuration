@@ -1,4 +1,7 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstable, ... }:
+let
+  cups-dev = unstable.cups.dev;
+in
 
 {
   # Boot loader
@@ -23,6 +26,7 @@
 
   # Printing
   services.printing.enable = true;
+  services.printing.package = unstable.cups;
   services.avahi = {
     enable = true;
     nssmdns4 = true;  # for .local hostname resolution
@@ -32,7 +36,8 @@
   environment.systemPackages = with pkgs; [
     goldendict-ng
     anki-bin
-    gthumb
+    unstable.gthumb
+    cups-dev
   ];
 
   # Fonts
