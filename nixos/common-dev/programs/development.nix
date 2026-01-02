@@ -19,6 +19,7 @@
     cmake
     extra-cmake-modules
     unstable.claude-code
+    gh
 
     # Build dependencies and toolchain
     openssl
