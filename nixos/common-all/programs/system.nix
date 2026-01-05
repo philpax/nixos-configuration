@@ -37,6 +37,9 @@
 
     # Misc
     xdg-utils
+
+    # Shell integration
+    any-nix-shell
   ];
 
   programs.nix-ld.enable = true;
