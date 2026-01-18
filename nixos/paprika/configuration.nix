@@ -59,6 +59,7 @@
     unstable.sunsetr
     gvfs
     wl-clipboard
+    unstable.art
 
     unstable.discord
     foliate
