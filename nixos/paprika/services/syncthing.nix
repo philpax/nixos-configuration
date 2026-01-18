@@ -21,12 +21,13 @@
     settings = {
       devices = {
         "the-wind-rises" = { id = "NLD2NYH-SAYR2TR-GSRXTMD-EWIQCYN-RNI2UDA-52QQEZX-FVVC3NC-YSPWYAY"; };
-        "redline" = { id = "MUFOKAR-D7CL6A6-2PUXSY3-KBWLORN-3R6HCUA-L2HW664-MKLYAXO-4Y2DCQK"; };
+        "redline" = { id = "MHZ62PM-H2JVD52-Z73DOWH-WSSOQKI-CYGJSMR-QVSKHGB-DHCTCU2-LKURZAU"; };
       };
       folders = {
         "Main" = {
           path = "/home/philpax/notes/Main";
           devices = [ "redline" "the-wind-rises" ];
+          ignorePerms = true;
         };
       };
       options = {

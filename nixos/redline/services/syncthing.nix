@@ -24,12 +24,13 @@ in {
       devices = {
         "iphone" = { id = "CTLWMSO-UZTMF6D-DKMOSXI-4DST6YP-W2GN3YW-Y5AV4UD-LUXBIBV-WBJXXQ6"; };
         "the-wind-rises" = { id = "NLD2NYH-SAYR2TR-GSRXTMD-EWIQCYN-RNI2UDA-52QQEZX-FVVC3NC-YSPWYAY"; };
-        "paprika" = { id = "6AJNFQE-DCDVHBD-UVPZINA-5HGY655-VGVCG2H-X7D7EL6-IEWWMIZ-F2LJSAQ"; };
+        "paprika" = { id = "MOF5BJW-TFNNC62-WHEQYG7-SMYBVSU-GAY7WHA-3ILFZSA-G7SRE5X-LY3DOQ4"; };
       };
       folders = {
         "Main" = {
           path = folders.notes;
           devices = [ "iphone" "the-wind-rises" "paprika" ];
+          ignorePerms = true;
         };
       };
       options = {
