@@ -12,7 +12,7 @@
 
   system.stateVersion = "24.11";
 
-  time.timeZone = "Australia/Melbourne";
+  time.timeZone = "Europe/Stockholm";
   networking.hostName = "paprika";
 
   # Desktop services
