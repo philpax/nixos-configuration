@@ -1,21 +1,12 @@
 { config, ... }:
 
 {
-  users.users.syncthing = {
-    isSystemUser = true;
-    group = "syncthing";
-    extraGroups = [ "editabledata" ];
-    home = "/var/lib/syncthing";
-    createHome = true;
-  };
-  users.groups.syncthing = {};
-
   services.syncthing = {
     enable = true;
-    user = "syncthing";
-    group = "syncthing";
-    dataDir = "/var/lib/syncthing";
-    configDir = "/var/lib/syncthing/.config/syncthing";
+    user = "philpax";
+    group = "users";
+    dataDir = "/home/philpax";
+    configDir = "/home/philpax/.config/syncthing";
     overrideDevices = true;
     overrideFolders = true;
     settings = {
@@ -27,7 +18,6 @@
         "Main" = {
           path = "/home/philpax/notes/Main";
           devices = [ "redline" "the-wind-rises" ];
-          ignorePerms = true;
         };
       };
       options = {
