@@ -27,7 +27,7 @@ in {
 
   fileSystems = {
     ${folders.mounts.ssd0} = {
-      device = "/dev/disk/by-uuid/d7e8a9c2-47c7-485b-b443-51d0dd4f7991";
+      device = "/dev/disk/by-uuid/68847514-728b-451c-8145-b2eaa1871e8d";
       fsType = "btrfs";
       options = [ "compress=zstd" "noatime" ];
     };
@@ -55,6 +55,13 @@ in {
     daily = 7;
     weekly = 4;
     monthly = 12;
+  };
+
+  # Auto-scrub btrfs weekly
+  services.btrfs.autoScrub = {
+    enable = true;
+    interval = "weekly";
+    fileSystems = [ "/mnt/ssd0" ];
   };
 
   # Use powersave governor for quieter operation
