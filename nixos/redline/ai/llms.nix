@@ -70,6 +70,7 @@ let
       ctxLen = 8192;
       mode = "gpu";
       gpu = 2;
+      shutDownAfterInactivitySeconds = 31536000; # 1 year - effectively never
     }
 
     # Gemma family
@@ -223,7 +224,7 @@ let
       mainGpuArg = if model.mode == "gpu" && !(model.split or false) && (model.gpu or 1) != 1
         then "--main-gpu ${toString ((model.gpu or 1) - 1)}"  # llama.cpp uses 0-indexed GPUs
         else "";
-    in utils.mkService {
+    in utils.mkService ({
       name = "${model.mode}:${model.name}";
       listenPort = port;
       targetPort = targetPort;
@@ -255,7 +256,9 @@ let
       else {
 
       };
-    };
+    } // (if model.shutDownAfterInactivitySeconds or null != null then {
+      shutDownAfterInactivitySeconds = model.shutDownAfterInactivitySeconds;
+    } else {}));
 
   # Generate all LLMs
   llms = let
