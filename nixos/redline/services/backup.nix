@@ -2,6 +2,7 @@
 
 let
   folders = import ../folders.nix;
+  resticSecrets = import ../secrets/restic.nix;
 
   # Define backup mappings in order of execution
   # Source of truth: primary SSD and ZFS pool
@@ -20,7 +21,6 @@ let
     { src = folders.music; dst = "${folders.backups.external}/Music"; }
     { src = folders.written; dst = "${folders.backups.external}/Written"; }
     # ZFS pool -> external drive (offsite backup)
-    { src = folders.backup; dst = "${folders.backups.external}/Backup"; }
     { src = folders.downloads; dst = "${folders.backups.external}/Downloads"; }
     { src = folders.documents; dst = "${folders.backups.external}/Documents"; }
     { src = folders.games; dst = "${folders.backups.external}/Games"; }
@@ -219,6 +219,7 @@ in {
 
   # Create a global command to run the backup manually
   environment.systemPackages = [
+    pkgs.fuse  # For restic mount
     (pkgs.writeShellScriptBin "backup-sync" ''
       if [ "$(id -u)" -ne 0 ]; then
           echo "This command requires root privileges. Use: sudo backup-sync"
@@ -269,4 +270,24 @@ in {
 
   # Enable the timer by default
   systemd.timers.backup-sync.enable = true;
+
+  # Restic backup for storage/backup -> external drive
+  services.restic.backups.external = {
+    paths = [ folders.backup ];
+    repository = "${folders.backups.external}/Backup";
+    passwordFile = toString (pkgs.writeText "restic-pw" resticSecrets.password);
+    initialize = true;
+
+    timerConfig = {
+      OnCalendar = "daily";
+      Persistent = true;
+    };
+
+    pruneOpts = [
+      "--keep-daily 7"
+      "--keep-weekly 4"
+      "--keep-monthly 12"
+      "--keep-yearly 5"
+    ];
+  };
 }
