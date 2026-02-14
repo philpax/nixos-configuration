@@ -83,3 +83,4 @@ alias clauded 'claude --dangerously-skip-permissions'
 
 # Initialize zoxide
 zoxide init fish | source
+export PATH="$HOME/.local/bin:$PATH"
