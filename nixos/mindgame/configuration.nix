@@ -1,0 +1,18 @@
+{ config, pkgs, unstable, ... }:
+
+{
+  imports =
+    [
+      # <nixos-hardware/...>          # add when hardware is known
+      ../common-all/configuration.nix
+      ../common-desktop/configuration.nix
+      ../common-dev/programs/development.nix
+      ../common-dev-desktop/configuration.nix
+      # (import ./services { inherit config pkgs unstable; })
+    ];
+
+  system.stateVersion = "25.05";
+
+  time.timeZone = "Europe/Stockholm";  # placeholder — update for actual location
+  networking.hostName = "mindgame";
+}
