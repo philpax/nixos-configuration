@@ -5,7 +5,6 @@
 font=Cozette 11
 format=<b>%a ⏵</b> %s\n%b
 sort=-time
-output=DP-2
 layer=overlay
 anchor=top-right
 background-color=#2e3440
