@@ -11,8 +11,12 @@
       # (import ./services { inherit config pkgs unstable; })
     ];
 
-  system.stateVersion = "25.05";
+  system.stateVersion = "25.11";
 
   time.timeZone = "Europe/Stockholm";  # placeholder — update for actual location
   networking.hostName = "mindgame";
+  services.xserver.videoDrivers = ["nvidia"];
+  hardware.nvidia.open = true;
+  hardware.graphics.enable = true;
+  hardware.nvidia.modesetting.enable = true;
 }
