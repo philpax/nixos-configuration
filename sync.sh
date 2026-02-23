@@ -109,10 +109,23 @@ build_symlink_list() {
     done
 }
 
+# Function to find existing non-symlink files that would be overwritten
+find_conflicts() {
+    local symlink_list="$1"
+
+    echo "$symlink_list" | while read -r line; do
+        local target_path="${line% -> *}"
+        if [ -e "$target_path" ] && [ ! -L "$target_path" ]; then
+            echo "  $target_path"
+        fi
+    done
+}
+
 # Function to create or update symlinks
 create_or_update_symlinks() {
     local symlink_list="$1"
     local use_sudo="$2"
+    local force="$3"
 
     echo "$symlink_list" | while read -r line; do
         local target_path="${line% -> *}"
@@ -124,8 +137,12 @@ create_or_update_symlinks() {
             if [ -L "$target_path" ]; then
                 sudo rm -f "$target_path"
             elif [ -e "$target_path" ]; then
-                echo "Warning: $target_path already exists and is not a symlink. Skipping."
-                continue
+                if [ "$force" = true ]; then
+                    sudo rm -f "$target_path"
+                else
+                    echo "Warning: $target_path already exists and is not a symlink. Skipping."
+                    continue
+                fi
             fi
             sudo ln -s "$source_path" "$target_path"
         else
@@ -133,8 +150,12 @@ create_or_update_symlinks() {
             if [ -L "$target_path" ]; then
                 rm -f "$target_path"
             elif [ -e "$target_path" ]; then
-                echo "Warning: $target_path already exists and is not a symlink. Skipping."
-                continue
+                if [ "$force" = true ]; then
+                    rm -f "$target_path"
+                else
+                    echo "Warning: $target_path already exists and is not a symlink. Skipping."
+                    continue
+                fi
             fi
             ln -s "$source_path" "$target_path"
         fi
@@ -149,8 +170,31 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-# Store the folder name for later use
-FOLDER_NAME="$1"
+# Parse flags
+FORCE=false
+FOLDER_NAME=""
+for arg in "$@"; do
+    case "$arg" in
+        --force|-f)
+            FORCE=true
+            ;;
+        *)
+            if [ -z "$FOLDER_NAME" ]; then
+                FOLDER_NAME="$arg"
+            else
+                echo "Error: Unexpected argument '$arg'"
+                usage
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if [ -z "$FOLDER_NAME" ]; then
+    echo "Error: No folder name provided"
+    usage
+    exit 1
+fi
 
 # Build the lists of proposed symlinks
 nixos_symlinks=$(build_symlink_list "$NIXOS_SOURCE" "$NIXOS_TARGET" "$FOLDER_NAME")
@@ -165,6 +209,21 @@ echo "Proposed symlinks for dotfiles:"
 echo "$dotfiles_symlinks"
 echo
 
+# Show conflicts
+nixos_conflicts=$(find_conflicts "$nixos_symlinks")
+dotfiles_conflicts=$(find_conflicts "$dotfiles_symlinks")
+all_conflicts="${nixos_conflicts}${dotfiles_conflicts}"
+
+if [ -n "$all_conflicts" ]; then
+    echo "The following existing files (not symlinks) would be overwritten:"
+    echo "$all_conflicts"
+    echo
+    if [ "$FORCE" = false ]; then
+        echo "Use --force / -f to overwrite them. Without it, these files will be skipped."
+        echo
+    fi
+fi
+
 # Ask for confirmation
 read -p "Are these symlinks OK? (y/n) " -n 1 -r
 echo
@@ -172,11 +231,11 @@ if [[ $REPLY =~ ^[Yy]$ ]]
 then
     # Create/Update symlinks for NixOS configuration (only 'common-*' and specified folder)
     echo "Creating/Updating symlinks for NixOS configuration (common-* + $FOLDER_NAME)..."
-    create_or_update_symlinks "$nixos_symlinks" true
+    create_or_update_symlinks "$nixos_symlinks" true "$FORCE"
 
     # Create/Update symlinks for dotfiles (only 'common-*' and specified folder)
     echo "Creating/Updating symlinks for dotfiles (common-* + $FOLDER_NAME)..."
-    create_or_update_symlinks "$dotfiles_symlinks" false
+    create_or_update_symlinks "$dotfiles_symlinks" false "$FORCE"
 
     echo "Symlinking complete!"
 
