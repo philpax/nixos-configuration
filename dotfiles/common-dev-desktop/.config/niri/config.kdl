@@ -99,7 +99,7 @@ output "eDP-1" {
 output "DP-4" {
     mode "3440x1440@144.000"
     layout {
-        default-column-width { proportion 0.33; }
+        default-column-width { proportion 0.33333; }
     }
 }
 
