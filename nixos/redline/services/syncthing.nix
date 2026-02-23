@@ -2,6 +2,7 @@
 
 let
   folders = import ../folders.nix;
+  deviceIds = import ../../common-all/syncthing-device-ids.nix;
 in {
   users.users.syncthing = {
     isSystemUser = true;
@@ -22,14 +23,14 @@ in {
     overrideFolders = true;
     settings = {
       devices = {
-        "iphone" = { id = "CTLWMSO-UZTMF6D-DKMOSXI-4DST6YP-W2GN3YW-Y5AV4UD-LUXBIBV-WBJXXQ6"; };
-        "the-wind-rises" = { id = "NLD2NYH-SAYR2TR-GSRXTMD-EWIQCYN-RNI2UDA-52QQEZX-FVVC3NC-YSPWYAY"; };
-        "paprika" = { id = "6AJNFQE-DCDVHBD-UVPZINA-5HGY655-VGVCG2H-X7D7EL6-IEWWMIZ-F2LJSAQ"; };
+        "iphone" = { id = deviceIds.iphone; };
+        "paprika" = { id = deviceIds.paprika; };
+        "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
       };
       folders = {
         "Main" = {
           path = folders.notes;
-          devices = [ "iphone" "the-wind-rises" "paprika" ];
+          devices = [ "iphone" "paprika" "mindgame-nixos" ];
           ignorePerms = true;
         };
       };

@@ -8,7 +8,7 @@
       ../common-desktop/configuration.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
-      # (import ./services { inherit config pkgs unstable; })
+      (import ./services { inherit config pkgs unstable; })
     ];
 
   system.stateVersion = "25.11";

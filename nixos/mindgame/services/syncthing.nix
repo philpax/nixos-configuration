@@ -14,12 +14,12 @@ in {
     settings = {
       devices = {
         "redline" = { id = deviceIds.redline; };
-        "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
+        "paprika" = { id = deviceIds.paprika; };
       };
       folders = {
         "Main" = {
           path = "/home/philpax/notes/Main";
-          devices = [ "redline" "mindgame-nixos" ];
+          devices = [ "redline" "paprika" ];
         };
       };
       options = {
