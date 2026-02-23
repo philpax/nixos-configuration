@@ -13,7 +13,7 @@ function fish_prompt --description 'Write out the prompt'
     end
 
     # Per-hostname color, derived from hashing the hostname into an HSV hue
-    set -l host_hash (printf "%s" (prompt_hostname) | cksum | string split " ")[1]
+    set -l host_hash (printf "%d" 0x(printf "%s" (prompt_hostname) | md5sum | string sub -l 8))
     set -l host_hue (math "$host_hash % 360")
     # HSV to hex with S=0.7, V=0.9 for bright, readable colors
     set -l c (math "0.9 * 0.7")
