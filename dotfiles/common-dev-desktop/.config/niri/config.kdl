@@ -280,7 +280,8 @@ layout {
 // spawn-at-startup "alacritty" "-e" "fish"
 spawn-at-startup "waybar"
 spawn-at-startup "mako"
-spawn-at-startup "swaybg" "-i" "/home/philpax/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg"
+spawn-at-startup "swaybg" "-o" "DP-4" "-i" "/home/philpax/wallpapers/21x9/wallhaven-vq72xm.png"
+spawn-at-startup "swaybg" "-o" "eDP-1" "-i" "/home/philpax/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg"
 spawn-at-startup "sunsetr"
 spawn-at-startup "sh" "-c" "swayidle -w timeout 900 'swaylock -f' timeout 1800 'systemctl suspend'"
 
