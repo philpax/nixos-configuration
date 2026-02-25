@@ -3,6 +3,12 @@
 let
   folders = import ../folders.nix;
   deviceIds = import ../../common-all/syncthing-device-ids.nix;
+  gamesDir = "/storage/installers/Games";
+  gameFolder = name: {
+    path = "${gamesDir}/${name}";
+    devices = [ "aynthor" ];
+    ignorePerms = true;
+  };
 in {
   users.users.syncthing = {
     isSystemUser = true;
@@ -26,6 +32,7 @@ in {
         "iphone" = { id = deviceIds.iphone; };
         "paprika" = { id = deviceIds.paprika; };
         "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
+        "aynthor" = { id = deviceIds.aynthor; };
       };
       folders = {
         "Main" = {
@@ -33,6 +40,15 @@ in {
           devices = [ "iphone" "paprika" "mindgame-nixos" ];
           ignorePerms = true;
         };
+        "gc" = gameFolder "gc";
+        "n3ds" = gameFolder "n3ds";
+        "nds" = gameFolder "nds";
+        "ps2" = gameFolder "ps2";
+        "psvita" = gameFolder "psvita";
+        "psx" = gameFolder "psx";
+        "switch" = gameFolder "switch";
+        "wii" = gameFolder "wii";
+        "wiiu" = gameFolder "wiiu";
       };
       options = {
         minHomeDiskFree = {
