@@ -339,6 +339,13 @@ window-rule {
     open-floating true
 }
 
+
+// Open Biome in floating.
+window-rule {
+    match title="^Biome*"
+    open-floating true
+}
+
 // Example: block out two password managers from screen capture.
 // (This example rule is commented out with a "/-" in front.)
 /-window-rule {
