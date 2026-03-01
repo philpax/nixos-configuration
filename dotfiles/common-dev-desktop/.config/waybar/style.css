@@ -61,6 +61,8 @@ button:hover {
 
 #workspaces button:hover {
     background: rgba(0, 0, 0, 0.2);
+    font-weight: normal;
+    text-shadow: none;
 }
 
 #workspaces button.focused, #workspaces button.active {
