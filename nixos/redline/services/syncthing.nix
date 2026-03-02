@@ -8,6 +8,10 @@ let
     path = "${gamesDir}/${name}";
     devices = [ "aynthor" ];
     ignorePerms = true;
+    versioning = {
+      type = "simple";
+      params.keep = "5";
+    };
   };
 in {
   users.users.syncthing = {
@@ -49,6 +53,7 @@ in {
         "switch" = gameFolder "switch";
         "wii" = gameFolder "wii";
         "wiiu" = gameFolder "wiiu";
+        "saves" = gameFolder "Saves";
       };
       options = {
         minHomeDiskFree = {
