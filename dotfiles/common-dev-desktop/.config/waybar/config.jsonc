@@ -20,6 +20,8 @@
         "power-profiles-daemon",
         "cpu",
         "memory",
+        "custom/gpu",
+        "custom/vram",
         "temperature",
         "backlight",
         "keyboard-state",
@@ -185,6 +187,20 @@
 			"suspend": "systemctl suspend",
 			"hibernate": "systemctl hibernate"
 		}
+    },
+    "custom/gpu": {
+        "format": "gpu {}",
+        "return-type": "json",
+        "interval": 5,
+        "exec": "$HOME/.config/waybar/gpu.sh",
+        "tooltip": true
+    },
+    "custom/vram": {
+        "format": "vram {}",
+        "return-type": "json",
+        "interval": 5,
+        "exec": "$HOME/.config/waybar/vram.sh",
+        "tooltip": true
     },
     "custom/tailscale": {
         "format": "{}",

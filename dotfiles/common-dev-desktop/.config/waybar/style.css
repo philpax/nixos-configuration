@@ -50,7 +50,7 @@ button:hover {
 
 /* you can set a style on hover for any module like this */
 #pulseaudio:hover {
-    background-color: #a37800;
+    background-color: rgba(106, 140, 56, 0.5);
 }
 
 #workspaces button {
@@ -90,6 +90,8 @@ button:hover {
 #pulseaudio,
 #wireplumber,
 #custom-media,
+#custom-gpu,
+#custom-vram,
 #custom-tailscale,
 #tray,
 #mode,
@@ -118,25 +120,26 @@ button:hover {
 }
 
 #clock {
+    background-color: rgba(165, 66, 101, 0.5);
 }
 
 #battery {
-    background-color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(159, 66, 165, 0.5);
 }
 
 #battery.charging, #battery.plugged {
-    background-color: rgba(38, 166, 91, 0.5);
+    background-color: rgba(58, 165, 75, 0.5);
 }
 
 @keyframes blink {
     to {
-        background-color: rgba(245, 60, 60, 0.6);
+        background-color: rgba(165, 58, 58, 0.6);
     }
 }
 
 /* Using steps() instead of linear as a timing function to limit cpu usage */
 #battery.critical:not(.charging) {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
     animation-name: blink;
     animation-duration: 0.5s;
     animation-timing-function: steps(12);
@@ -149,15 +152,15 @@ button:hover {
 }
 
 #power-profiles-daemon.performance {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #power-profiles-daemon.balanced {
-    background-color: rgba(41, 128, 185, 0.5);
+    background-color: rgba(58, 93, 165, 0.5);
 }
 
 #power-profiles-daemon.power-saver {
-    background-color: rgba(46, 204, 113, 0.5);
+    background-color: rgba(58, 165, 75, 0.5);
 }
 
 label:focus {
@@ -165,68 +168,76 @@ label:focus {
 }
 
 #cpu {
-    background-color: rgba(46, 204, 113, 0.5);
+    background-color: rgba(66, 165, 113, 0.5);
 }
 
 #memory {
-    background-color: rgba(155, 89, 182, 0.5);
+    background-color: rgba(66, 165, 148, 0.5);
+}
+
+#custom-gpu {
+    background-color: rgba(66, 148, 165, 0.5);
+}
+
+#custom-vram {
+    background-color: rgba(66, 113, 165, 0.5);
 }
 
 #disk {
-    background-color: rgba(150, 75, 0, 0.5);
+    background-color: rgba(66, 165, 148, 0.5);
 }
 
 #backlight {
-    background-color: rgba(231, 76, 60, 0.5);
+    background-color: rgba(89, 66, 165, 0.5);
 }
 
 #network {
-    background-color: rgba(41, 128, 185, 0.5);
+    background-color: rgba(89, 165, 66, 0.5);
 }
 
 #network.disconnected {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #pulseaudio {
-    background-color: rgba(241, 196, 15, 0.5);
+    background-color: rgba(124, 165, 66, 0.5);
 }
 
 #pulseaudio.muted {
-    background-color: rgba(144, 177, 177, 0.5);
+    background-color: rgba(105, 108, 114, 0.5);
 }
 
 #wireplumber {
-    background-color: rgba(255, 240, 245, 0.5);
+    background-color: rgba(124, 165, 66, 0.5);
 }
 
 #wireplumber.muted {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #custom-media {
-    background-color: rgba(102, 204, 153, 0.5);
+    background-color: rgba(165, 66, 66, 0.5);
     min-width: 100px;
 }
 
 #custom-media.custom-spotify {
-    background-color: rgba(102, 204, 153, 0.5);
+    background-color: rgba(165, 66, 66, 0.5);
 }
 
 #custom-media.custom-vlc {
-    background-color: rgba(255, 160, 0, 0.5);
+    background-color: rgba(140, 56, 56, 0.5);
 }
 
 #temperature {
-    background-color: rgba(240, 147, 43, 0.5);
+    background-color: rgba(66, 77, 165, 0.5);
 }
 
 #temperature.critical {
-    background-color: rgba(235, 77, 75, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #tray {
-    background-color: rgba(41, 128, 185, 0.5);
+    background-color: rgba(165, 66, 136, 0.5);
 }
 
 #tray > .passive {
@@ -235,35 +246,35 @@ label:focus {
 
 #tray > .needs-attention {
     -gtk-icon-effect: highlight;
-    background-color: rgba(235, 77, 75, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #idle_inhibitor {
-    background-color: rgba(45, 52, 54, 0.5);
+    background-color: rgba(165, 136, 66, 0.5);
 }
 
 #idle_inhibitor.activated {
-    background-color: rgba(236, 240, 241, 0.5);
+    background-color: rgba(132, 138, 165, 0.5);
 }
 
 #mpd {
-    background-color: rgba(102, 204, 153, 0.5);
+    background-color: rgba(165, 101, 66, 0.5);
 }
 
 #mpd.disconnected {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
 
 #mpd.stopped {
-    background-color: rgba(144, 177, 177, 0.5);
+    background-color: rgba(105, 108, 114, 0.5);
 }
 
 #mpd.paused {
-    background-color: rgba(81, 163, 122, 0.5);
+    background-color: rgba(140, 86, 56, 0.5);
 }
 
 #language {
-    background: rgba(0, 176, 147, 0.5);
+    background: rgba(124, 66, 165, 0.5);
     color: #ffffff;
     padding: 0 5px;
     margin: 0 5px;
@@ -271,7 +282,7 @@ label:focus {
 }
 
 #keyboard-state {
-    background: rgba(151, 225, 173, 0.5);
+    background: rgba(124, 66, 165, 0.5);
     color: #ffffff;
     padding: 0 0px;
     margin: 0 5px;
@@ -316,17 +327,17 @@ label:focus {
 }
 
 #custom-tailscale {
-    background-color: rgba(100, 114, 125, 0.5);
+    background-color: rgba(159, 165, 66, 0.5);
 }
 
 #custom-tailscale.on {
-    background-color: rgba(46, 204, 113, 0.5);
+    background-color: rgba(58, 165, 75, 0.5);
 }
 
 #custom-tailscale.off {
-    background-color: rgba(100, 114, 125, 0.5);
+    background-color: rgba(105, 108, 114, 0.5);
 }
 
 #custom-tailscale.error {
-    background-color: rgba(245, 60, 60, 0.5);
+    background-color: rgba(165, 58, 58, 0.5);
 }
