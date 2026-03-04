@@ -1,4 +1,4 @@
-{ pkgs, comfyuiDir, port }:
+{ pkgs, comfyuiDir, port, baseImage ? "pytorch/pytorch:2.10.0-cuda13.0-cudnn9-devel" }:
 let
   imageName = "comfyui-custom";
   imageTag = "latest";
@@ -42,10 +42,10 @@ in
 
       # Create temporary Dockerfile
       cat << EOF > /tmp/Dockerfile
-      FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
+      FROM ${baseImage}
 
       # Install dependencies
-      RUN apt-get update && apt-get install -y git libgl1-mesa-glx libglib2.0-0
+      RUN apt-get update && apt-get install -y git libgl1 libglib2.0-0
 
       # Set up workspace
       WORKDIR /workspace
@@ -54,7 +54,7 @@ in
       COPY requirements.txt .
 
       # Install Python dependencies
-      RUN pip install -r requirements.txt
+      RUN pip install --break-system-packages -r requirements.txt
 
       # Set entrypoint
       ENTRYPOINT ["python", "main.py", "--listen", "--enable-cors-header"]
