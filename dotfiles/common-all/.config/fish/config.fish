@@ -78,6 +78,33 @@ function gfp --description 'Force pull from origin (fetch + reset --hard)'
     git fetch origin && git reset --hard origin/(git branch --show-current)
 end
 
+function dlretry --argument-names url filename
+    if test -z "$url"
+        echo "Usage: dlretry <url> [filename]" >&2
+        return 1
+    end
+
+    # Default filename from URL if not provided
+    if test -z "$filename"
+        set filename (basename "$url" | string replace -r '\?.*' '')
+    end
+
+    set -l max_attempts 20
+    set -l attempt 0
+    while test $attempt -lt $max_attempts
+        set attempt (math $attempt + 1)
+        echo "Attempt $attempt/$max_attempts: $filename"
+        curl -L -C - -o "$filename" "$url" \
+            --retry 5 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            --connect-timeout 30
+        and break
+        echo "Failed, retrying in 10s..."
+        sleep 10
+    end
+end
+
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
 
