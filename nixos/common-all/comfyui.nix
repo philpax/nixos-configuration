@@ -1,0 +1,122 @@
+{ pkgs, comfyuiDir, port }:
+let
+  imageName = "comfyui-custom";
+  imageTag = "latest";
+  image = "${imageName}:${imageTag}";
+in
+{
+  comfyuiRebuildScript = pkgs.writeShellApplication {
+    name = "comfyui-rebuild";
+    runtimeInputs = [ pkgs.git pkgs.docker ];
+    text = ''
+      set -e
+
+      COMFYUI_DIR="${comfyuiDir}"
+
+      echo "Building/updating ComfyUI Docker image..."
+
+      if [ ! -d "$COMFYUI_DIR/.git" ]; then
+        echo "Cloning ComfyUI repository..."
+        TMPDIR=$(mktemp -d)
+        ${pkgs.git}/bin/git clone https://github.com/comfyanonymous/ComfyUI.git "$TMPDIR/ComfyUI"
+        # Move git content into existing directory (preserving files like models/)
+        cp -rn "$TMPDIR/ComfyUI/." "$COMFYUI_DIR/"
+        mv "$TMPDIR/ComfyUI/.git" "$COMFYUI_DIR/.git"
+        rm -rf "$TMPDIR"
+      fi
+
+      cd "$COMFYUI_DIR"
+
+      # Configure Git to trust this directory
+      ${pkgs.git}/bin/git config --global --add safe.directory "$COMFYUI_DIR"
+
+      # Pull latest changes
+      ${pkgs.git}/bin/git fetch origin
+      ${pkgs.git}/bin/git pull origin master
+
+      # Remove old image if it exists
+      if docker image inspect ${image} >/dev/null 2>&1; then
+        echo "Removing old ComfyUI image..."
+        docker rmi ${image}
+      fi
+
+      # Create temporary Dockerfile
+      cat << EOF > /tmp/Dockerfile
+      FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
+
+      # Install dependencies
+      RUN apt-get update && apt-get install -y git libgl1-mesa-glx libglib2.0-0
+
+      # Set up workspace
+      WORKDIR /workspace
+
+      # Copy requirements.txt
+      COPY requirements.txt .
+
+      # Install Python dependencies
+      RUN pip install -r requirements.txt
+
+      # Set entrypoint
+      ENTRYPOINT ["python", "main.py", "--listen", "--enable-cors-header"]
+      EOF
+
+      # Build the image
+      docker build -t ${image} -f /tmp/Dockerfile .
+
+      # Clean up
+      rm /tmp/Dockerfile
+
+      echo "ComfyUI Docker image rebuilt successfully!"
+    '';
+  };
+
+  comfyuiStartScript = pkgs.writeShellApplication {
+    name = "comfyui-start";
+    runtimeInputs = [ pkgs.docker ];
+    text = ''
+      set -e
+
+      COMFYUI_DIR="${comfyuiDir}"
+      cd "$COMFYUI_DIR"
+
+      # Check if image exists
+      if ! docker image inspect ${image} >/dev/null 2>&1; then
+        echo "Error: ComfyUI Docker image not found. Please run 'sudo comfyui-rebuild' first."
+        exit 1
+      fi
+
+      FOREGROUND=false
+      for arg in "$@"; do
+        case "$arg" in
+          --foreground) FOREGROUND=true ;;
+        esac
+      done
+
+      if [ "$FOREGROUND" = true ]; then
+        echo "Starting ComfyUI in foreground..."
+        exec docker run --rm --name comfyui \
+          --device nvidia.com/gpu=all \
+          -v "$COMFYUI_DIR:/workspace" \
+          -p ${toString port}:8188 \
+          ${image}
+      else
+        echo "Starting ComfyUI (detached)..."
+        docker run -d --rm --name comfyui \
+          --device nvidia.com/gpu=all \
+          -v "$COMFYUI_DIR:/workspace" \
+          -p ${toString port}:8188 \
+          ${image}
+        echo "ComfyUI started. Access at http://localhost:${toString port}"
+      fi
+    '';
+  };
+
+  comfyuiStopScript = pkgs.writeShellApplication {
+    name = "comfyui-stop";
+    runtimeInputs = [ pkgs.docker ];
+    text = ''
+      docker kill comfyui
+      echo "ComfyUI stopped."
+    '';
+  };
+}

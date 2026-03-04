@@ -20,5 +20,8 @@
   hardware.graphics.enable = true;
   hardware.nvidia.modesetting.enable = true;
 
+  virtualisation.docker.enable = true;
+  hardware.nvidia-container-toolkit.enable = true;
+
   networking.firewall.allowedTCPPorts = [ 5173 ];
 }
