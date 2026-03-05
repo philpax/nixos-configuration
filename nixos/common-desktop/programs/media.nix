@@ -2,8 +2,7 @@
 
 {
   environment.systemPackages = with pkgs; [
-    ffmpeg-full
-    yt-dlp
-    imagemagick
+    mpv
+    vlc
   ];
 }
