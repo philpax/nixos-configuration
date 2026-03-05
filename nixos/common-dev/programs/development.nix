@@ -13,6 +13,7 @@
     rye
     uv
     stylua
+    python3Packages.huggingface-hub
 
     # Development utilities
     gnumake
