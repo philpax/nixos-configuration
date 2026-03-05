@@ -36,6 +36,8 @@ in
     LC_TIME = "en_AU.UTF-8";
   };
 
+  networking.nameservers = [ "1.1.1.1" "1.0.0.1" "8.8.8.8" "8.8.4.4" ];
+
   users.groups.editabledata = {};
 
   users.users.philpax = {
