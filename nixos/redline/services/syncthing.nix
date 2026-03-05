@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, lib, ... }:
 
 let
   folders = import ../folders.nix;
@@ -13,6 +13,10 @@ let
       params.keep = "5";
     };
   };
+  # Not synced: ps3, windows, x360
+  gameFolders = lib.genAttrs
+    [ "dreamcast" "gba" "gc" "n3ds" "n64" "nds" "ps2" "psp" "psvita" "psx" "saturn" "snes" "switch" "wii" "wiiu" ]
+    gameFolder;
 in {
   users.users.syncthing = {
     isSystemUser = true;
@@ -44,15 +48,7 @@ in {
           devices = [ "iphone" "paprika" "mindgame-nixos" ];
           ignorePerms = true;
         };
-        "gc" = gameFolder "gc";
-        "n3ds" = gameFolder "n3ds";
-        "nds" = gameFolder "nds";
-        "ps2" = gameFolder "ps2";
-        "psvita" = gameFolder "psvita";
-        "psx" = gameFolder "psx";
-        "switch" = gameFolder "switch";
-        "wii" = gameFolder "wii";
-        "wiiu" = gameFolder "wiiu";
+      } // gameFolders // {
         "saves" = gameFolder "Saves";
         "comfyui-models" = {
           path = "${folders.ai.comfyui}/models";

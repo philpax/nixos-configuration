@@ -1,4 +1,4 @@
-{ config, pkgs, unstable ? null }:
+{ config, lib, pkgs, unstable ? null, ... }:
 let
   # Get all .nix files in the current directory except default.nix
   serviceFiles = builtins.filter (f: f != "default.nix")
@@ -8,7 +8,7 @@ let
 
   # Create import expressions for each service file
   serviceImports = builtins.map (file:
-    import (./. + "/${file}") { inherit config pkgs unstable; }
+    import (./. + "/${file}") { inherit config lib pkgs unstable; }
   ) serviceFiles;
 in
 {

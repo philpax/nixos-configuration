@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, lib, pkgs, unstable, ... }:
 
 let
   folders = import ./folders.nix;
@@ -7,7 +7,7 @@ in {
     [
       ../common-all/configuration.nix
       (import ./ai { inherit config pkgs unstable; })
-      (import ./services { inherit config pkgs unstable; })
+      (import ./services { inherit config lib pkgs unstable; })
       (import ./programs { inherit config pkgs unstable; })
     ];
 
