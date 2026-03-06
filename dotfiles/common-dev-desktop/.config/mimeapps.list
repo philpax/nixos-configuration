@@ -1,5 +1,6 @@
 [Added Associations]
 image/jpeg=firefox.desktop;org.gnome.gThumb.desktop;
+video/mp4=vlc.desktop;
 
 [Default Applications]
 image/jpeg=org.gnome.gThumb.desktop
@@ -10,3 +11,4 @@ image/tiff=org.gnome.gThumb.desktop
 image/webp=org.gnome.gThumb.desktop
 image/svg+xml=org.gnome.gThumb.desktop
 image/x-icon=org.gnome.gThumb.desktop
+video/mp4=vlc.desktop
