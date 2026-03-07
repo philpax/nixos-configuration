@@ -41,11 +41,12 @@ in {
         "paprika" = { id = deviceIds.paprika; };
         "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
         "aynthor" = { id = deviceIds.aynthor; };
+        "mindgame-windows" = { id = deviceIds.mindgame-windows; };
       };
       folders = {
         "Main" = {
           path = folders.notes;
-          devices = [ "iphone" "paprika" "mindgame-nixos" ];
+          devices = [ "iphone" "paprika" "mindgame-nixos" "mindgame-windows" ];
           ignorePerms = true;
         };
       } // gameFolders // {
