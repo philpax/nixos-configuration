@@ -14,6 +14,9 @@
   # Enable 32-bit graphics support for Wine etc.
   hardware.graphics.enable32Bit = true;
 
+  # Steam
+  programs.steam.enable = true;
+
   security.polkit.enable = true;
 
   environment.systemPackages = with pkgs; [
