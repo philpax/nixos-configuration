@@ -52,6 +52,10 @@
     # Wine (Full variant includes wine-mono)
     wineWowPackages.stableFull
     winetricks
+
+    # VM stuff
+    quickemu
+    quickgui
   ];
 
   systemd.user.services.polkit-gnome-authentication-agent-1 = {
