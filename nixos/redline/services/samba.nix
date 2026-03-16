@@ -40,7 +40,7 @@ in
     settings = {
       global = {
         workgroup = "WORKGROUP";
-        "server string" = "NixOS SMB Server";
+        "server string" = config.networking.hostName;
         "server role" = "standalone server";
         "map to guest" = "Bad User";
         "guest account" = "nobody";
