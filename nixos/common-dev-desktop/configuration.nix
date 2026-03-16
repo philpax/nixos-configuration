@@ -43,6 +43,8 @@
     swaybg
     unstable.sunsetr
     gvfs
+    samba
+    wsdd
     wl-clipboard
     unstable.art
 
@@ -71,6 +73,9 @@
       TimeoutStopSec = 10;
     };
   };
+
+  # Cap xdg-desktop-portal memory to work around leak (flatpak/xdg-desktop-portal#1416)
+  systemd.user.services.xdg-desktop-portal.serviceConfig.MemoryMax = "1G";
 
   services.gnome.gcr-ssh-agent.enable = false;
 }
