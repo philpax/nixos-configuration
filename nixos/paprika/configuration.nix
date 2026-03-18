@@ -14,6 +14,11 @@
 
   system.stateVersion = "24.11";
 
+  swapDevices = [{
+    device = "/swapfile";
+    size = 16 * 1024; # 16 GB
+  }];
+
   time.timeZone = "Europe/Stockholm";
   networking.hostName = "paprika";
 }

@@ -109,6 +109,11 @@ in {
   # wait-online breaks rebuilds: https://github.com/NixOS/nixpkgs/issues/180175
   systemd.services.NetworkManager-wait-online.enable = false;
 
+  swapDevices = [{
+    device = "/mnt/ssd0/swapfile";
+    size = 64 * 1024; # 64 GB
+  }];
+
   security.rtkit.enable = true;
   security.sudo.extraConfig = ''
     Defaults timestamp_timeout=60
