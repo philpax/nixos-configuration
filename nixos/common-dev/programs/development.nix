@@ -10,6 +10,7 @@
     python3Packages.pip
     poetry
     nodejs_22
+    pnpm
     rye
     uv
     stylua
