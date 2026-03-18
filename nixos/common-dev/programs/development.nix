@@ -29,4 +29,7 @@
     lld
     libgcc
   ];
+
+  # Vite dev server
+  networking.firewall.allowedTCPPorts = [ 5173 ];
 }

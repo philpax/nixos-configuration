@@ -23,8 +23,6 @@
   virtualisation.docker.enable = true;
   hardware.nvidia-container-toolkit.enable = true;
 
-  networking.firewall.allowedTCPPorts = [ 5173 ];
-
   swapDevices = [{
     device = "/swapfile";
     size = 128 * 1024; # 128 GB
