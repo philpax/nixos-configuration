@@ -8,6 +8,7 @@
       ../common-desktop/configuration.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
+      ../common-dev-desktop/driftwm.nix
       (import ./services { inherit config pkgs unstable; })
     ];
 

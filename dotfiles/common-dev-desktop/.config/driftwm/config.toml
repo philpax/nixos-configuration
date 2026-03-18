@@ -1,0 +1,41 @@
+# driftwm configuration — ported from niri config
+
+autostart = ["~/.config/wayland-autostart.sh"]
+
+[input.trackpad]
+tap_to_click = true
+natural_scroll = true
+
+[cursor]
+theme = "volantes_light_cursors"
+size = 24
+
+[decorations]
+corner_radius = 4
+
+[keybindings]
+# Lock screen (matches niri's Super+Alt+L)
+"super+alt+l" = "spawn swaylock"
+# Quit (matches niri's Mod+Shift+E)
+"mod+shift+e" = "quit"
+# Media keys
+"XF86AudioPlay" = "spawn playerctl play-pause"
+"XF86AudioPause" = "spawn playerctl play-pause"
+"XF86AudioNext" = "spawn playerctl next"
+"XF86AudioPrev" = "spawn playerctl previous"
+# Screenshots (grim+slurp, piped to clipboard)
+"mod+shift+s" = "spawn sh -c 'grim -g \"$(slurp -d)\" - | wl-copy'"
+
+[[outputs]]
+name = "eDP-1"
+mode = "1920x1080@120"
+
+[[outputs]]
+name = "DP-4"
+mode = "3440x1440@144"
+
+# Translucent + blurred terminal
+[[window_rules]]
+app_id = "Alacritty"
+opacity = 0.85
+blur = true
