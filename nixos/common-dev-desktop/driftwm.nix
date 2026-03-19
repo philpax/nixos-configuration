@@ -10,7 +10,6 @@ in
   environment.systemPackages = [
     driftwm
     pkgs.grim
-    pkgs.slurp
     pkgs.xdg-desktop-portal-wlr
   ];
 }

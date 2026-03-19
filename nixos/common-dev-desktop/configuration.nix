@@ -46,6 +46,8 @@
     samba
     wsdd
     wl-clipboard
+    wf-recorder
+    slurp
     unstable.art
 
     unstable.discord

@@ -552,7 +552,8 @@ binds {
     Mod+Period { expel-window-from-column; }
 
     Mod+R { switch-preset-column-width; }
-    Mod+Shift+R { switch-preset-window-height; }
+    Mod+Shift+R { spawn "sh" "-c" "~/.local/bin/record-screen.sh area"; }
+    Mod+Shift+Ctrl+R { spawn "sh" "-c" "~/.local/bin/record-screen.sh window"; }
     Mod+Ctrl+R { reset-window-height; }
     Mod+F { maximize-column; }
     Mod+Shift+F { fullscreen-window; }
@@ -605,6 +606,7 @@ binds {
     Mod+Shift+S { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
+    Mod+Ctrl+Shift+S { screenshot-window; }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here
