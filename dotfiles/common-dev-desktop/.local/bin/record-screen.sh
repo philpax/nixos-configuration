@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-PID_FILE="/tmp/wf-recorder.pid"
-PATH_FILE="/tmp/wf-recorder.path"
+PID_FILE="/tmp/screen-recorder.pid"
+PATH_FILE="/tmp/screen-recorder.path"
 RECORDING_DIR="$HOME/Videos/Recordings"
 
 # If already recording, stop it
@@ -24,20 +24,22 @@ MODE="${1:-area}"
 mkdir -p "$RECORDING_DIR"
 FILENAME="$RECORDING_DIR/recording-$(date +%Y%m%d-%H%M%S).mp4"
 
+echo "$FILENAME" > "$PATH_FILE"
+
 case "$MODE" in
     area)
         GEOMETRY="$(slurp)" || exit 1
+        wf-recorder -g "$GEOMETRY" -f "$FILENAME" &
         ;;
     window)
-        GEOMETRY="$(niri msg --json windows | jq -r '.[] | "\(.x),\(.y) \(.width)x\(.height)"' | slurp)" || exit 1
+        gpu-screen-recorder -w portal -f 60 -o "$FILENAME" &
         ;;
     *)
         echo "Usage: $0 [area|window]" >&2
+        rm -f "$PATH_FILE"
         exit 1
         ;;
 esac
 
-echo "$FILENAME" > "$PATH_FILE"
-wf-recorder -g "$GEOMETRY" -f "$FILENAME" &
 echo $! > "$PID_FILE"
 notify-send "Recording started" "$(basename "$FILENAME")"

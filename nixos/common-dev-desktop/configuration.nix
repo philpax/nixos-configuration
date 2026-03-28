@@ -47,6 +47,7 @@
     wsdd
     wl-clipboard
     wf-recorder
+    gpu-screen-recorder
     slurp
     unstable.art
 
