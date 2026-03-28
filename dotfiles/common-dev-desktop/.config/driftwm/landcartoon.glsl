@@ -64,27 +64,29 @@ const vec3 FOAM = vec3(0.85, 0.93, 1.00);
 const vec3 SNOW = vec3(0.92, 0.94, 0.96);
 // --------------
 
-vec2 hash2(vec2 p) {
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
+// Integer-based hash — avoids expensive sin() entirely
+float hash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
 float noise(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
-    vec2 a = hash2(i);
-    vec2 b = hash2(i + vec2(1.0, 0.0));
-    vec2 c = hash2(i + vec2(0.0, 1.0));
-    vec2 d = hash2(i + vec2(1.0, 1.0));
-    return mix(mix(a.x, b.x, f.x), mix(c.x, d.x, f.x), f.y);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-float fbm4(vec2 p) {
+float fbm3(vec2 p) {
     float v = 0.0;
     float a = 0.5;
     mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
         v += a * noise(p);
         p = rot * p * 2.0;
         a *= 0.5;
@@ -92,75 +94,53 @@ float fbm4(vec2 p) {
     return v;
 }
 
-// Very broad noise for biome maps (2 octaves)
-float fbm2(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    mat2 rot = mat2(0.6, 0.8, -0.8, 0.6);
-    for (int i = 0; i < 2; i++) {
-        v += a * noise(p);
-        p = rot * p * 2.0;
-        a *= 0.5;
-    }
-    return v;
+// Single octave for biome maps — broad features don't need more
+float fbm1(vec2 p) {
+    return noise(p);
 }
 
 void main() {
     vec2 canvas_pos = v_coords * size + u_camera;
     vec2 world = canvas_pos * SCALE;
 
-    // Terrain height
-    float h = fbm4(world);
+    // Terrain height (3 octaves — 4th added negligible detail)
+    float h = fbm3(world);
 
-    // Biome axes — large-scale, independent seeds
-    float temperature = fbm2(canvas_pos * BIOME_SCALE + vec2(42.0, 17.0));
-    float moisture = fbm2(canvas_pos * BIOME_SCALE + vec2(91.0, 63.0));
+    // Biome axes — single octave is enough at this scale
+    float temperature = fbm1(canvas_pos * BIOME_SCALE + vec2(42.0, 17.0));
+    float moisture = fbm1(canvas_pos * BIOME_SCALE + vec2(91.0, 63.0));
 
-    // Stippled biome blending: use high-freq noise to dither at boundaries
-    float dither = noise(world * 8.0 + vec2(13.7, 29.1));
-    // Widen the transition zone: remap biome axes with dither offset
-    const float BLEND_ZONE = 0.06; // noise range over which stippling occurs
-    bool hot = temperature > TEMP_MID + (dither - 0.5) * BLEND_ZONE;
-    bool wet = moisture > MOIST_MID + (dither - 0.5) * BLEND_ZONE;
+    // Smooth biome blending — gradient transition over BLEND_WIDTH around thresholds
+    const float BLEND_WIDTH = 0.24;
+    float t = smoothstep(TEMP_MID - BLEND_WIDTH, TEMP_MID + BLEND_WIDTH, temperature);
+    float m = smoothstep(MOIST_MID - BLEND_WIDTH, MOIST_MID + BLEND_WIDTH, moisture);
 
-    // Select biome palette
-    vec3 b_water, b_sand, b_grass, b_dark_grass, b_hill, b_rock, b_rock_dark;
-    if (hot && wet) {
-        // Tropical
-        b_water = TR_WATER; b_sand = TR_SAND;
-        b_grass = TR_GRASS; b_dark_grass = TR_DARK_GRASS;
-        b_hill = TR_HILL; b_rock = TR_ROCK; b_rock_dark = TR_ROCK_DARK;
-    } else if (hot && !wet) {
-        // Desert
-        b_water = DE_WATER; b_sand = DE_SAND;
-        b_grass = DE_GRASS; b_dark_grass = DE_DARK_GRASS;
-        b_hill = DE_HILL; b_rock = DE_ROCK; b_rock_dark = DE_ROCK_DARK;
-    } else if (!hot && wet) {
-        // Temperate
-        b_water = TE_WATER; b_sand = TE_SAND;
-        b_grass = TE_GRASS; b_dark_grass = TE_DARK_GRASS;
-        b_hill = TE_HILL; b_rock = TE_ROCK; b_rock_dark = TE_ROCK_DARK;
-    } else {
-        // Tundra
-        b_water = TU_WATER; b_sand = TU_SAND;
-        b_grass = TU_GRASS; b_dark_grass = TU_DARK_GRASS;
-        b_hill = TU_HILL; b_rock = TU_ROCK; b_rock_dark = TU_ROCK_DARK;
-    }
+    // Blend all four biome palettes: mix cold/hot along t, then dry/wet along m
+    vec3 b_water      = mix(mix(TU_WATER, DE_WATER, t),           mix(TE_WATER, TR_WATER, t), m);
+    vec3 b_sand       = mix(mix(TU_SAND, DE_SAND, t),             mix(TE_SAND, TR_SAND, t), m);
+    vec3 b_grass      = mix(mix(TU_GRASS, DE_GRASS, t),           mix(TE_GRASS, TR_GRASS, t), m);
+    vec3 b_dark_grass = mix(mix(TU_DARK_GRASS, DE_DARK_GRASS, t), mix(TE_DARK_GRASS, TR_DARK_GRASS, t), m);
+    vec3 b_hill       = mix(mix(TU_HILL, DE_HILL, t),             mix(TE_HILL, TR_HILL, t), m);
+    vec3 b_rock       = mix(mix(TU_ROCK, DE_ROCK, t),             mix(TE_ROCK, TR_ROCK, t), m);
+    vec3 b_rock_dark  = mix(mix(TU_ROCK_DARK, DE_ROCK_DARK, t),   mix(TE_ROCK_DARK, TR_ROCK_DARK, t), m);
 
-    // Patch noise for two-tone variation
-    float patch = noise(world * 1.5 + vec2(5.3, 2.7));
+    // Reuse terrain height for two-tone variation (free — already computed)
+    float patch = fract(h * 7.0);
 
     vec3 col;
 
-    if (h < WATER_LEVEL) {
+    // Thin foam band on the water side, just below the shoreline
+    const float FOAM_LEVEL = WATER_LEVEL - 0.015;
+
+    if (h < FOAM_LEVEL) {
         col = b_water;
+
+    } else if (h < WATER_LEVEL) {
+        // Shallow water band — lighter blue near shore
+        col = mix(b_water, vec3(1.0), 0.35);
 
     } else if (h < SAND_LEVEL) {
         col = b_sand;
-        // Foam fringe at water edge
-        float foam_noise = noise(world * 30.0);
-        float foam = step(0.4, foam_noise) * smoothstep(SAND_LEVEL, WATER_LEVEL, h);
-        col = mix(col, FOAM, foam * 0.9);
 
     } else if (h < GRASS_LEVEL) {
         col = (patch > 0.5) ? b_grass : b_dark_grass;
@@ -172,8 +152,7 @@ void main() {
         col = (patch > 0.45) ? b_rock : b_rock_dark;
 
     } else if (h < SNOW_LEVEL) {
-        float snow_patch = noise(world * 8.0);
-        col = (snow_patch > 0.5) ? SNOW : b_rock;
+        col = (patch > 0.5) ? SNOW : b_rock;
 
     } else {
         col = SNOW;
