@@ -16,6 +16,9 @@ shader_path = "~/.config/driftwm/landcartoon.glsl"
 [decorations]
 corner_radius = 0
 
+[zoom]
+step = 2.0
+
 [snap]
 same_edge = true
 
