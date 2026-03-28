@@ -110,10 +110,6 @@ cursor {
 
 workspace "main"
 workspace "music"
-workspace "study"
-workspace "website"
-workspace "genresin.space"
-workspace "pyxis"
 
 gestures {
     hot-corners {
