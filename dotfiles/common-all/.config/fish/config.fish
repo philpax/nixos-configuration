@@ -107,6 +107,8 @@ end
 
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
+alias claudew 'CLAUDE_CONFIG_DIR=~/.claude-work claude'
+alias claudewd 'CLAUDE_CONFIG_DIR=~/.claude-work claude --dangerously-skip-permissions'
 
 # Initialize zoxide
 zoxide init fish | source

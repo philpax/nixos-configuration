@@ -13,3 +13,4 @@ image/webp=org.gnome.gThumb.desktop
 image/svg+xml=org.gnome.gThumb.desktop
 image/x-icon=org.gnome.gThumb.desktop
 video/mp4=vlc.desktop
+x-scheme-handler/claude-cli=claude-code-url-handler.desktop
