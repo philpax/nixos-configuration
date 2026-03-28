@@ -52,6 +52,7 @@
     unstable.art
 
     unstable.discord
+    unstable.zed-editor
     foliate
 
     # Wine (Full variant includes wine-mono)
