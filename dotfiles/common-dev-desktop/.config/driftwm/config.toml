@@ -14,9 +14,16 @@ size = 24
 shader_path = "~/.config/driftwm/landcartoon.glsl"
 
 [decorations]
-corner_radius = 4
+corner_radius = 0
+
+[snap]
+same_edge = true
+
+[navigation.edge_pan]
+zone = 0.0
 
 [keybindings]
+"mod+return" = "exec alacritty"
 # Lock screen (matches niri's Super+Alt+L)
 "super+alt+l" = "spawn swaylock"
 # Quit (matches niri's Mod+Shift+E)

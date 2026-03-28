@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  driftwm-flake = builtins.getFlake "git+file:///home/philpax/programming/driftwm";
+  driftwm-flake = builtins.getFlake "github:malbiruk/driftwm";
   driftwm = driftwm-flake.packages.x86_64-linux.default;
 in
 {
