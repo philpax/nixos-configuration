@@ -4,6 +4,7 @@
   # Desktop services
   services.gvfs.enable = true;
   services.udisks2.enable = true;
+  services.udev.packages = [ pkgs.libgphoto2 ];
 
   # Niri compositor
   services.displayManager.sddm.theme = "sugar-dark";
