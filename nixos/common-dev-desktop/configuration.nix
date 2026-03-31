@@ -79,8 +79,26 @@
     };
   };
 
-  # Cap xdg-desktop-portal memory to work around leak (flatpak/xdg-desktop-portal#1416)
+  # Work around xdg-desktop-portal locking up after a few hours of use,
+  # blocking any applications that depend on it (flatpak/xdg-desktop-portal#1416).
+  # Cap its memory and restart it hourly as a preventive measure.
   systemd.user.services.xdg-desktop-portal.serviceConfig.MemoryMax = "1G";
+  systemd.user.services.xdg-desktop-portal-restart = {
+    description = "Restart xdg-desktop-portal";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user restart xdg-desktop-portal.service";
+    };
+  };
+
+  systemd.user.timers.xdg-desktop-portal-restart = {
+    description = "Restart xdg-desktop-portal hourly";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "hourly";
+      Persistent = true;
+    };
+  };
 
   services.gnome.gcr-ssh-agent.enable = false;
 }
