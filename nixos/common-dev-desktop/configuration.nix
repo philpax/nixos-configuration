@@ -88,5 +88,8 @@
     Restart = "always";
   };
 
+  # React dev server (Vite)
+  networking.firewall.allowedTCPPorts = [ 5173 ];
+
   services.gnome.gcr-ssh-agent.enable = false;
 }
