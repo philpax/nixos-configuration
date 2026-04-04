@@ -1,10 +1,12 @@
-{ config, unstable, ... }:
+{ config, pkgs, ... }:
 
 {
   services.wivrn = {
     enable = true;
     openFirewall = true;
     autoStart = true;
-    package = (unstable.wivrn.override { cudaSupport = true; });
+    package = pkgs.wivrn.override { cudaSupport = true; };
   };
+
+  environment.systemPackages = [ pkgs.wayvr ];
 }
