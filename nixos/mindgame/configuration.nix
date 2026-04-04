@@ -30,6 +30,7 @@
 
   environment.systemPackages = with pkgs; [
     kdePackages.kdenlive
+    android-tools
   ];
 
   # OBS Studio
