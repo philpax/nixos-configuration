@@ -11,8 +11,8 @@ let
     name = "ComfyUI";
     listenPort = comfyuiPort;
     targetPort = comfyuiTargetPort;
-    command = "${shared.comfyuiStartScript}/bin/comfyui-start --foreground";
-    args = "";
+    command = "${shared.comfyuiStartScript}/bin/comfyui-start";
+    args = "--foreground";
     killCommand = "${shared.comfyuiStopScript}/bin/comfyui-stop";
     healthcheck = {
       command = "curl --fail http://localhost:${toString comfyuiTargetPort}/system_stats";
