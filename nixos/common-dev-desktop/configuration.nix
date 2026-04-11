@@ -2,6 +2,8 @@
 
 {
   # Desktop services
+  programs.dconf.enable = true;
+  environment.pathsToLink = [ "/share/gsettings-schemas" ];
   services.gvfs.enable = true;
   services.udisks2.enable = true;
   services.udev.packages = [ pkgs.libgphoto2 ];
@@ -25,6 +27,9 @@
     obsidian
 
     # Desktop environment
+    glib  # provides gsettings
+    gsettings-desktop-schemas  # provides org.gnome.desktop.interface schema
+    nwg-look  # GTK theme/icon/cursor/font configuration
     mako
     alacritty
     fuzzel
