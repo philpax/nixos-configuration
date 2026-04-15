@@ -101,6 +101,14 @@ output "DP-4" {
     layout {
         default-column-width { proportion 0.33333; }
     }
+    position x=0 y=0
+}
+
+output "HDMI-A-3" {
+    mode "3840x2160@60.000"
+    scale 1
+    transform "90"
+    position x=3440 y=0
 }
 
 cursor {
