@@ -34,7 +34,11 @@ in
     # Automatically add the ports to the firewall
     networking.firewall.allowedTCPPorts = largeModelProxy.ports;
 
-    # Add ComfyUI rebuild command to system environment
-    environment.systemPackages = [ comfyui.comfyuiRebuildScript ];
+    # Expose ComfyUI rebuild/start/stop scripts on PATH.
+    environment.systemPackages = [
+      comfyui.comfyuiRebuildScript
+      comfyui.comfyuiStartScript
+      comfyui.comfyuiStopScript
+    ];
   };
 }
