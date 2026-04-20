@@ -41,7 +41,7 @@ rec {
     base = "${mounts.ssd0}/ai";
     llm = "${mounts.ssd0}/ai/llm";
     comfyui = "${mounts.ssd0}/ai/ComfyUI";
-    largeModelProxy = "${mounts.ssd0}/ai/large-model-proxy";
+    ananke = "${mounts.ssd0}/ai/ananke";
     paxcord = "${mounts.ssd0}/ai/paxcord";
   };
 

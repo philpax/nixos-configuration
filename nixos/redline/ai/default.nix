@@ -2,13 +2,11 @@
 
 let
   llamaCppCuda = (unstable.llama-cpp.override { cudaSupport = true; });
-  largeModelProxy = import ./large-model-proxy-config.nix { inherit pkgs; };
-  comfyui = largeModelProxy.comfyui;
 in
 {
   imports = [
     ./users.nix
-    ./services.nix
+    ./ananke.nix
   ];
 
   options = {
@@ -18,27 +16,12 @@ in
         description = "CUDA-enabled llama-cpp package";
         default = llamaCppCuda;
       };
-      largeModelProxy = pkgs.lib.mkOption {
-        type = pkgs.lib.types.attrs;
-        description = "Large model proxy configuration";
-        default = largeModelProxy;
-      };
     };
   };
 
   config = {
     ai = {
-      inherit llamaCppCuda largeModelProxy;
+      inherit llamaCppCuda;
     };
-
-    # Automatically add the ports to the firewall
-    networking.firewall.allowedTCPPorts = largeModelProxy.ports;
-
-    # Expose ComfyUI rebuild/start/stop scripts on PATH.
-    environment.systemPackages = [
-      comfyui.comfyuiRebuildScript
-      comfyui.comfyuiStartScript
-      comfyui.comfyuiStopScript
-    ];
   };
 }

@@ -5,8 +5,8 @@ let
 in {
   systemd.services.paxcord = {
     description = "paxcord";
-    after = [ "largemodelproxy.service" ];
-    requires = [ "largemodelproxy.service" ];
+    after = [ "ananke.service" ];
+    requires = [ "ananke.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
