@@ -290,6 +290,11 @@ let
     daemon = {
       management_listen = "0.0.0.0:${toString managementPort}";
       allow_external_management = true;
+      # Bind per-service reverse proxies on 0.0.0.0 too — we open the
+      # LLM port range in the firewall, so clients can reach an
+      # individual model via `<host>:<port>` without routing through
+      # the OpenAI multiplexer on 7070.
+      allow_external_services = true;
       data_dir = "${anankeDir}/data";
     };
     openai_api = {
