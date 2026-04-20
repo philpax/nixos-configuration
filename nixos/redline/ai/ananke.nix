@@ -168,7 +168,11 @@ let
       name = "gemma-4-31b-it";
       file = "gemma-4-31B-it-UD-Q4_K_XL.gguf";
       mmproj = "gemma-4-31B-it-GGUF-mmproj-F16.gguf";
-      extras = gemma4Extras // { lifecycle = "persistent"; } // discordVisible;
+      # On-demand: at 256K context Gemma 4 31B and persistent Qwen 3.6
+      # don't fit together on 48 GB. Ananke's idle-eviction rule lets
+      # a Gemma request displace dormant Qwen, and the persistent
+      # watcher respawns Qwen once Gemma idle-drains.
+      extras = gemma4Extras // discordVisible;
     }
     {
       name = "gemma-4-26b-a4b-it";
