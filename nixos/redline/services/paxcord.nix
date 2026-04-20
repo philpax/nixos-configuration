@@ -3,8 +3,6 @@
 let
   folders = import ../folders.nix;
 in {
-  users.users.ai.extraGroups = [ "editabledata" ];
-
   systemd.services.paxcord = {
     description = "paxcord";
     after = [ "largemodelproxy.service" ];
