@@ -85,28 +85,45 @@ in
         exit 1
       fi
 
+      # Default to the nix-configured port; let callers override with
+      # `--port N`.
       FOREGROUND=false
-      for arg in "$@"; do
-        case "$arg" in
+      PORT=${toString port}
+      while [ $# -gt 0 ]; do
+        case "$1" in
           --foreground) FOREGROUND=true ;;
+          --port)
+            shift
+            if [ $# -eq 0 ]; then
+              echo "Error: --port requires a value" >&2
+              exit 2
+            fi
+            PORT="$1"
+            ;;
+          --port=*) PORT="''${1#--port=}" ;;
+          *)
+            echo "Error: unknown argument '$1'" >&2
+            exit 2
+            ;;
         esac
+        shift
       done
 
       if [ "$FOREGROUND" = true ]; then
-        echo "Starting ComfyUI in foreground..."
+        echo "Starting ComfyUI in foreground on port $PORT..."
         exec docker run --rm --name comfyui \
           --device nvidia.com/gpu=all \
           -v "$COMFYUI_DIR:/workspace" \
-          -p ${toString port}:8188 \
+          -p "$PORT:8188" \
           ${image}
       else
-        echo "Starting ComfyUI (detached)..."
+        echo "Starting ComfyUI (detached) on port $PORT..."
         docker run -d --rm --name comfyui \
           --device nvidia.com/gpu=all \
           -v "$COMFYUI_DIR:/workspace" \
-          -p ${toString port}:8188 \
+          -p "$PORT:8188" \
           ${image}
-        echo "ComfyUI started. Access at http://localhost:${toString port}"
+        echo "ComfyUI started. Access at http://localhost:$PORT"
       fi
     '';
   };
