@@ -112,3 +112,6 @@ alias claudewd 'CLAUDE_CONFIG_DIR=~/.claude-work claude --dangerously-skip-permi
 # Initialize zoxide
 zoxide init fish | source
 export PATH="$HOME/.local/bin:$PATH"
+
+# opencode
+fish_add_path $HOME/.opencode/bin
