@@ -19,6 +19,11 @@ in
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
 
+  boot.kernelPackages =
+    if config.boot.zfs.enabled
+    then config.boot.zfs.package.latestCompatibleLinuxPackages
+    else pkgs.linuxPackages_latest;
+
   time.timeZone = lib.mkDefault "Europe/Stockholm";
   i18n.defaultLocale = "en_AU.UTF-8";
   i18n.supportedLocales = ["en_AU.UTF-8/UTF-8"];
