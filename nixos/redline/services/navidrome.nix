@@ -10,6 +10,7 @@ in
     settings = {
       Address = "0.0.0.0";
       MusicFolder = folders.music;
+      Subsonic.AppendAlbumVersion = false;
     };
   };
 
