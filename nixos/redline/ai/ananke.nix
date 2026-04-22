@@ -142,6 +142,12 @@ let
         };
       };
     }
+    {
+      name = "qwen3.6-27b";
+      file = "Qwen3.6-27B-UD-Q5_K_XL.gguf";
+      mmproj = "Qwen3.6-27B-GGUF-mmproj-F16.gguf";
+      extras = qwen36Extras // discordVisible;
+    }
 
     # Gemma family.
     {
