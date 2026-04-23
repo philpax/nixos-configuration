@@ -1,1 +1,4 @@
 theme = "tokyonight_transparent"
+
+[editor.file-picker]
+hidden = false
