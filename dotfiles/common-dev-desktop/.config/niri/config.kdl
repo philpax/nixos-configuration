@@ -96,7 +96,7 @@ output "eDP-1" {
     position x=1280 y=0
 }
 
-output "DP-1" {
+output "DP-4" {
     mode "3440x1440@144.000"
     layout {
         default-column-width { proportion 0.33333; }
@@ -104,7 +104,7 @@ output "DP-1" {
     position x=0 y=0
 }
 
-output "HDMI-A-2" {
+output "HDMI-A-3" {
     mode "3840x2160@60.000"
     scale 1
     transform "90"
@@ -117,10 +117,10 @@ cursor {
 }
 
 workspace "main" {
-    open-on-output "DP-1"
+    open-on-output "DP-4"
 }
 workspace "music" {
-    open-on-output "DP-1"
+    open-on-output "DP-4"
 }
 
 gestures {
