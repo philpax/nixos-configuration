@@ -566,6 +566,7 @@ binds {
     Mod+F { maximize-column; }
     Mod+Shift+F { fullscreen-window; }
     Mod+Shift+W { spawn "~/.local/bin/window-action.sh"; }
+    Mod+Shift+A { spawn "~/.local/bin/audio-action.sh"; }
 
     // Expand the focused column to space not taken up by other fully visible columns.
     // Makes the column "fill the rest of the space".
