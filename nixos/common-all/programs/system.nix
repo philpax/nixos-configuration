@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstable, ... }:
 
 {
   environment.systemPackages = with pkgs; [
@@ -32,7 +32,7 @@
     hyperfine
     tokei
     fzf
-    zellij
+    unstable.zellij # https://github.com/NixOS/nixpkgs/issues/512867 back to stable once mended
     broot
 
     # Misc

@@ -1,7 +1,7 @@
 { config, pkgs, lib, ... }:
 let
   unstable = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/9fcf76718e340de76ab3726e26da4635e62487b3)
+    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/bec2457004a6ba32c044105130c1bcd994d8cb9c)
     # reuse the current configuration
     { config = config.nixpkgs.config; };
 in
