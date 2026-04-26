@@ -109,17 +109,24 @@ in
         shift
       done
 
+      # Ananke sets CUDA_VISIBLE_DEVICES on us with the GPU id(s) it picked.
+      # CDI's `nvidia.com/gpu=N` accepts a comma-separated index list, so we
+      # forward it directly: the container only sees the picked GPU(s) and
+      # Comfy's `cuda:0` actually maps to it. Falls back to `all` when the
+      # script is invoked outside ananke (e.g. via `sudo comfyui-start`).
+      GPU_DEVICES="''${CUDA_VISIBLE_DEVICES:-all}"
+
       if [ "$FOREGROUND" = true ]; then
-        echo "Starting ComfyUI in foreground on port $PORT..."
+        echo "Starting ComfyUI in foreground on port $PORT (GPUs: $GPU_DEVICES)..."
         exec docker run --rm --name comfyui \
-          --device nvidia.com/gpu=all \
+          --device "nvidia.com/gpu=$GPU_DEVICES" \
           -v "$COMFYUI_DIR:/workspace" \
           -p "$PORT:8188" \
           ${image}
       else
-        echo "Starting ComfyUI (detached) on port $PORT..."
+        echo "Starting ComfyUI (detached) on port $PORT (GPUs: $GPU_DEVICES)..."
         docker run -d --rm --name comfyui \
-          --device nvidia.com/gpu=all \
+          --device "nvidia.com/gpu=$GPU_DEVICES" \
           -v "$COMFYUI_DIR:/workspace" \
           -p "$PORT:8188" \
           ${image}
