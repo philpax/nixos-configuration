@@ -116,17 +116,29 @@ in
       # script is invoked outside ananke (e.g. via `sudo comfyui-start`).
       GPU_DEVICES="''${CUDA_VISIBLE_DEVICES:-all}"
 
+      # Place the container under a known systemd slice so ananke's
+      # snapshotter can attribute VRAM to this service via cgroup
+      # membership. Without this, the container's cgroup
+      # (`docker-<id>.scope`) lives under `system.slice/docker.service`
+      # — entirely outside ananke's view of the daemon's children — and
+      # ananke's pledge book would stay frozen at `min_vram_gb` no
+      # matter how much VRAM the workload was actually using. Mirrors
+      # `tracking.cgroup_parent` in the daemon's service config.
+      CGROUP_PARENT="ananke-comfyui.slice"
+
       if [ "$FOREGROUND" = true ]; then
-        echo "Starting ComfyUI in foreground on port $PORT (GPUs: $GPU_DEVICES)..."
+        echo "Starting ComfyUI in foreground on port $PORT (GPUs: $GPU_DEVICES, slice: $CGROUP_PARENT)..."
         exec docker run --rm --name comfyui \
           --device "nvidia.com/gpu=$GPU_DEVICES" \
+          --cgroup-parent "$CGROUP_PARENT" \
           -v "$COMFYUI_DIR:/workspace" \
           -p "$PORT:8188" \
           ${image}
       else
-        echo "Starting ComfyUI (detached) on port $PORT (GPUs: $GPU_DEVICES)..."
+        echo "Starting ComfyUI (detached) on port $PORT (GPUs: $GPU_DEVICES, slice: $CGROUP_PARENT)..."
         docker run -d --rm --name comfyui \
           --device "nvidia.com/gpu=$GPU_DEVICES" \
+          --cgroup-parent "$CGROUP_PARENT" \
           -v "$COMFYUI_DIR:/workspace" \
           -p "$PORT:8188" \
           ${image}

@@ -287,6 +287,17 @@ let
       min_vram_gb = 2.0;
       max_vram_gb = 20.0;
     };
+    # ComfyUI runs inside Docker, so its container is reparented out of
+    # ananke's process tree. Without this hint the snapshotter can't see
+    # the workload's VRAM and the dynamic pledge stays frozen at
+    # `min_vram_gb`. The wrapper script passes `--cgroup-parent
+    # ananke-comfyui.slice` to `docker run`; systemd treats `-` as a
+    # path separator in slice names, so `ananke-comfyui.slice` lives at
+    # `/ananke.slice/ananke-comfyui.slice/` (NOT under `/system.slice/`).
+    # ananke matches by prefix on the v2 cgroup path.
+    tracking = {
+      cgroup_parent = "/ananke.slice/ananke-comfyui.slice";
+    };
     health = {
       http = "/system_stats";
     };
@@ -317,6 +328,17 @@ let
     ++ (lib.imap0 (i: _: llmBasePort + i) models);
 in
 {
+  # Sibling slice that holds the ComfyUI Docker container. The
+  # `comfyui-start` wrapper passes `--cgroup-parent ananke-comfyui.slice`
+  # so the resulting `docker-<id>.scope` lands inside this slice;
+  # ananke's snapshotter watches the subtree to attribute VRAM/RSS to
+  # the comfyui service. Declaring the slice here ensures it exists at
+  # boot — relying on docker's lazy creation can race the first
+  # `comfyui-start` invocation on some cgroup-driver setups.
+  systemd.slices."ananke-comfyui" = {
+    description = "Cgroup parent for ananke's ComfyUI container";
+  };
+
   systemd.services.ananke = {
     description = "Ananke";
     after = [ "docker.service" "network.target" ];
