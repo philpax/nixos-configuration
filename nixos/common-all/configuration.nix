@@ -21,7 +21,7 @@ in
 
   boot.kernelPackages =
     if config.boot.zfs.enabled
-    then config.boot.zfs.package.latestCompatibleLinuxPackages
+    then pkgs.linuxPackages
     else pkgs.linuxPackages_latest;
 
   time.timeZone = lib.mkDefault "Europe/Stockholm";
