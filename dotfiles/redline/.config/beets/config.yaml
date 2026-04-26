@@ -1,7 +1,7 @@
 directory: /mnt/ssd0/music
 library: /mnt/ssd0/music/musiclibrary.db
 artist_credit: yes
-plugins: fetchart lyrics musicbrainz
+plugins: fetchart lyrics musicbrainz replaygain
 
 lyrics:
   auto: yes
@@ -9,3 +9,7 @@ lyrics:
 
 paths:
   singleton: $albumartist/Singles/$title
+
+replaygain:
+  backend: ffmpeg
+  threads: 40
