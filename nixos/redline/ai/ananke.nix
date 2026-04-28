@@ -135,7 +135,6 @@ let
       file = "Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       mmproj = "Qwen3.6-35B-A3B-GGUF-mmprog-F16.gguf";
       extras = qwen36Extras // {
-        lifecycle = "persistent";
         metadata = {
           discord_visible = true;
           resident = true;
@@ -174,10 +173,6 @@ let
       name = "gemma-4-31b-it";
       file = "gemma-4-31B-it-UD-Q4_K_XL.gguf";
       mmproj = "gemma-4-31B-it-GGUF-mmproj-F16.gguf";
-      # On-demand: at 256K context Gemma 4 31B and persistent Qwen 3.6
-      # don't fit together on 48 GB. Ananke's idle-eviction rule lets
-      # a Gemma request displace dormant Qwen, and the persistent
-      # watcher respawns Qwen once Gemma idle-drains.
       extras = gemma4Extras // discordVisible;
     }
     {
