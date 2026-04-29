@@ -58,6 +58,7 @@
     unstable.art
 
     unstable.discord
+    unstable.vesktop
     unstable.zed-editor
     foliate
 
