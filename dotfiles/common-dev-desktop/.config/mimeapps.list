@@ -1,6 +1,7 @@
 [Added Associations]
 image/jpeg=firefox.desktop;org.gnome.gThumb.desktop;
 video/mp4=vlc.desktop;
+application/pdf=firefox.desktop;
 
 [Default Applications]
 inode/directory=org.gnome.Nautilus.desktop
