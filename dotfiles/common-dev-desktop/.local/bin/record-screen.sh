@@ -32,7 +32,25 @@ case "$MODE" in
         wf-recorder -g "$GEOMETRY" -f "$FILENAME" &
         ;;
     window)
-        gpu-screen-recorder -w portal -f 60 -o "$FILENAME" &
+        WIN="$(niri msg --json focused-window)"
+        IS_FLOATING="$(printf '%s' "$WIN" | jq -r '.is_floating')"
+        if [ "$IS_FLOATING" != "true" ]; then
+            notify-send "Recording" "Focused window is not floating; window-record only supports floating windows."
+            rm -f "$PATH_FILE"
+            exit 1
+        fi
+        WS_ID="$(printf '%s' "$WIN" | jq -r '.workspace_id')"
+        OUTPUT_NAME="$(niri msg --json workspaces | jq -r --argjson id "$WS_ID" '.[] | select(.id == $id) | .output')"
+        OUTPUTS="$(niri msg --json outputs)"
+        REGION="$(jq -nr \
+            --argjson win "$WIN" \
+            --argjson outputs "$OUTPUTS" \
+            --arg name "$OUTPUT_NAME" \
+            '($outputs[$name] // ($outputs | to_entries[] | select(.value.name == $name) | .value)) as $o
+             | ($win.layout.tile_pos_in_workspace_view[0] + $o.logical.x | floor) as $x
+             | ($win.layout.tile_pos_in_workspace_view[1] + $o.logical.y | floor) as $y
+             | "\($win.layout.window_size[0])x\($win.layout.window_size[1])+\($x)+\($y)"')"
+        gpu-screen-recorder -w region -region "$REGION" -f 60 -o "$FILENAME" &
         ;;
     *)
         echo "Usage: $0 [area|window]" >&2

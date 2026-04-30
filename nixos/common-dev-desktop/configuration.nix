@@ -22,6 +22,9 @@
   # Steam
   programs.steam.enable = true;
 
+  # gpu-screen-recorder (sets cap_sys_admin on gsr-kms-server to avoid root prompts)
+  programs.gpu-screen-recorder.enable = true;
+
   security.polkit.enable = true;
 
   environment.systemPackages = with pkgs; [
@@ -57,6 +60,7 @@
     wf-recorder
     gpu-screen-recorder
     slurp
+    libnotify
     unstable.art
 
     unstable.discord
