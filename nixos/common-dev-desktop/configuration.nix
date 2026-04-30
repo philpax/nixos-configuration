@@ -85,13 +85,23 @@
     };
   };
 
-  # Work around xdg-desktop-portal locking up after a few hours of use,
-  # blocking any applications that depend on it (flatpak/xdg-desktop-portal#1416).
-  # Cap its memory and force a restart every hour as a preventive measure.
+  # Route portal requests away from xdg-desktop-portal-gnome, which leaks
+  # memory unboundedly waiting for gnome-shell on non-GNOME sessions
+  # (was peaking at >100G swap before the OOM killer caught it).
+  # niri's nixpkgs module forces the gnome backend into extraPortals; this
+  # config keeps it installed but idle by sending real traffic to gtk/wlr.
+  xdg.portal = {
+    config.common = {
+      default = [ "gtk" ];
+      "org.freedesktop.impl.portal.ScreenCast" = [ "wlr" ];
+      "org.freedesktop.impl.portal.Screenshot" = [ "wlr" ];
+    };
+    extraPortals = [ pkgs.xdg-desktop-portal-wlr ];
+  };
+
   systemd.user.services.xdg-desktop-portal.serviceConfig = {
     MemoryMax = "1G";
-    RuntimeMaxSec = "1h";
-    Restart = "always";
+    Restart = "on-failure";
   };
 
   # React dev server (Vite)
