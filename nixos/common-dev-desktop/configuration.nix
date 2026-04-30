@@ -1,6 +1,8 @@
 { config, pkgs, unstable, ... }:
 
 {
+  nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
+
   # Desktop services
   programs.dconf.enable = true;
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
@@ -99,9 +101,15 @@
     extraPortals = [ pkgs.xdg-desktop-portal-wlr ];
   };
 
+  # Belt-and-braces against the Realtime-portal leak (flatpak/xdg-desktop-portal#1416).
+  # The 1.21.1 override above should fix the leak itself; these caps just ensure
+  # that if it ever recurs, the portal gets killed quickly instead of burning
+  # tens of GB of swap.
   systemd.user.services.xdg-desktop-portal.serviceConfig = {
-    MemoryMax = "1G";
-    Restart = "on-failure";
+    MemoryMax = "512M";
+    MemorySwapMax = "0";
+    RuntimeMaxSec = "1h";
+    Restart = "always";
   };
 
   # React dev server (Vite)

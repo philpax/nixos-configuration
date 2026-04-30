@@ -1,0 +1,20 @@
+--- a/src/xdp-portal-config.c
++++ b/src/xdp-portal-config.c
+@@ -360,6 +360,8 @@
+
+   /* We need to override this in the tests */
+   portal_dir = g_getenv ("XDG_DESKTOP_PORTAL_DIR");
++  if (portal_dir == NULL)
++    portal_dir = g_getenv ("NIX_XDG_DESKTOP_PORTAL_DIR");
+   if (portal_dir != NULL)
+     {
+       load_installed_portals_dir (portals, portal_dir, opt_verbose);
+@@ -528,6 +530,8 @@
+
+   /* We need to override this in the tests */
+   portal_dir = g_getenv ("XDG_DESKTOP_PORTAL_DIR");
++  if (portal_dir == NULL)
++    portal_dir = g_getenv ("NIX_XDG_DESKTOP_PORTAL_DIR");
+
+   if (portal_dir != NULL)
+     {
