@@ -361,11 +361,22 @@ window-rule {
     // block-out-from "screencast"
 }
 
-// Example: enable rounded corners for all windows.
-// (This example rule is commented out with a "/-" in front.)
+// Enable blur behind the Alacritty terminal.
 window-rule {
-    geometry-corner-radius 4
-    clip-to-geometry true
+    match app-id="^Alacritty$"
+
+    background-effect {
+        blur true
+    }
+}
+
+// Enable blur behind the fuzzel launcher.
+layer-rule {
+    match namespace="^launcher$"
+
+    background-effect {
+        blur true
+    }
 }
 
 hotkey-overlay {

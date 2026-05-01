@@ -2,7 +2,7 @@
 normal = { family = "Cozette", style = "Regular" }
 
 [window]
-opacity = 0.85
+opacity = 0.8
 padding = { x = 4, y = 4 }
 
 [colors.primary]
