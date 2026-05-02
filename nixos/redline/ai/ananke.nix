@@ -313,6 +313,14 @@ let
     command = [ m.script "{port}" ];
     env = vllmEnv;
     idle_timeout = "60m";
+    # vLLM cold-start is multi-minute (see `health.timeout` below), so
+    # losing one to an eviction contest with a default-priority llama.cpp
+    # model is expensive — the next vLLM request pays the full warm-up
+    # tax again. Bumping above the default 50 keeps the llama.cpp herd
+    # from displacing a resident vLLM service. Anything that genuinely
+    # should preempt vLLM (a hand-tagged high-priority model) can still
+    # set a higher value.
+    priority = 70;
     allocation = {
       mode = "static";
       vram_gb = m.vram_gb;
