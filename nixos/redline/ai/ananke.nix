@@ -265,7 +265,7 @@ let
     }
     {
       kind = "vllm";
-      name = "gemma-4-26b-vllm";
+      name = "gemma-4-26b-a4b-it-vllm";
       script = "${vllmDir}/gemma4_26b.sh";
       upstream_model = "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit";
       vram_gb = 46;
