@@ -5,6 +5,7 @@ let
   lib = pkgs.lib;
 
   llmDir = folders.ai.llm;
+  vllmDir = folders.ai.vllm;
   anankeDir = folders.ai.ananke;
 
   # Public ports.
@@ -23,8 +24,14 @@ let
   };
 
   # Model list. Order determines port: llmBasePort + index. Only fields
-  # the model actually needs are set; mkLlmService folds them into a
+  # the model actually needs are set; mkService folds them into a
   # well-formed ananke [[service]] block.
+  #
+  # Each entry has an optional `kind` discriminator that picks the right
+  # mkXService builder. `kind` is missing or "llama-cpp" for the local
+  # llama.cpp serving path; `kind = "vllm"` defers to mkVllmService and
+  # generates a `template = "command"` service that fronts a vLLM
+  # container via the OpenAI proxy.
   #
   # `extras` holds ad-hoc ananke service keys (sampling, extra_args,
   # override_tensor, threads, flash_attn, cache_type_*, lifecycle,
@@ -240,6 +247,31 @@ let
       file = "gpt-oss-20b-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
+
+    # vLLM-served models. `kind = "vllm"` routes through mkVllmService,
+    # which emits a `template = "command"` service that wraps the
+    # corresponding shell script and registers an `openai_proxy` block
+    # so the model shows up in /v1/models alongside the llama.cpp ones.
+    # The exposed (`-vllm` suffixed) name is what clients address; the
+    # script's `--served-model-name` is the upstream rewrite target.
+    {
+      kind = "vllm";
+      name = "qwen3.6-27b-vllm";
+      script = "${vllmDir}/qwen36_27b.sh";
+      upstream_model = "qwen3.6-27b-autoround";
+      vram_gb = 44;
+      per_gpu_mib = 22000;
+      description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4).";
+    }
+    {
+      kind = "vllm";
+      name = "gemma-4-26b-vllm";
+      script = "${vllmDir}/gemma4_26b.sh";
+      upstream_model = "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit";
+      vram_gb = 46;
+      per_gpu_mib = 23000;
+      description = "Gemma 4 26B (A4B) served by vLLM (TP=2, AWQ 4-bit).";
+    }
   ];
 
   mkLlmService = index: m:
@@ -256,7 +288,62 @@ let
       };
     in base // mmprojAttrs // (m.extras or { });
 
-  llmServices = lib.imap0 mkLlmService models;
+  # vLLM scripts run docker in the foreground, accept the host port as
+  # their first arg (`{port}` → `-p $PORT:8000`), and shut down via a
+  # SIGTERM trap that calls `docker stop`. ananke supervises the
+  # foreground shell; that's enough for the lifecycle. Static allocation
+  # pinned per-GPU because the containers run without `--cgroup-parent`,
+  # so the snapshotter can't observe them — the pledge is the source
+  # of truth for VRAM accounting.
+  #
+  # `env.PATH` is required because ananke's spawner calls env_clear()
+  # before exec for reproducibility, and these are user-authored shell
+  # scripts that use bare `mkdir`/`docker` (unlike comfyui, which is a
+  # Nix-built wrapper with baked-in paths). HOME points docker at the
+  # ai user's `~/.docker` so credential helpers work.
+  vllmEnv = {
+    PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
+    HOME = "/home/ai";
+  };
+  mkVllmService = index: m: {
+    template = "command";
+    name = m.name;
+    port = llmBasePort + index;
+    description = m.description;
+    command = [ m.script "{port}" ];
+    env = vllmEnv;
+    idle_timeout = "60m";
+    allocation = {
+      mode = "static";
+      vram_gb = m.vram_gb;
+    };
+    devices = {
+      placement = "gpu-only";
+      placement_override = {
+        "gpu:0" = m.per_gpu_mib;
+        "gpu:1" = m.per_gpu_mib;
+      };
+    };
+    # vLLM cold start is in the multi-minute range: docker image
+    # bring-up, NCCL init, two weight loads (target + drafter), and
+    # torch.compile graph load. Default 3-minute timeout is tight; bump
+    # to 10 to leave headroom for cache misses (fresh torch.compile
+    # cache, evicted page cache, …).
+    health = {
+      http = "/health";
+      timeout = "10m";
+    };
+    openai_proxy = {
+      upstream_model = m.upstream_model;
+    };
+  };
+
+  mkService = index: m:
+    if (m.kind or "llama-cpp") == "vllm"
+    then mkVllmService index m
+    else mkLlmService index m;
+
+  llmServices = lib.imap0 mkService models;
 
   # ComfyUI is an external command; ananke starts/stops the host-side
   # docker wrapper. `{port}` resolves to the private loopback port ananke

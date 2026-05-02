@@ -43,6 +43,7 @@ rec {
     comfyui = "${mounts.ssd0}/ai/ComfyUI";
     ananke = "${mounts.ssd0}/ai/ananke";
     paxcord = "${mounts.ssd0}/ai/paxcord";
+    vllm = "${mounts.ssd0}/ai/vllm";
   };
 
   # Service directories
