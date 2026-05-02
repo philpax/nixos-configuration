@@ -11,6 +11,9 @@
         "gemma-4-26b-a4b-it": {
           "name": "Gemma 4 26B A4B"
         },
+        "gemma-4-26b-a4b-it-vllm": {
+          "name": "Gemma 4 26B A4B (vLLM)"
+        },
         "gemma-4-31b-it": {
           "name": "Gemma 4 31B"
         },
@@ -19,6 +22,9 @@
         },
         "qwen3.6-27b": {
           "name": "Qwen 3.6 27B"
+        },
+        "qwen3.6-27b-vllm": {
+          "name": "Qwen 3.6 27B (vLLM)"
         }
       }
     }
