@@ -311,6 +311,14 @@ let
     port = llmBasePort + index;
     description = m.description;
     command = [ m.script "{port}" ];
+    # Explicit container teardown. The script's own EXIT/TERM trap can
+    # race ananke's SIGTERM→SIGKILL window (10s) — `docker stop` itself
+    # waits up to 10s for the container, and if the shell is killed
+    # mid-stop the orphaned `docker stop` client may not complete the
+    # request, leaving the container (and its VRAM) alive. Running
+    # `--stop` after the main child exits gets the explicit teardown
+    # under ananke's 30s shutdown-command grace.
+    shutdown_command = [ m.script "--stop" ];
     env = vllmEnv;
     idle_timeout = "60m";
     # vLLM cold-start is multi-minute (see `health.timeout` below), so
