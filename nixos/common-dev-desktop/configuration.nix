@@ -1,5 +1,26 @@
 { config, pkgs, unstable, ... }:
 
+let
+  # 0WD0's niri fork (wd/vertical-layout branch) — adds two-dimensional
+  # layouting so niri works on vertical monitors.
+  niri-src = pkgs.fetchFromGitHub {
+    owner = "0WD0";
+    repo = "niri";
+    rev = "49fe5ed546ae938829842d7e259b4bb5175d40c6";
+    hash = "sha256-WYYnuQhxiqBGs3+Dgz05nHzAVAAFwy+0yaFYo06u7Og=";
+  };
+  niri-fork = unstable.niri.overrideAttrs (oldAttrs: {
+    version = "26.04-fork-2026-04-28";
+    src = niri-src;
+    cargoDeps = unstable.rustPlatform.fetchCargoVendor {
+      src = niri-src;
+      name = "niri-26.04-fork-2026-04-28-vendor";
+      hash = "sha256-gfnalA3qI3a9h3PvsxgQLCrzapfjLLkxhTMJpwRh+ro=";
+    };
+    # Fork's binary reports `niri 26.04`; our annotated version differs.
+    doInstallCheck = false;
+  });
+in
 {
   nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
 
@@ -13,7 +34,7 @@
   # Niri compositor
   services.displayManager.sddm.theme = "sugar-dark";
   services.displayManager.sddm.wayland.enable = true;
-  programs.niri = { enable = true; package = unstable.niri; };
+  programs.niri = { enable = true; package = niri-fork; };
   programs.xwayland.enable = true;
 
   # Enable 32-bit graphics support for Wine etc.
