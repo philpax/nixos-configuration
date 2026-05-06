@@ -9,7 +9,6 @@ let
   # Backup destinations: secondary SSD, ZFS pool, and external drive
   backupMappings = [
     # Primary SSD -> secondary SSD (local backup)
-    { src = folders.photos; dst = "${folders.backups.data}/photos"; }
     { src = folders.music; dst = "${folders.backups.data}/music"; }
     { src = folders.written; dst = "${folders.backups.data}/written"; }
     # Primary SSD -> ZFS pool (local backup)
