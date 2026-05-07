@@ -2,6 +2,7 @@
 image/jpeg=firefox.desktop;org.gnome.gThumb.desktop;
 video/mp4=vlc.desktop;
 application/pdf=firefox.desktop;
+video/x-matroska=vlc.desktop;
 
 [Default Applications]
 inode/directory=org.gnome.Nautilus.desktop
@@ -16,3 +17,4 @@ image/x-icon=org.gnome.gThumb.desktop
 video/mp4=vlc.desktop
 x-scheme-handler/claude-cli=claude-code-url-handler.desktop
 x-scheme-handler/discord=vesktop.desktop
+video/x-matroska=vlc.desktop
