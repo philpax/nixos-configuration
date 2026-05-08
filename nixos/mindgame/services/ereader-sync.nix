@@ -3,24 +3,14 @@
 let
   targetVendorId = "2237";
   targetFsLabel = "KOBOeReader";
+  src = import ./lib/books-source.nix;
 
   syncScript = pkgs.writeShellApplication {
     name = "ereader-sync";
-    runtimeInputs = with pkgs; [ util-linux cifs-utils rsync coreutils ];
+    runtimeInputs = with pkgs; [ util-linux rsync coreutils ];
     text = ''
       DEV="''${1:?missing device path}"
       DEVICE_MOUNT="/run/media/ereader"
-      SMB_MOUNT="/run/ereader-sync/source"
-      SRC_SUBDIR="Books"
-
-      cleanup() {
-        sync || true
-        umount "$SMB_MOUNT" 2>/dev/null || true
-        rmdir  "$SMB_MOUNT" 2>/dev/null || true
-      }
-      trap cleanup EXIT
-
-      mkdir -p "$SMB_MOUNT"
 
       if mountpoint -q "$DEVICE_MOUNT" 2>/dev/null; then
         current_source=$(findmnt -no SOURCE --target "$DEVICE_MOUNT" 2>/dev/null || true)
@@ -37,15 +27,11 @@ let
         mount -o "uid=1000,gid=100,iocharset=utf8,flush" "$DEV" "$DEVICE_MOUNT"
       fi
 
-      echo "Mounting //redline/written at $SMB_MOUNT..."
-      mount.cifs //redline/written "$SMB_MOUNT" \
-        -o "guest,ro,uid=1000,gid=100,iocharset=utf8,vers=3.0"
-
-      echo "Syncing top-level files: $SRC_SUBDIR/ -> device root"
+      echo "Syncing top-level files: ${src.booksSubdir}/ -> device root"
       rsync -rt -v --human-readable --info=stats2 \
         --no-perms --no-owner --no-group --modify-window=1 \
         --filter='- /*/' \
-        "$SMB_MOUNT/$SRC_SUBDIR/" \
+        "${src.booksPath}/" \
         "$DEVICE_MOUNT/"
 
       echo "Sync complete. Device left mounted at $DEVICE_MOUNT — umount when done."
@@ -61,6 +47,7 @@ in
     description = "Sync books to eReader (%I)";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
+    unitConfig.RequiresMountsFor = src.mountPoint;
     serviceConfig = {
       Type = "oneshot";
       ExecStartPre = "${pkgs.coreutils}/bin/sleep 2";
