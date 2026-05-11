@@ -96,6 +96,9 @@ in
     # VM stuff
     quickemu
     quickgui
+
+    # Games
+    prismlauncher
   ];
 
   systemd.user.services.polkit-gnome-authentication-agent-1 = {
