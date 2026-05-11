@@ -48,4 +48,5 @@ rec {
 
   # Service directories
   paxboard = "${mounts.ssd0}/paxboard";
+  minecraft = "${mounts.ssd0}/minecraft";
 }

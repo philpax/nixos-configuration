@@ -15,6 +15,8 @@ let
     { src = folders.photos; dst = folders.storageBackup.photos; }
     { src = folders.music; dst = folders.storageBackup.music; }
     { src = folders.written; dst = folders.storageBackup.written; }
+    # Primary SSD -> ZFS backup pool (also picked up by restic -> external)
+    { src = folders.minecraft; dst = "${folders.backup}/Minecraft Servers/2026-05-create"; }
     # Primary SSD -> external drive (offsite backup)
     { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
     { src = folders.music; dst = "${folders.backups.external}/Music"; }
