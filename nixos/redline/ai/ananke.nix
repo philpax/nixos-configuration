@@ -272,6 +272,15 @@ let
       per_gpu_mib = 23000;
       description = "Gemma 4 26B (A4B) served by vLLM (TP=2, AWQ 4-bit).";
     }
+    {
+      kind = "vllm";
+      name = "gemma-4-31b-it-vllm";
+      script = "${vllmDir}/gemma4_31b.sh";
+      upstream_model = "gemma-4-31b-autoround";
+      vram_gb = 45;
+      per_gpu_mib = 22500;
+      description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4).";
+    }
   ];
 
   mkLlmService = index: m:
