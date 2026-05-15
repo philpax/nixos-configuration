@@ -353,6 +353,15 @@ window-rule {
     open-floating true
 }
 
+// Open rashomon in floating.
+// Multiple `match` blocks are OR'd, so this catches either the pinned
+// app-id (set via SDL_VIDEO_WAYLAND_WMCLASS) or the window title.
+window-rule {
+    match app-id="^rashomon$"
+    match title="^rashomon"
+    open-floating true
+}
+
 // Example: block out two password managers from screen capture.
 // (This example rule is commented out with a "/-" in front.)
 /-window-rule {
