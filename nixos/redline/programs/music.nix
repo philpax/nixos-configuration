@@ -1,7 +1,7 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstable, ... }:
 
 {
   environment.systemPackages = with pkgs; [
-    beets
+    unstable.beets
   ];
 }
