@@ -1,0 +1,22 @@
+singleton Theme 1.0 Theme.qml
+singleton NiriIPC 1.0 NiriIPC.qml
+Audio 1.0 Audio.qml
+Backlight 1.0 Backlight.qml
+Bar 1.0 Bar.qml
+Battery 1.0 Battery.qml
+BitmapText 1.0 BitmapText.qml
+Clock 1.0 Clock.qml
+Cpu 1.0 Cpu.qml
+FocusedWindow 1.0 FocusedWindow.qml
+Gpu 1.0 Gpu.qml
+IdleInhibitor 1.0 IdleInhibitor.qml
+Memory 1.0 Memory.qml
+Mpris 1.0 Mpris.qml
+Network 1.0 Network.qml
+Pill 1.0 Pill.qml
+Poller 1.0 Poller.qml
+PowerProfile 1.0 PowerProfile.qml
+Tailscale 1.0 Tailscale.qml
+Tray 1.0 Tray.qml
+Vram 1.0 Vram.qml
+Workspaces 1.0 Workspaces.qml

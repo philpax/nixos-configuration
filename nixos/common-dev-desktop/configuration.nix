@@ -22,6 +22,8 @@ let
   });
 in
 {
+  imports = [ ./quickshell.nix ];
+
   nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
 
   # Desktop services
@@ -59,7 +61,6 @@ in
     mako
     alacritty
     fuzzel
-    waybar
     polkit_gnome
     swaylock
     swayidle

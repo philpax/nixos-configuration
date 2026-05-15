@@ -1,7 +1,7 @@
 #!/bin/sh
 # Shared autostart for Wayland compositors (niri, driftwm, etc.)
 
-waybar &
+qs &
 mako &
 
 # swaybg matches outputs by connector (DP-1, HDMI-A-2, ...), but the niri config
