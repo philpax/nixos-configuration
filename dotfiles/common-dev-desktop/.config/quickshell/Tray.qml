@@ -32,6 +32,7 @@ Pill {
                 }
 
                 MouseArea {
+                    id: mouseArea
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
@@ -41,7 +42,9 @@ Pill {
                         } else if (mouse.button === Qt.MiddleButton) {
                             modelData.secondaryActivate();
                         } else {
-                            modelData.display(tray.QsWindow.window, mouse.x, mouse.y);
+                            const win = tray.QsWindow.window;
+                            const pos = mouseArea.mapToItem(win.contentItem, 0, mouseArea.height);
+                            modelData.display(win, pos.x, pos.y);
                         }
                     }
                 }
