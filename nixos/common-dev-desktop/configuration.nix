@@ -31,6 +31,7 @@ in
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
   services.gvfs.enable = true;
   services.udisks2.enable = true;
+  services.upower.enable = true;
   services.udev.packages = [ pkgs.libgphoto2 ];
 
   # Niri compositor
