@@ -362,6 +362,15 @@ window-rule {
     open-floating true
 }
 
+// Open the world_engine_rs interactive example as a floating window.
+// The example sets its own app-id via winit's WindowAttributesExtWayland
+// and requests a 1280x720 inner size, so this rule just opts it out of
+// tiling and lets niri's default floating positioning center it.
+window-rule {
+    match app-id=r#"^world_engine_rs\.interactive$"#
+    open-floating true
+}
+
 // Example: block out two password managers from screen capture.
 // (This example rule is commented out with a "/-" in front.)
 /-window-rule {
