@@ -24,8 +24,14 @@ let
       echo "Reachable."
 
       echo "Fetching remote file list..."
-      remote_list=$(curl -sSf "$TARGET/api/files?path=/" \
-        | jq -r '.[] | select(.isDirectory == false) | .name')
+      remote_list=$(
+        {
+          curl -sSf "$TARGET/api/files?path=/" \
+            | jq -r '.[] | select(.isDirectory == false) | .name'
+          curl -sSf "$TARGET/api/files?path=/read" \
+            | jq -r '.[] | select(.isDirectory == false) | .name'
+        }
+      )
 
       uploaded=0
       skipped=0
