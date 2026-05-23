@@ -36,6 +36,10 @@ sunsetr &
 # mindgame excluded from suspend: sleep is broken on that machine
 if [ "$(hostname)" = mindgame ]; then
     swayidle -w timeout 900 'swaylock -f' &
+
+    # Pin sunshine to the MSI ultrawide (handles DRM connector renumbering
+    # across reboots). Script is defined in nixos/mindgame/services/sunshine.nix.
+    sunshine-pin-output &
 else
     swayidle -w timeout 900 'swaylock -f' timeout 1800 'systemctl suspend' &
 fi
