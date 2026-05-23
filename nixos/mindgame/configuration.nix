@@ -45,11 +45,10 @@
   # OBS Studio
   programs.obs-studio = {
     enable = true;
-    package = pkgs.obs-studio.override {
+    package = unstable.obs-studio.override {
       cudaSupport = true;
     };
-    plugins = with pkgs.obs-studio-plugins; [
-      wlrobs
+    plugins = with unstable.obs-studio-plugins; [
       obs-backgroundremoval
       obs-pipewire-audio-capture
       obs-vaapi

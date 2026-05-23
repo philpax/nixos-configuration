@@ -35,7 +35,6 @@ in
   services.udev.packages = [ pkgs.libgphoto2 ];
 
   # Niri compositor
-  services.displayManager.sddm.theme = "sugar-dark";
   services.displayManager.sddm.wayland.enable = true;
   programs.niri = { enable = true; package = niri-fork; };
   programs.xwayland.enable = true;
@@ -52,7 +51,6 @@ in
   security.polkit.enable = true;
 
   environment.systemPackages = with pkgs; [
-    sddm-sugar-dark
     obsidian
 
     # Desktop environment

@@ -19,7 +19,6 @@
     # Development utilities
     gnumake
     cmake
-    extra-cmake-modules
     gh
 
     # Build dependencies and toolchain
