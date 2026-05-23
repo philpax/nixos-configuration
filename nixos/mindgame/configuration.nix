@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, lib, unstable, unstableGfx, ... }:
 
 {
   imports =
@@ -16,8 +16,16 @@
 
   time.timeZone = "Europe/Stockholm";  # placeholder — update for actual location
   networking.hostName = "mindgame";
+  # Held to 2026-04-25 unstable via unstableGfx (see common-all). 25.11
+  # stable's 580.142 lacks features we want; current unstable's 595.71.05 +
+  # kernel 7.0.9 breaks EGL/GBM on Blackwell (RTX 5090). The unstableGfx pin
+  # gives us 595.58.03 + 7.0.1, the last-known-working combo on this GPU.
+  # Drop both overrides once we migrate to 26.05. Timebomb: see common-all.
+  boot.kernelPackages = lib.mkForce unstableGfx.linuxPackages_latest;
+
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia.open = true;
+  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.latest;
   hardware.graphics.enable = true;
   hardware.nvidia.modesetting.enable = true;
 
