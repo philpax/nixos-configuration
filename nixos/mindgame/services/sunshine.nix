@@ -61,6 +61,42 @@ let
     '';
   };
 
+  # Wrapper that runs INSIDE gamescope. Starting these in-band (rather than
+  # blocking start_session on a graceful shutdown of the existing instance)
+  # means the mode switch and the stream start are immediate; the launcher
+  # then drains the old process and execs the new one as gamescope's payload.
+  innerSteam = pkgs.writeShellApplication {
+    name = "sunshine-gamescope-inner-steam";
+    runtimeInputs = with pkgs; [ procps coreutils ];
+    text = ''
+      # Old Steam was sent `-shutdown` outside gamescope; wait for it to drain
+      # so Steam's single-instance check relays our launch to the new process.
+      for _ in $(seq 1 60); do
+        pgrep -u "$(id -u)" -x steam >/dev/null || break
+        sleep 0.3
+      done
+      pkill -KILL -u "$(id -u)" -x steam 2>/dev/null || true
+      exec steam -bigpicture
+    '';
+  };
+
+  innerPrism = pkgs.writeShellApplication {
+    name = "sunshine-gamescope-inner-prism";
+    runtimeInputs = with pkgs; [ procps coreutils prismlauncher ];
+    text = ''
+      for _ in $(seq 1 60); do
+        if ! pgrep -u "$(id -u)" -x prismlauncher >/dev/null \
+           && ! pgrep -u "$(id -u)" -x java >/dev/null; then
+          break
+        fi
+        sleep 0.3
+      done
+      pkill -KILL -u "$(id -u)" -x prismlauncher 2>/dev/null || true
+      pkill -KILL -u "$(id -u)" -x java 2>/dev/null || true
+      exec prismlauncher
+    '';
+  };
+
   sunshineGamescopeStream = pkgs.writeShellApplication {
     name = "sunshine-gamescope-stream";
     runtimeInputs = with pkgs; [
@@ -70,13 +106,22 @@ let
       gamescope
       procps
       coreutils
-      prismlauncher
     ];
     text = ''
       MONITOR_DESC="${monitorDesc}"
       TARGET_W=2560
       TARGET_H=1440
-      STATE_FILE="/tmp/sunshine-gamescope-stream.prev-mode"
+      # Fallback mode used by `reset` and by `stop` when state is missing/garbled.
+      NATIVE_MODE="3440x1440@144.000"
+
+      RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/tmp/sunshine-gamescope-$(id -u)}"
+      mkdir -p "$RUNTIME_DIR"
+      STATE_FILE="$RUNTIME_DIR/sunshine-gamescope-stream.prev-mode"
+      LOG_FILE="$RUNTIME_DIR/sunshine-gamescope-stream.log"
+
+      log() {
+        printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG_FILE" >&2
+      }
 
       # --- mode-switch helpers ---
 
@@ -112,73 +157,73 @@ let
           | format_mode
       }
 
-      # --- process-kill helpers ---
-
-      # Wait up to ~18s for all named processes (any of them) to exit.
-      wait_for_exit() {
-        for _ in $(seq 1 60); do
-          any=0
-          for p in "$@"; do
-            if pgrep -u "$(id -u)" -x "$p" >/dev/null; then any=1; break; fi
-          done
-          if [ "$any" = "0" ]; then return 0; fi
+      # niri occasionally swallows mode-set commands (we saw at least one case
+      # where stop reported success but the output stayed at 1440p). Verify the
+      # change actually took, and retry a couple of times if not.
+      set_mode_verified() {
+        conn="$1"
+        desired="$2"
+        attempt=1
+        while [ "$attempt" -le 3 ]; do
+          niri msg output "$conn" mode "$desired" 2>&1 | sed 's/^/  niri: /' | tee -a "$LOG_FILE" >&2 || true
           sleep 0.3
+          actual="$(current_mode_string "$conn")"
+          if [ "$actual" = "$desired" ]; then
+            log "set $conn → $desired (attempt $attempt)"
+            return 0
+          fi
+          log "set $conn attempt $attempt: still at '$actual' (wanted '$desired'), retrying"
+          attempt=$((attempt + 1))
         done
+        log "ERROR: failed to set $conn to $desired after 3 attempts (current: $(current_mode_string "$conn"))"
         return 1
       }
 
-      kill_steam() {
-        steam -shutdown 2>/dev/null || true
-        wait_for_exit steam || echo "warn: Steam didn't exit cleanly" >&2
-      }
-
-      kill_prism() {
-        pkill -TERM -u "$(id -u)" -x prismlauncher 2>/dev/null || true
-        # Prism normally signals its child JVM on shutdown; give it a chance.
-        if ! wait_for_exit prismlauncher java; then
-          echo "warn: Prism/java didn't exit cleanly, force-killing" >&2
-          pkill -KILL -u "$(id -u)" -x prismlauncher 2>/dev/null || true
-          pkill -KILL -u "$(id -u)" -x java 2>/dev/null || true
-        fi
-      }
-
-      # --- per-profile launch commands ---
+      # --- subcommands ---
 
       start_session() {
         profile="$1"
         case "$profile" in
           steam)
-            kill_steam
-            set -- steam -bigpicture
+            log "start steam: signalling any running Steam to shut down"
+            steam -shutdown >/dev/null 2>&1 || true
+            set -- ${innerSteam}/bin/sunshine-gamescope-inner-steam
             ;;
           prism)
-            kill_prism
-            set -- prismlauncher
+            log "start prism: signalling any running Prism/JVM"
+            pkill -TERM -u "$(id -u)" -x prismlauncher 2>/dev/null || true
+            set -- ${innerPrism}/bin/sunshine-gamescope-inner-prism
             ;;
           *)
-            echo "unknown profile: '$profile' (expected: steam, prism)" >&2
+            log "ERROR: unknown profile: '$profile' (expected: steam, prism)"
             exit 2
             ;;
         esac
 
         conn="$(resolve_connector)"
         if [ -z "$conn" ]; then
-          echo "could not resolve connector for '$MONITOR_DESC'" >&2
+          log "ERROR: could not resolve connector for '$MONITOR_DESC'"
           exit 1
         fi
 
         prev="$(current_mode_string "$conn")"
         target="$(target_mode_string "$conn")"
         if [ -z "$target" ]; then
-          echo "no ''${TARGET_W}x''${TARGET_H} mode available on $conn" >&2
+          log "ERROR: no ''${TARGET_W}x''${TARGET_H} mode available on $conn"
           exit 1
         fi
+        if [ -z "$prev" ]; then
+          log "WARN: empty current mode for $conn; will fall back to $NATIVE_MODE on stop"
+          prev="$NATIVE_MODE"
+        fi
         printf '%s %s\n' "$conn" "$prev" > "$STATE_FILE"
+        log "saved state: '$conn $prev' to $STATE_FILE"
 
-        niri msg output "$conn" mode "$target"
+        set_mode_verified "$conn" "$target" || log "WARN: mode set failed, continuing anyway"
 
         # exec: this process becomes gamescope, so Sunshine's `cmd` waits on
         # gamescope to exit before firing `undo`.
+        log "exec gamescope at ''${TARGET_W}x''${TARGET_H} → $*"
         exec gamescope \
           -W "$TARGET_W" -H "$TARGET_H" \
           -r 144 \
@@ -187,23 +232,50 @@ let
       }
 
       stop_session() {
-        if [ ! -f "$STATE_FILE" ]; then
-          echo "no state file at $STATE_FILE; nothing to restore" >&2
-          exit 0
+        log "stop invoked"
+        conn=""
+        prev=""
+        if [ -f "$STATE_FILE" ]; then
+          read -r conn prev < "$STATE_FILE"
+          log "read state: conn='$conn' prev='$prev'"
+        else
+          log "no state file at $STATE_FILE"
         fi
-        read -r conn prev < "$STATE_FILE"
-        if [ -n "$conn" ] && [ -n "$prev" ]; then
-          niri msg output "$conn" mode "$prev"
+        if [ -z "$conn" ]; then
+          conn="$(resolve_connector)"
+          log "fallback connector resolution: '$conn'"
         fi
+        if [ -z "$prev" ]; then
+          prev="$NATIVE_MODE"
+          log "fallback mode: '$prev'"
+        fi
+        if [ -n "$conn" ]; then
+          set_mode_verified "$conn" "$prev" || true
+        else
+          log "ERROR: cannot restore — no connector available"
+        fi
+        rm -f "$STATE_FILE"
+      }
+
+      reset_session() {
+        log "reset: forcing $MONITOR_DESC to $NATIVE_MODE"
+        conn="$(resolve_connector)"
+        if [ -z "$conn" ]; then
+          log "ERROR: could not resolve $MONITOR_DESC"
+          exit 1
+        fi
+        set_mode_verified "$conn" "$NATIVE_MODE" || exit 1
         rm -f "$STATE_FILE"
       }
 
       case "''${1:-}" in
         start) start_session "''${2:-}" ;;
         stop)  stop_session ;;
+        reset) reset_session ;;
         *)
-          echo "usage: sunshine-gamescope-stream {start <profile>|stop}" >&2
+          echo "usage: sunshine-gamescope-stream {start <profile>|stop|reset}" >&2
           echo "profiles: steam, prism" >&2
+          echo "reset: force the MSI back to $NATIVE_MODE (use when stuck)" >&2
           exit 2
           ;;
       esac
@@ -220,6 +292,27 @@ in
       cudaSupport = true;
       cudaPackages = sunshinePkgs.cudaPackages;
     };
+  };
+
+  # Workarounds for two known sunshine bugs hitting us on this host:
+  #
+  # 1. https://github.com/LizardByte/Sunshine/issues/5038 — regression in
+  #    2026.415.34134+ (we're on 2026.516.143833) where the DRM-FD/NVENC path
+  #    leaks file descriptors per session on Wayland/NVIDIA. The systemd
+  #    default soft NOFILE of 1024 isn't enough for even a few connect/
+  #    disconnect cycles. Bump it generously until the upstream regression is
+  #    fixed; revisit when issue 5038 closes.
+  #
+  # 2. https://github.com/LizardByte/Sunshine/issues/3668 — sunshine fails to
+  #    detect an existing pulseaudio/pipewire-pulse instance and spawns a
+  #    duplicate that loops trying to grab the (already-claimed) hardware,
+  #    burning CPU and FDs until the soft limit hits. The fix is to point
+  #    sunshine at the existing socket explicitly. `%t` is the systemd
+  #    runtime-directory specifier; in a user unit it expands to
+  #    /run/user/<uid>.
+  systemd.user.services.sunshine = {
+    serviceConfig.LimitNOFILE = 65536;
+    environment.PULSE_SERVER = "%t/pulse/native";
   };
 
   assertions = [{
