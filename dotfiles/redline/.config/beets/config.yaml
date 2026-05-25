@@ -1,7 +1,7 @@
 directory: /mnt/ssd0/music
 library: /mnt/ssd0/music/musiclibrary.db
 artist_credit: yes
-plugins: fetchart lyrics musicbrainz replaygain
+plugins: fetchart lyrics musicbrainz replaygain chroma missing duplicates edit
 
 lyrics:
   auto: yes
