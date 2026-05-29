@@ -106,6 +106,7 @@ let
       gamescope
       procps
       coreutils
+      wlinhibit
     ];
     text = ''
       MONITOR_DESC="${monitorDesc}"
@@ -221,10 +222,21 @@ let
 
         set_mode_verified "$conn" "$target" || log "WARN: mode set failed, continuing anyway"
 
-        # exec: this process becomes gamescope, so Sunshine's `cmd` waits on
-        # gamescope to exit before firing `undo`.
-        log "exec gamescope at ''${TARGET_W}x''${TARGET_H} → $*"
-        exec gamescope \
+        # Hold a Wayland idle-inhibit lock so niri stops emitting idle events
+        # for the streaming session's lifetime — this is what actually keeps
+        # swayidle's timer from firing (systemd-inhibit would not, since
+        # swayidle's timeout is driven by the compositor's idle-notify
+        # protocol, not by logind inhibitors).
+        wlinhibit &
+        inhibit_pid=$!
+        trap 'kill "$inhibit_pid" 2>/dev/null || true' EXIT
+        log "spawned wlinhibit (pid $inhibit_pid)"
+
+        # Sunshine's `cmd` waits on this script to exit before firing `undo`.
+        # We can't `exec gamescope` here because the EXIT trap needs to run
+        # to release the idle-inhibit lock after gamescope is done.
+        log "running gamescope at ''${TARGET_W}x''${TARGET_H} → $*"
+        gamescope \
           -W "$TARGET_W" -H "$TARGET_H" \
           -r 144 \
           -f -e \
