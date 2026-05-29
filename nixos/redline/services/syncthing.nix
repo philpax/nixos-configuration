@@ -51,11 +51,6 @@ in {
         };
       } // gameFolders // {
         "saves" = gameFolder "Saves";
-        "comfyui-models" = {
-          path = "${folders.ai.comfyui}/models";
-          devices = [ "mindgame-nixos" ];
-          ignorePerms = true;
-        };
       };
       options = {
         minHomeDiskFree = {

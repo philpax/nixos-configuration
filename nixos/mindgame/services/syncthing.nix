@@ -21,10 +21,6 @@ in {
           path = "/home/philpax/notes/Main";
           devices = [ "redline" "paprika" ];
         };
-        "comfyui-models" = {
-          path = "/home/philpax/comfyui/models";
-          devices = [ "redline" ];
-        };
       };
       options = {
         minHomeDiskFree = {
