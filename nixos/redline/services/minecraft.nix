@@ -59,6 +59,13 @@ in
       RestrictSUIDSGID = true;
 
       LimitNOFILE = 65536;
+
+      # Keep the 16G JVM heap out of swap. The box has 125G RAM, but with the
+      # default swappiness the kernel was paging ~6G of the live heap to disk;
+      # G1GC then stalled multi-second pulling it back in during collections,
+      # which showed up as periodic "Can't keep up!" tick lag. Pin this cgroup
+      # to RAM only.
+      MemorySwapMax = 0;
     };
   };
 
