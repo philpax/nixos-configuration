@@ -272,23 +272,15 @@ let
       per_gpu_mib = 23000;
       description = "Gemma 4 26B (A4B) served by vLLM (TP=2, AWQ 4-bit).";
     }
-    # Gemma 4 31B has three vLLM variants — pick by workload:
-    #   dflash: AutoRound INT4 weights, INT8 PTH KV, DFlash drafter n=7.
-    #           Chat-safe (no garbled-output bug on sustained turns).
-    #   mtp:    AutoRound INT4 weights, INT8 PTH KV, Google MTP drafter n=3.
-    #           Faster but degenerates after ~4 short-reply turns; fine for
-    #           one-shot / scripted / batch use.
-    #   awq:    cyankiwi AWQ-4bit weights, BF16 KV, MTP drafter n=4.
-    #           No PR #40391, no chat bug, longest stable ctx (~195K).
-    {
-      kind = "vllm";
-      name = "gemma-4-31b-it-dflash-vllm";
-      script = "${vllmDir}/gemma4_31b_dflash.sh";
-      upstream_model = "gemma-4-31b-autoround";
-      vram_gb = 45;
-      per_gpu_mib = 22500;
-      description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, DFlash drafter n=7, INT8 PTH KV).";
-    }
+    # Gemma 4 31B has two vLLM variants (after club-3090's 2026-05-29
+    # 9->3 prune at commit 4568680) — both AutoRound INT4 weights + MTP
+    # n=4 on stable v0.21.0; pick by context budget:
+    #   mtp:  BF16 KV, no overlays, 32K default / 65K practical max. Chat
+    #         default; lowest-complexity build.
+    #   int8: INT8 per-token-head KV via PR #40391 + tool-parser fix + PR
+    #         #41800 (9 patch files), 98K default / 262K native. Long-ctx
+    #         path. Was previously buggy on the dead nightly base —
+    #         resurrected on v0.21.0 stable; re-validation in progress.
     {
       kind = "vllm";
       name = "gemma-4-31b-it-mtp-vllm";
@@ -296,16 +288,16 @@ let
       upstream_model = "gemma-4-31b-autoround";
       vram_gb = 45;
       per_gpu_mib = 22500;
-      description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=3, INT8 PTH KV — garbles after 4+ short-reply chat turns).";
+      description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=4, BF16 KV).";
     }
     {
       kind = "vllm";
-      name = "gemma-4-31b-it-awq-vllm";
-      script = "${vllmDir}/gemma4_31b_awq.sh";
-      upstream_model = "gemma-4-31b-awq";
+      name = "gemma-4-31b-it-int8-vllm";
+      script = "${vllmDir}/gemma4_31b_int8.sh";
+      upstream_model = "gemma-4-31b-autoround";
       vram_gb = 45;
       per_gpu_mib = 22500;
-      description = "Gemma 4 31B served by vLLM (TP=2, AWQ-4bit cyankiwi weights, MTP drafter n=4, BF16 KV).";
+      description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=4, INT8 PTH KV — long-context variant).";
     }
   ];
 
