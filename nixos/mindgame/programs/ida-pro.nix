@@ -17,6 +17,18 @@ let
 
   pythonForIDA = pkgs.python313.withPackages (ps: with ps; [ rpyc ]);
 
+  # Prebuilt BinDiff 8 / BinExport 12 plugins for the IDA 9.3 SDK, from
+  # Lil-Ran's CI builds (built on Ubuntu 24.04). Each archive holds the IDA
+  # plugin under `ida/`, alongside tool binaries we don't install here.
+  bindiffZip = pkgs.fetchurl {
+    url = "https://github.com/Lil-Ran/build-bindiff-for-ida-9/releases/download/release-20260302-1/BinDiff-IDA_9.3-x86_64-linux-built_on_ubuntu_24.04.zip";
+    sha256 = "885dd92ac46aa92ccb831dbeb6c67d4828bf2cea9ceb257856dfb64164e03069";
+  };
+  binexportZip = pkgs.fetchurl {
+    url = "https://github.com/Lil-Ran/build-bindiff-for-ida-9/releases/download/release-20260302-1/BinExport-IDA_9.3-x86_64-linux-built_on_ubuntu_24.04.zip";
+    sha256 = "cd888487f2c7265918204e0f5cc428624c87b5f40511d35230a075131e876521";
+  };
+
   # Byte-pattern substitution applied to the core libraries after extraction.
   # `from`/`to` must be the same length since we overwrite in place. Only files
   # present for this platform are touched — on Linux just the .so variants exist,
@@ -69,6 +81,7 @@ let
       autoPatchelfHook
       qt6.wrapQtAppsHook
       perl
+      unzip
     ];
 
     # We just get a runfile in $src, so no need to unpack it.
@@ -141,6 +154,27 @@ let
       # Apply hex patches before linking/patchelf so $out/lib reflects them.
       ${patchScript}
 
+      # Drop the BinDiff / BinExport plugins into IDA's plugins directory. These
+      # are prebuilt against Ubuntu's glibc; autoPatchelfHook (postFixup) rewrites
+      # their RPATH against IDA's own libraries (see addAutoPatchelfSearchPath
+      # below) and the buildInputs. `-j` flattens the `ida/` prefix.
+      mkdir -p "$IDADIR/plugins"
+      unzip -j -o ${bindiffZip} 'ida/*.so' -d "$IDADIR/plugins"
+      unzip -j -o ${binexportZip} 'ida/*.so' -d "$IDADIR/plugins"
+
+      # Install the BinDiff core engine and CLI tools in a self-contained
+      # directory laid out the way BinDiff expects: the IDA plugin launches
+      # "<directory>/bin/bindiff", where <directory> comes from bindiff.json
+      # (wired up via environment.etc below). autoPatchelfHook fixes their
+      # interpreter/RPATH; they only need libstdc++ and glibc.
+      mkdir -p "$IDADIR/bindiff/bin"
+      unzip -j -o ${bindiffZip} 'bindiff' 'tools/bindiff_config_setup' -d "$IDADIR/bindiff/bin"
+      unzip -j -o ${binexportZip} 'tools/binexport2dump' -d "$IDADIR/bindiff/bin"
+      chmod +x "$IDADIR"/bindiff/bin/*
+      for b in bindiff binexport2dump bindiff_config_setup; do
+        ln -s "$IDADIR/bindiff/bin/$b" "$out/bin/$b"
+      done
+
       # Link the exported libraries to the output.
       for lib in $IDADIR/*.so $IDADIR/*.so.6; do
         ln -s $lib $out/lib/$(basename $lib)
@@ -182,4 +216,15 @@ let
 in
 {
   environment.systemPackages = [ ida-pro ];
+
+  # BinDiff looks for /etc/opt/bindiff/bindiff.json before ~/.bindiff/bindiff.json.
+  # Provide it system-wide so the IDA plugin finds the bundled engine without any
+  # per-user setup: `directory` is the BinDiff install root (engine at its
+  # bin/bindiff), `ida.directory` is the IDA install. Partial configs merge over
+  # BinDiff's built-in defaults, and regenerating it here keeps the store paths
+  # current across rebuilds.
+  environment.etc."opt/bindiff/bindiff.json".text = builtins.toJSON {
+    directory = "${ida-pro}/opt/bindiff";
+    ida.directory = "${ida-pro}/opt";
+  };
 }
