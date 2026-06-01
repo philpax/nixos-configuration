@@ -56,11 +56,18 @@ let
     ];
   };
 
+  # Qwen 3.6 shared knobs. Both models carry an embedded MTP head, so we
+  # enable multi-token-prediction speculative decoding (composes with
+  # parallel > 1 and mmproj). parallel = 2 splits the context budget
+  # across slots. Context left unspecified to allow optimising
+  # for what each model can handle within the VRAM.
   qwen36Extras = {
-    context = 262144;
     flash_attn = true;
     cache_type_k = "q8_0";
     cache_type_v = "q8_0";
+    parallel = 2;
+    spec_type = "draft-mtp";
+    spec_draft_n_max = 2;
     sampling = {
       temperature = 0.6;
       top_p = 0.95;
@@ -140,8 +147,11 @@ let
     {
       name = "qwen3.6-35b-a3b";
       file = "Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
-      mmproj = "Qwen3.6-35B-A3B-GGUF-mmprog-F16.gguf";
+      mmproj = "Qwen3.6-35B-A3B-GGUF-mmproj-F16.gguf";
+      # Double the context so both parallel slots keep the full 262144;
+      # the A3B's lighter KV leaves room for this where the 27B can't.
       extras = qwen36Extras // {
+        context = 524288;
         metadata = {
           discord_visible = true;
           resident = true;
@@ -152,7 +162,7 @@ let
       name = "qwen3.6-27b";
       file = "Qwen3.6-27B-UD-Q5_K_XL.gguf";
       mmproj = "Qwen3.6-27B-GGUF-mmproj-F16.gguf";
-      extras = qwen36Extras // discordVisible;
+      extras = qwen36Extras // { context = 350000; } // discordVisible;
     }
 
     # Gemma family.
@@ -263,6 +273,35 @@ let
       per_gpu_mib = 22000;
       description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4).";
     }
+    # Lower-VRAM 200K-context variant of the 27B, sized to co-run with the
+    # GPU-1-pinned Jina embedder. Shares the image and weights with
+    # qwen3.6-27b-vllm (same script, same upstream_model); CONTAINER_SUFFIX
+    # gives it a distinct docker container so the two never collide on the
+    # fixed `vllm_qwen36_27b` name during an eviction handover.
+    #
+    # The binding constraint is GPU 1: this runs TP=2 (a shard on each
+    # card), and GPU 1 also carries the embedder. vLLM grabs
+    # `gpu-memory-utilization * 24122` up front, so util 0.80 (~19.3
+    # GiB/GPU) holds 200K and still leaves room once the embedder is
+    # shrunk to ~3.5 GiB (max-len 8192, util 0.12) — see its entry below:
+    # 19.3 + 3.5 ≈ 22.8 GiB on GPU 1, ~0.8 GiB headroom. (262K needs ~0.92
+    # util / ~22 GiB/GPU and can't coexist with the embedder.) If vLLM
+    # rejects 200000 at boot ("max seq len > KV cache"), nudge
+    # GPU_MEMORY_UTILIZATION up and bump the pledge to match.
+    {
+      kind = "vllm";
+      name = "qwen3.6-27b-lowvram-vllm";
+      script = "${vllmDir}/qwen36_27b.sh";
+      upstream_model = "qwen3.6-27b-autoround";
+      vram_gb = 39;
+      per_gpu_mib = 19500;
+      extra_env = {
+        MAX_MODEL_LEN = "200000";
+        GPU_MEMORY_UTILIZATION = "0.80";
+        CONTAINER_SUFFIX = "_lowvram";
+      };
+      description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4, 200K ctx — co-runs with the embedder).";
+    }
     {
       kind = "vllm";
       name = "gemma-4-26b-a4b-it-vllm";
@@ -308,16 +347,29 @@ let
     # config (parsed into ananke_api::Modality, propagated through
     # /v1/models + /api/services, rendered as a badge in the
     # ServicesTable + ServiceDetail).
+    #
+    # Sized to co-tenant GPU 1 with qwen3.6-27b-lowvram-vllm's TP=2 shard.
+    # The model itself is tiny (~1.3 GiB bf16, Qwen3-0.6B backbone); the
+    # footprint is almost all KV pool (~110 KiB/token). Capping inputs at
+    # 16384 needs ~1.7 GiB KV → util 0.16 (~3.9 GiB total) per the script's
+    # two-point calibration, vs the 32K/util-0.25 (~7 GiB) default. That
+    # leaves GPU 1 at ~19.3 (qwen) + ~3.9 = ~23.2 GiB of ~23.3 — it fits
+    # but headroom is slim. If either OOMs at boot, drop MAX_MODEL_LEN to
+    # 12288 (or qwen to ~192K) to buy margin.
     {
       kind = "vllm";
       name = "jina-embeddings-v5-text-small-retrieval-vllm";
       script = "${vllmDir}/jina_embed_v5_small.sh";
       upstream_model = "jina-embeddings-v5-text-small-retrieval";
-      vram_gb = 7;
-      per_gpu_mib = 7000;
+      vram_gb = 4;
+      per_gpu_mib = 4000;
       gpu_indices = [ 1 ];
       modality = "embedding";
-      description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 32K ctx). GPU 1 only.";
+      extra_env = {
+        MAX_MODEL_LEN = "16384";
+        GPU_MEMORY_UTILIZATION = "0.16";
+      };
+      description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 16K ctx — sized to co-run with qwen 200K). GPU 1 only.";
     }
   ];
 
@@ -347,7 +399,9 @@ let
   # before exec for reproducibility, and these are user-authored shell
   # scripts that use bare `mkdir`/`docker` (unlike comfyui, which is a
   # Nix-built wrapper with baked-in paths). HOME points docker at the
-  # ai user's `~/.docker` so credential helpers work.
+  # ai user's `~/.docker` so credential helpers work. A service can add
+  # to this via `extra_env` (merged in mkVllmService) to feed its script
+  # tunables like MAX_MODEL_LEN / GPU_MEMORY_UTILIZATION / CONTAINER_SUFFIX.
   vllmEnv = {
     PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
     HOME = "/home/ai";
@@ -381,7 +435,7 @@ let
         # `--stop` after the main child exits gets the explicit teardown
         # under ananke's 30s shutdown-command grace.
         shutdown_command = [ m.script "--stop" ];
-        env = vllmEnv;
+        env = vllmEnv // (m.extra_env or { });
         idle_timeout = "60m";
         # vLLM cold-start is multi-minute (see `health.timeout` below), so
         # losing one to an eviction contest with a default-priority llama.cpp
