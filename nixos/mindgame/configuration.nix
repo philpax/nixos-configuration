@@ -9,6 +9,7 @@
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ./nixpkgs-xr.nix
+      (import ./programs { inherit config pkgs unstable; })
       (import ./services { inherit config pkgs unstable; })
     ];
 
