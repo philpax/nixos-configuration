@@ -11,7 +11,7 @@ let
 
   # If the PR hasn't merged by this date, fail the rebuild so we re-check
   # rather than silently squatting on a stale fork commit forever.
-  sunshinePrDeadline = 1780272000; # 2026-06-01 UTC
+  sunshinePrDeadline = 1780876800; # 2026-06-08 UTC
 
   # Monitor description format matches `make model serial` from
   # `niri msg --json outputs`, same pattern as wayland-autostart.sh.
@@ -331,7 +331,7 @@ in
     assertion = builtins.currentTime <= sunshinePrDeadline;
     message = ''
       The sunshine package is pinned to nixpkgs PR #521906
-      (https://github.com/NixOS/nixpkgs/pull/521906) and the 2026-06-01
+      (https://github.com/NixOS/nixpkgs/pull/521906) and the 2026-06-08
       deadline for re-checking has passed.
 
       Has the PR merged?
