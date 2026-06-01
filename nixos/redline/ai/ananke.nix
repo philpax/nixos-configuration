@@ -272,15 +272,17 @@ let
       per_gpu_mib = 23000;
       description = "Gemma 4 26B (A4B) served by vLLM (TP=2, AWQ 4-bit).";
     }
-    # Gemma 4 31B has two vLLM variants (after club-3090's 2026-05-29
-    # 9->3 prune at commit 4568680) — both AutoRound INT4 weights + MTP
-    # n=4 on stable v0.21.0; pick by context budget:
-    #   mtp:  BF16 KV, no overlays, 32K default / 65K practical max. Chat
-    #         default; lowest-complexity build.
-    #   int8: INT8 per-token-head KV via PR #40391 + tool-parser fix + PR
-    #         #41800 (9 patch files), 98K default / 262K native. Long-ctx
-    #         path. Was previously buggy on the dead nightly base —
-    #         resurrected on v0.21.0 stable; re-validation in progress.
+    # Gemma 4 31B has two vLLM variants (after club-3090's 2026-05-31
+    # v0.22.0 cut at commit b2d7d8f) — both AutoRound INT4 weights +
+    # MTP n=4 on stable v0.22.0; pick by context budget. Both carry
+    # PR #42006 (Gemma 4 streaming multi-tool-call fix) as a shared
+    # build-time overlay:
+    #   mtp:  BF16 KV, 131K default ctx (BF16 pool ~196K tok ceiling).
+    #         Stable long-ctx path; the int8 sibling is the fuller-ctx
+    #         option.
+    #   int8: INT8 per-token-head KV via vendored PR #40391 (lean
+    #         ~240-line diff-apply, not 7-file copy), 262K native
+    #         default (INT8 PTH pool ~354K-455K tok). Long-ctx path.
     {
       kind = "vllm";
       name = "gemma-4-31b-it-mtp-vllm";
@@ -298,6 +300,24 @@ let
       vram_gb = 45;
       per_gpu_mib = 22500;
       description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=4, INT8 PTH KV — long-context variant).";
+    }
+    # Embedding service. Pinned to GPU 1 alone (gpu_indices = [ 1 ]);
+    # the script's --device nvidia.com/gpu=1 enforces the same on the
+    # container side, so ananke's pledge and the container's reality
+    # agree. modality = "embedding" is a first-class field in ananke's
+    # config (parsed into ananke_api::Modality, propagated through
+    # /v1/models + /api/services, rendered as a badge in the
+    # ServicesTable + ServiceDetail).
+    {
+      kind = "vllm";
+      name = "jina-embeddings-v5-text-small-retrieval-vllm";
+      script = "${vllmDir}/jina_embed_v5_small.sh";
+      upstream_model = "jina-embeddings-v5-text-small-retrieval";
+      vram_gb = 7;
+      per_gpu_mib = 7000;
+      gpu_indices = [ 1 ];
+      modality = "embedding";
+      description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 32K ctx). GPU 1 only.";
     }
   ];
 
@@ -332,54 +352,67 @@ let
     PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
     HOME = "/home/ai";
   };
-  mkVllmService = index: m: {
-    template = "command";
-    name = m.name;
-    port = llmBasePort + index;
-    description = m.description;
-    command = [ m.script "{port}" ];
-    # Explicit container teardown. The script's own EXIT/TERM trap can
-    # race ananke's SIGTERM→SIGKILL window (10s) — `docker stop` itself
-    # waits up to 10s for the container, and if the shell is killed
-    # mid-stop the orphaned `docker stop` client may not complete the
-    # request, leaving the container (and its VRAM) alive. Running
-    # `--stop` after the main child exits gets the explicit teardown
-    # under ananke's 30s shutdown-command grace.
-    shutdown_command = [ m.script "--stop" ];
-    env = vllmEnv;
-    idle_timeout = "60m";
-    # vLLM cold-start is multi-minute (see `health.timeout` below), so
-    # losing one to an eviction contest with a default-priority llama.cpp
-    # model is expensive — the next vLLM request pays the full warm-up
-    # tax again. Bumping above the default 50 keeps the llama.cpp herd
-    # from displacing a resident vLLM service. Anything that genuinely
-    # should preempt vLLM (a hand-tagged high-priority model) can still
-    # set a higher value.
-    priority = 70;
-    allocation = {
-      mode = "static";
-      vram_gb = m.vram_gb;
-    };
-    devices = {
-      placement = "gpu-only";
-      placement_override = {
-        "gpu:0" = m.per_gpu_mib;
-        "gpu:1" = m.per_gpu_mib;
+  mkVllmService = index: m:
+    let
+      # gpu_indices defaults to [ 0 1 ] for the dual-card services that
+      # made up the entire vLLM section before the embedding entry
+      # landed. Single-card services (the embedding model on GPU 1)
+      # pass `gpu_indices = [ 1 ]` to skip the gpu:0 pledge.
+      gpuIndices = m.gpu_indices or [ 0 1 ];
+      mkPlacementEntry = idx: lib.nameValuePair "gpu:${toString idx}" m.per_gpu_mib;
+      placementOverride = lib.listToAttrs (map mkPlacementEntry gpuIndices);
+      # Optional typed modality field. Folded in via lib.optionalAttrs
+      # so chat services emit no `modality` key at all (ananke defaults
+      # to chat, and the validator parses missing/`"chat"` identically),
+      # keeping the generated TOML identical to what shipped before the
+      # embedding service landed.
+      modalityAttrs = lib.optionalAttrs (m ? modality) { modality = m.modality; };
+      base = {
+        template = "command";
+        name = m.name;
+        port = llmBasePort + index;
+        description = m.description;
+        command = [ m.script "{port}" ];
+        # Explicit container teardown. The script's own EXIT/TERM trap can
+        # race ananke's SIGTERM→SIGKILL window (10s) — `docker stop` itself
+        # waits up to 10s for the container, and if the shell is killed
+        # mid-stop the orphaned `docker stop` client may not complete the
+        # request, leaving the container (and its VRAM) alive. Running
+        # `--stop` after the main child exits gets the explicit teardown
+        # under ananke's 30s shutdown-command grace.
+        shutdown_command = [ m.script "--stop" ];
+        env = vllmEnv;
+        idle_timeout = "60m";
+        # vLLM cold-start is multi-minute (see `health.timeout` below), so
+        # losing one to an eviction contest with a default-priority llama.cpp
+        # model is expensive — the next vLLM request pays the full warm-up
+        # tax again. Bumping above the default 50 keeps the llama.cpp herd
+        # from displacing a resident vLLM service. Anything that genuinely
+        # should preempt vLLM (a hand-tagged high-priority model) can still
+        # set a higher value.
+        priority = 70;
+        allocation = {
+          mode = "static";
+          vram_gb = m.vram_gb;
+        };
+        devices = {
+          placement = "gpu-only";
+          placement_override = placementOverride;
+        };
+        # vLLM cold start is in the multi-minute range: docker image
+        # bring-up, NCCL init, two weight loads (target + drafter), and
+        # torch.compile graph load. Default 3-minute timeout is tight; bump
+        # to 10 to leave headroom for cache misses (fresh torch.compile
+        # cache, evicted page cache, …).
+        health = {
+          http = "/health";
+          timeout = "10m";
+        };
+        openai_proxy = {
+          upstream_model = m.upstream_model;
+        };
       };
-    };
-    # vLLM cold start is in the multi-minute range: docker image
-    # bring-up, NCCL init, two weight loads (target + drafter), and
-    # torch.compile graph load. Default 3-minute timeout is tight; bump
-    # to 10 to leave headroom for cache misses (fresh torch.compile
-    # cache, evicted page cache, …).
-    health = {
-      http = "/health";
-      timeout = "10m";
-    };
-    openai_proxy = {
-      upstream_model = m.upstream_model;
-    };
-  };
+    in base // modalityAttrs;
 
   mkService = index: m:
     if (m.kind or "llama-cpp") == "vllm"
