@@ -6,6 +6,7 @@ plugins: fetchart lyrics musicbrainz replaygain chroma missing duplicates edit
 lyrics:
   auto: yes
   synced: yes
+  sources: [lrclib, google]
 
 paths:
   singleton: $albumartist/Singles/$title
