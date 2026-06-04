@@ -17,7 +17,7 @@ in {
     "nvidia"
   ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
-  boot.kernelParams = [ "nomodeset" ];
+  boot.kernelParams = [ "nomodeset" "nvme_core.default_ps_max_latency_us=0" "pcie_aspm=off" ];
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -29,7 +29,7 @@ in {
     ${folders.mounts.ssd0} = {
       device = "/dev/disk/by-uuid/68847514-728b-451c-8145-b2eaa1871e8d";
       fsType = "btrfs";
-      options = [ "compress=zstd" "noatime" ];
+      options = [ "compress=zstd" "noatime" "discard=async" ];
     };
 
     ${folders.backups.external} = {
