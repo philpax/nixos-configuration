@@ -68,6 +68,7 @@ let
     parallel = 2;
     spec_type = "draft-mtp";
     spec_draft_n_max = 2;
+    devices = { split = "tensor"; };
     sampling = {
       temperature = 0.6;
       top_p = 0.95;
@@ -162,7 +163,7 @@ let
       name = "qwen3.6-27b";
       file = "Qwen3.6-27B-UD-Q5_K_XL.gguf";
       mmproj = "Qwen3.6-27B-GGUF-mmproj-F16.gguf";
-      extras = qwen36Extras // { context = 350000; } // discordVisible;
+      extras = qwen36Extras // { context = 2*180*1000; } // discordVisible;
     }
 
     # Gemma family.
