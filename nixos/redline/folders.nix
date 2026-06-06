@@ -34,6 +34,7 @@ rec {
     photos = "${mounts.storage}/photos";
     music = "${mounts.storage}/music";
     written = "${mounts.storage}/written";
+    notes = "${mounts.storage}/notes";
   };
 
   # AI directories

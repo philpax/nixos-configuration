@@ -15,6 +15,7 @@ let
     { src = folders.photos; dst = folders.storageBackup.photos; }
     { src = folders.music; dst = folders.storageBackup.music; }
     { src = folders.written; dst = folders.storageBackup.written; }
+    { src = folders.notes; dst = folders.storageBackup.notes; }
     # Primary SSD -> ZFS backup pool (also picked up by restic -> external)
     { src = folders.minecraft; dst = "${folders.backup}/Minecraft Servers/2026-05-create"; }
     # Primary SSD -> external drive (offsite backup)
@@ -26,7 +27,7 @@ let
     { src = folders.documents; dst = "${folders.backups.external}/Documents"; }
     { src = folders.games; dst = "${folders.backups.external}/Games"; }
     { src = folders.videos; dst = "${folders.backups.external}/Videos"; }
-    # TODO: consider backing up: others (immich, notes, datasets, installers)
+    # TODO: consider backing up: others (immich, datasets, installers)
   ];
 
   # Create the backup script
