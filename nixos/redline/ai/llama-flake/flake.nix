@@ -10,7 +10,7 @@
   # in this directory and commit the updated flake.lock.
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/b9444";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/b9518";
 
   outputs = { llama-cpp, ... }: { inherit (llama-cpp) packages; };
 }
