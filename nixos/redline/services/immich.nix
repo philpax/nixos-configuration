@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 let
     port = 2283;
     immichSecrets = import ../secrets/immich.nix;
@@ -50,7 +50,7 @@ in
   services.immich = {
     enable = true;
     port = port;
-    package = unstable.immich;
+    package = pkgs.immich;
     host = "0.0.0.0";
     accelerationDevices = null;
   };

@@ -1,9 +1,9 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
 {
   environment.systemPackages = with pkgs; [
     awscli2
     rtorrent
-    unstable.icloudpd
+    icloudpd
   ];
 }

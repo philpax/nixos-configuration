@@ -1,4 +1,4 @@
-{ config, pkgs, unstable ? null }:
+{ config, pkgs }:
 let
   shared = import ../../common-all/comfyui.nix {
     inherit pkgs;

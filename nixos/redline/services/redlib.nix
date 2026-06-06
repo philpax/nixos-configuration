@@ -1,4 +1,4 @@
-{ config, lib, pkgs, unstable, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   src = pkgs.fetchFromGitHub {
@@ -9,10 +9,10 @@ let
   };
   # Use Silvenga's wreq fork (redlib-org/redlib#544) which uses BoringSSL
   # to emulate browser TLS fingerprints and evade bot detection
-  redlib-fork = unstable.redlib.overrideAttrs (oldAttrs: {
+  redlib-fork = pkgs.redlib.overrideAttrs (oldAttrs: {
     version = "0.36.0-unstable-2026-04-04";
     inherit src;
-    cargoDeps = unstable.rustPlatform.fetchCargoVendor {
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       inherit src;
       name = "redlib-0.36.0-unstable-2026-04-04-vendor";
       hash = "sha256-eO3c7rlFna3DuO31etJ6S4c7NmcvgvIWZ1KVkNIuUqQ=";

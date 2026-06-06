@@ -1,4 +1,4 @@
-{ config, pkgs, unstable ? null }:
+{ config, pkgs }:
 let
   # Get all .nix files in the current directory except default.nix
   programFiles = builtins.filter (f: f != "default.nix")
@@ -8,7 +8,7 @@ let
 
   # Create import expressions for each program file
   programImports = builtins.map (file:
-    import (./. + "/${file}") { inherit config pkgs unstable; }
+    import (./. + "/${file}") { inherit config pkgs; }
   ) programFiles;
 in
 {

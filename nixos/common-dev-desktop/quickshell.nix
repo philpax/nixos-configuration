@@ -1,4 +1,4 @@
-{ pkgs, unstable, ... }:
+{ pkgs, ... }:
 
 let
   # imiric/qml-niri — QML plugin exposing niri's IPC (workspaces, focused
@@ -17,7 +17,7 @@ let
 
   # Mirror the flake's `quickshell-niri` output: add the plugin to
   # quickshell's buildInputs so Qt's wrap hook puts it on QML2_IMPORT_PATH.
-  quickshell = unstable.quickshell.overrideAttrs (prev: {
+  quickshell = pkgs.quickshell.overrideAttrs (prev: {
     buildInputs = [ qml-niri ] ++ prev.buildInputs;
   });
 in

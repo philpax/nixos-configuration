@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
 {
   imports =
@@ -9,7 +9,7 @@
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ../common-dev-desktop/driftwm.nix
-      (import ./services { inherit config pkgs unstable; })
+      (import ./services { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";

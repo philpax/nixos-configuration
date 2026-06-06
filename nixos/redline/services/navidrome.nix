@@ -1,4 +1,4 @@
-{ config, unstable, ... }:
+{ config, pkgs, ... }:
 
 let
   folders = import ../folders.nix;
@@ -6,7 +6,7 @@ in
 {
   services.navidrome = {
     enable = true;
-    package = unstable.navidrome;
+    package = pkgs.navidrome;
     settings = {
       Address = "0.0.0.0";
       MusicFolder = folders.music;

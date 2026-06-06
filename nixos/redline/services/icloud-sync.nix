@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
 let
   folders = import ../folders.nix;
@@ -23,7 +23,7 @@ let
 
     # Run icloudpd
     echo "Running icloudpd sync..."
-    if ! ${unstable.icloudpd}/bin/icloudpd \
+    if ! ${pkgs.icloudpd}/bin/icloudpd \
         --directory "${icloudDir}" \
         --username "${username}"; then
         echo "ERROR: icloudpd sync failed"
@@ -103,12 +103,12 @@ in {
           exit 1
       fi
 
-      echo "Starting iCloud authentication for ${unstable.icloudpd}/bin/icloudpd..."
+      echo "Starting iCloud authentication for ${pkgs.icloudpd}/bin/icloudpd..."
       echo "You will be prompted for your password and 2FA code."
       echo
 
       # Run icloudpd auth interactively as the icloudpd user
-      sudo -u ${serviceUser} ${unstable.icloudpd}/bin/icloudpd \
+      sudo -u ${serviceUser} ${pkgs.icloudpd}/bin/icloudpd \
         --username "${username}" \
         --directory "${icloudDir}" \
         --auth-only

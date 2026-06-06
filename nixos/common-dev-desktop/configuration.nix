@@ -1,4 +1,4 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
 let
   # 0WD0's niri fork (wd/vertical-layout branch) — adds two-dimensional
@@ -9,10 +9,10 @@ let
     rev = "49fe5ed546ae938829842d7e259b4bb5175d40c6";
     hash = "sha256-WYYnuQhxiqBGs3+Dgz05nHzAVAAFwy+0yaFYo06u7Og=";
   };
-  niri-fork = unstable.niri.overrideAttrs (oldAttrs: {
+  niri-fork = pkgs.niri.overrideAttrs (oldAttrs: {
     version = "26.04-fork-2026-04-28";
     src = niri-src;
-    cargoDeps = unstable.rustPlatform.fetchCargoVendor {
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       src = niri-src;
       name = "niri-26.04-fork-2026-04-28-vendor";
       hash = "sha256-gfnalA3qI3a9h3PvsxgQLCrzapfjLLkxhTMJpwRh+ro=";
@@ -73,7 +73,7 @@ in
     xwayland-satellite
     volantes-cursors
     swaybg
-    unstable.sunsetr
+    sunsetr
     gvfs
     samba
     wsdd
@@ -82,11 +82,11 @@ in
     gpu-screen-recorder
     slurp
     libnotify
-    unstable.art
+    art
 
-    unstable.discord
-    unstable.vesktop
-    unstable.zed-editor
+    discord
+    vesktop
+    zed-editor
     foliate
 
     # Wine (Full variant includes wine-mono)

@@ -1,4 +1,4 @@
-{ config, lib, pkgs, unstable, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   folders = import ./folders.nix;
@@ -6,9 +6,9 @@ in {
   imports =
     [
       ../common-all/configuration.nix
-      (import ./ai { inherit config pkgs unstable; })
-      (import ./services { inherit config lib pkgs unstable; })
-      (import ./programs { inherit config pkgs unstable; })
+      (import ./ai { inherit config pkgs; })
+      (import ./services { inherit config lib pkgs; })
+      (import ./programs { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";
@@ -40,6 +40,7 @@ in {
 
     "/var/lib/immich" = {
       device = folders.immich;
+      fsType = "none";
       options = [ "bind" ];
     };
   };

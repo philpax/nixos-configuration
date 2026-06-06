@@ -1,10 +1,10 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 let
   # Pinned to the head of nixpkgs PR #521906, which updates sunshine to
   # 2026.516.143833 (adapting to upstream's FFmpeg/Boost packaging refactor).
   # https://github.com/NixOS/nixpkgs/pull/521906
   # TODO: once that PR merges, drop this pin and switch back to
-  # `unstable.sunshine.override` (and remove the deadline assertion below).
+  # `pkgs.sunshine.override` (and remove the deadline assertion below).
   sunshinePkgs = import
     (builtins.fetchTarball https://github.com/Qubasa/nixpkgs/tarball/9672041e168ea7e431074220bb71920ddbe4106d)
     { config = config.nixpkgs.config; };
@@ -336,7 +336,7 @@ in
 
       Has the PR merged?
         - Yes: drop the `sunshinePkgs` pin in
-          nixos/mindgame/services/sunshine.nix and use `unstable.sunshine`
+          nixos/mindgame/services/sunshine.nix and use `pkgs.sunshine`
           (also remove this assertion).
         - No:  bump `sunshinePrDeadline` in that file to a new date.
     '';

@@ -1,8 +1,8 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
 {
   environment.systemPackages = with pkgs; [
-    unstable.beets
+    beets
     chromaprint
   ];
 }

@@ -1,43 +1,10 @@
 { config, pkgs, lib, ... }:
-let
-  unstable = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/f83fc3c307e74bc5fd5adb7eb6b8b13ffd2a36e1)
-    # reuse the current configuration
-    { config = config.nixpkgs.config; };
-
-  # Graphics-stack-only pin, held to 2026-04-25 unstable. Used solely by
-  # mindgame for boot.kernelPackages + hardware.nvidia.package. The May
-  # unstable's nvidia 595.71.05 + kernel 7.0.9 combination regresses EGL/GBM
-  # init on the RTX 5090 (Blackwell); 595.58.03 + 7.0.1 from this pin is the
-  # last-known-working combo. See nixos/mindgame/configuration.nix.
-  unstableGfx = import
-    (builtins.fetchTarball https://github.com/nixos/nixpkgs/tarball/bec2457004a6ba32c044105130c1bcd994d8cb9c)
-    { config = config.nixpkgs.config; };
-in
 {
-  _module.args = { inherit unstable unstableGfx; };
-
-  # TIMEBOMB 2026-06-14: by then 26.05 stable should be out with a working
-  # Blackwell nvidia/kernel combo. Migrate mindgame to 26.05, drop unstableGfx
-  # above, and remove the overrides in nixos/mindgame/configuration.nix. If
-  # 26.05 still ships a broken combo, bump this date and add a note.
-  # 1781395200 = 2026-06-14T00:00:00Z.
-  assertions = [{
-    assertion = builtins.currentTime < 1781395200;
-    message = ''
-      TIMEBOMB EXPIRED (2026-06-14): time to migrate mindgame to 26.05 stable
-      and remove the unstableGfx pin in nixos/common-all/configuration.nix
-      plus the boot.kernelPackages + hardware.nvidia.package overrides in
-      nixos/mindgame/configuration.nix. If 26.05 still regresses Blackwell
-      EGL, bump the date instead.
-    '';
-  }];
-
   imports =
     [
       /etc/nixos/hardware-configuration.nix
-      (import ./services { inherit config pkgs unstable; })
-      (import ./programs { inherit config pkgs unstable; })
+      (import ./services { inherit config pkgs; })
+      (import ./programs { inherit config pkgs; })
     ];
 
   system.autoUpgrade.enable = true;

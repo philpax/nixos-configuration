@@ -1,12 +1,12 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 let
-  cups-dev = unstable.cups.dev;
+  cups-dev = pkgs.cups.dev;
 in
 
 {
   imports =
     [
-      (import ./programs { inherit config pkgs unstable; })
+      (import ./programs { inherit config pkgs; })
     ];
 
   # Boot loader
@@ -31,7 +31,7 @@ in
 
   # Printing
   services.printing.enable = true;
-  services.printing.package = unstable.cups;
+  services.printing.package = pkgs.cups;
   services.avahi = {
     enable = true;
     nssmdns4 = true;  # for .local hostname resolution
@@ -41,7 +41,7 @@ in
   environment.systemPackages = with pkgs; [
     goldendict-ng
     anki-bin
-    unstable.gthumb
+    gthumb
     cups-dev
   ];
 
