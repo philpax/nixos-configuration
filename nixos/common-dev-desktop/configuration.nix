@@ -20,6 +20,9 @@ let
     # Fork's binary reports `niri 26.04`; our annotated version differs.
     doInstallCheck = false;
   });
+
+  # bump `rev` to pull in new commits (an unpinned URL is cached for an hour by tarball-ttl and won't refetch promptly).
+  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=a8774159189494e0fa29e53ad230c2a4645a9cc0").packages.${pkgs.system}.default;
 in
 {
   imports = [ ./quickshell.nix ];
@@ -51,6 +54,8 @@ in
   security.polkit.enable = true;
 
   environment.systemPackages = with pkgs; [
+    blackbird
+
     obsidian
 
     # Desktop environment
