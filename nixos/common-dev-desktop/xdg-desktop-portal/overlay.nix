@@ -18,7 +18,7 @@ final: prev: {
     # merged upstream and is dropped.
     patches =
       let
-        upstreamPatches = "${prev.path}/pkgs/development/libraries/xdg-desktop-portal";
+        upstreamPatches = "${prev.path}/pkgs/by-name/xd/xdg-desktop-portal";
       in
       [
         (prev.replaceVars "${upstreamPatches}/fix-icon-validation.patch" {
