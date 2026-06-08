@@ -6,7 +6,7 @@
     qemu
 
     # Wine related
-    wineWowPackages.stable
+    wineWow64Packages.stable
     winetricks
   ];
 }

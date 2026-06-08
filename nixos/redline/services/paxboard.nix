@@ -35,7 +35,7 @@ in
       # Set up the environment
       Environment = [
         "NODE_ENV=development"
-        "PATH=${pkgs.nodejs}/bin:${pkgs.nodePackages.npm}/bin:/run/current-system/sw/bin"
+        "PATH=${pkgs.nodejs}/bin:/run/current-system/sw/bin"
       ];
 
       # The actual command

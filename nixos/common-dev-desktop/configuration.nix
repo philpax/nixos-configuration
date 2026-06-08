@@ -90,7 +90,7 @@ in
     foliate
 
     # Wine (Full variant includes wine-mono)
-    wineWowPackages.stableFull
+    wineWow64Packages.stableFull
     winetricks
 
     # VM stuff

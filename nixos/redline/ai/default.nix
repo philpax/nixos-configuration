@@ -6,7 +6,7 @@ let
     sha256 = "19d2z6xsvpxm184m41qrpi1bplilwipgnzv9jy17fgw421785q1m";
   });
   llamaCpp = (flake-compat { src = ./llama-flake; }).defaultNix;
-  llamaCppCuda = llamaCpp.packages.${pkgs.system}.cuda;
+  llamaCppCuda = llamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
 in
 {
   imports = [
