@@ -259,6 +259,14 @@ let
       extras = { context = 8192; } // discordVisible;
     }
 
+    # Talkie family. Dense 13B (talkie arch) with full MHA — the estimator
+    # treats it as llama-family. Native context tops out at 2048.
+    {
+      name = "talkie-1930-13b-it";
+      file = "talkie-1930-13b-it-hf.Q6_K.gguf";
+      extras = { context = 2048; } // discordVisible;
+    }
+
     # vLLM-served models. `kind = "vllm"` routes through mkVllmService,
     # which emits a `template = "command"` service that wraps the
     # corresponding shell script and registers an `openai_proxy` block
