@@ -22,7 +22,7 @@ let
   });
 
   # bump `rev` to pull in new commits (an unpinned URL is cached for an hour by tarball-ttl and won't refetch promptly).
-  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=a8774159189494e0fa29e53ad230c2a4645a9cc0").packages.${pkgs.system}.default;
+  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=a8774159189494e0fa29e53ad230c2a4645a9cc0").packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   imports = [ ./quickshell.nix ];
