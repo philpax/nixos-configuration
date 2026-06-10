@@ -4,6 +4,26 @@
 qs &
 mako &
 
+# Work around a post-update DRM plane bug on the MSI ultrawide (DP-1): at boot it
+# comes up at 144Hz (DSC) with a stale 2560-wide plane source, which makes
+# gpu-screen-recorder's region capture squash recordings by 2560/3440 (0.744x) —
+# windows end up shrunk and offset within the frame. Forcing a clean modeset
+# (bounce 60Hz -> 144Hz) reconfigures the plane to its true 3440 width. The 60Hz
+# step is what guarantees a real modeset; a same-mode reapply may be a no-op. If a
+# single reapply turns out to suffice, the 60Hz line can be dropped. No-op on
+# machines without this monitor.
+fix_msi_plane() {
+    connector=$(niri msg --json outputs 2>/dev/null | jq -r '
+        to_entries[]
+        | select("\(.value.make) \(.value.model) \(.value.serial)"
+                 == "Microstep MSI MAG342CQR DB6H261C01393")
+        | .key')
+    [ -n "$connector" ] || return 0
+    niri msg output "$connector" mode 3440x1440@60.000  >/dev/null 2>&1
+    niri msg output "$connector" mode 3440x1440@144.000 >/dev/null 2>&1
+}
+fix_msi_plane
+
 # swaybg matches outputs by connector (DP-1, HDMI-A-2, ...), but the niri config
 # keys outputs by description. Resolve descriptions via `niri msg --json outputs`
 # so both files can refer to monitors by the same human-readable name.
