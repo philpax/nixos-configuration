@@ -383,6 +383,11 @@ window-rule {
     open-floating true
 }
 
+window-rule {
+    match title="^Witchspire"
+    open-floating true
+}
+
 // Open the world_engine_rs interactive example as a floating window.
 // The example sets its own app-id via winit's WindowAttributesExtWayland
 // and requests a 1280x720 inner size, so this rule just opts it out of
