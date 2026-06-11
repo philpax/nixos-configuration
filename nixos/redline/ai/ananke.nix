@@ -193,6 +193,34 @@ let
       mmproj = "gemma-4-31B-it-GGUF-mmproj-F16.gguf";
       extras = gemma4Extras // discordVisible;
     }
+    # QAT build with a tuned 2×3090 MTP config from the model.
+    {
+      name = "gemma-4-31b-it-qat";
+      file = "unsloth/gemma-4-31B-it-qat-GGUF/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf";
+      mmproj = "unsloth/gemma-4-31B-it-qat-GGUF/mmproj-F16.gguf";
+      extras = {
+        context = 204800;
+        flash_attn = true;
+        cache_type_k = "f16";
+        cache_type_v = "f16";
+        parallel = 4;
+        kv_unified = true;
+        # Stability mitigation for the rare prompt-cache/checkpoint crash
+        # race; see RECOMMENDED.md. ananke already supervises + restarts.
+        cache_idle_slots = false;
+        spec_type = "draft-mtp";
+        spec_draft_n_max = 2;
+        draft_model = "${llmDir}/unsloth/gemma-4-31B-it-qat-GGUF/mtp-gemma-4-31B-it.gguf";
+        devices = { split = "tensor"; };
+        sampling = {
+          temperature = 1.0;
+          top_k = 64;
+          top_p = 0.95;
+          min_p = 0.05;
+          repeat_penalty = 1.0;
+        };
+      } // discordVisible;
+    }
     {
       name = "gemma-4-26b-a4b-it";
       file = "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
