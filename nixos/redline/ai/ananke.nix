@@ -212,6 +212,19 @@ let
         spec_draft_n_max = 2;
         draft_model = "${llmDir}/unsloth/gemma-4-31B-it-qat-GGUF/mtp-gemma-4-31B-it.gguf";
         devices = { split = "tensor"; };
+        # -n: server-side generation cap. With kv_unified the 4 slots share one
+        # 204800-token pool, and uncapped runaway generations can exhaust it,
+        # which llama-server handles by asserting (observed 2026-06-12, see
+        # the model dir's bench/TRIALS.md). 16384 is far above any sane reply.
+        #
+        # --cache-ram 0: disable the host-RAM prompt cache. Measured in prod
+        # (2026-06-12): 0.8-2.6 GiB state copies froze the whole server for
+        # ~18% of wall time (30s per 3min under 4-way load), while the
+        # post-#24411 checkpoint-skip semantics defeat most cross-slot
+        # restores anyway. Conversations at our sizes re-prefill faster than
+        # the cache round-trips, without blocking other slots. Slot-local KV
+        # reuse and SWA checkpoints are unaffected.
+        extra_args = [ "-n" "16384" "--cache-ram" "0" ];
         sampling = {
           temperature = 1.0;
           top_k = 64;
