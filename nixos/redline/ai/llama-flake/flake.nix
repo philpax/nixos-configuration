@@ -8,13 +8,12 @@
   # The `cuda` package is rebuilt here rather than re-exported, for two reasons:
   #   1. CUDA architectures pinned to SM 8.6 (RTX 3090); upstream builds every
   #      supported arch, which drastically inflates compile time.
-  #   2. fattn-graph-reuse-fix.patch (experimental, local-only): ownership
-  #      refactor of the meta backend's external-view shard registrations
-  #      (per-instance containers, lazy registration, scratch shards) fixing
-  #      reused compute graphs executing foreign/stale K/V cache views under
-  #      Gemma 4 MTP + -sm tensor (fattn.cu abort or silent corruption;
-  #      upstream issues #24324/#24440, PR #24411 insufficient). Includes a
-  #      diagnostic canary on the fattn abort path. Full investigation:
+  #   2. fattn-graph-reuse-fix.patch: ownership refactor of the meta backend's
+  #      external-view shard registrations (per-instance containers, lazy
+  #      registration, scratch shard pools), fixing reused compute graphs
+  #      executing foreign/stale K/V cache views under Gemma 4 MTP +
+  #      -sm tensor (fattn.cu abort or silent corruption; upstream issues
+  #      #24324/#24440). Full investigation:
   #      /mnt/ssd0/ai/llm/unsloth/gemma-4-31B-it-qat-GGUF/bench/TRIALS.md.
   #      Drop the patch once upstream fixes graph reuse properly.
   #
