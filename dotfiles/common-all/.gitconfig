@@ -1,0 +1,20 @@
+[user]
+	name = Philpax
+	email = me@philpax.me
+	signingkey = /home/philpax/.ssh/id_rsa.pub
+[safe]
+	directory = /home/philpax/comfyui
+[credential]
+	helper = store
+[protocol "file"]
+	allow = always
+[init]
+	defaultBranch = main
+[gpg]
+	format = ssh
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true
+[gpg "ssh"]
+	allowedSignersFile = /home/philpax/.ssh/allowed_signers
