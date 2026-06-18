@@ -55,6 +55,8 @@ PanelWindow {
             Audio {}
             Network {}
             PowerProfile {}
+            ClaudeSession {}
+            ClaudeWeekly {}
             Cpu {}
             Memory {}
             Gpu {}

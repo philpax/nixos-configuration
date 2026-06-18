@@ -34,6 +34,8 @@ QtObject {
     readonly property color tailscaleBg:    "#80a54242"
     readonly property color tailscaleOn:    "#803aa54b"
     readonly property color langBg:         "#80646e7d"
+    readonly property color claude5hBg:     "#8051a552"
+    readonly property color claudeWklyBg:   "#804aa561"
 
     readonly property string fontFamily: "Cozette"
     readonly property string fontStyle: "Regular"

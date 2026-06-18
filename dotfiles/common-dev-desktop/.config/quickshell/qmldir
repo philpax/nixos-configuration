@@ -5,6 +5,8 @@ Backlight 1.0 Backlight.qml
 Bar 1.0 Bar.qml
 Battery 1.0 Battery.qml
 BitmapText 1.0 BitmapText.qml
+ClaudeSession 1.0 ClaudeSession.qml
+ClaudeWeekly 1.0 ClaudeWeekly.qml
 Clock 1.0 Clock.qml
 Cpu 1.0 Cpu.qml
 FocusedWindow 1.0 FocusedWindow.qml
