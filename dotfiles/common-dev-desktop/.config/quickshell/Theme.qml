@@ -8,34 +8,51 @@ QtObject {
     readonly property int barHeight: 24
     readonly property int barBorderHeight: 3
 
-    // Module colours (rgba with 0.5 alpha → 80 hex prefix)
-    readonly property color clockBg:        "#80a54265"
-    readonly property color batteryBg:      "#809f42a5"
-    readonly property color batteryCharging: "#803aa54b"
-    readonly property color batteryCritical: "#80a53a3a"
-    readonly property color cpuBg:          "#8042a571"
-    readonly property color memoryBg:       "#8042a594"
-    readonly property color gpuBg:          "#804294a5"
-    readonly property color vramBg:         "#804271a5"
-    readonly property color backlightBg:    "#805942a5"
-    readonly property color networkBg:      "#8059a542"
-    readonly property color networkDown:    "#80a53a3a"
-    readonly property color audioBg:        "#807ca542"
-    readonly property color audioMuted:     "#80696c72"
-    readonly property color tempBg:         "#80424da5"
-    readonly property color tempCritical:   "#80a53a3a"
-    readonly property color trayBg:         "#80a54288"
-    readonly property color idleBg:         "#80a58842"
+    // Module colours. Nearly every pill sits on one saturation/value "shell"
+    // (S=0.6, V=0.647, 50% alpha) and differs only by hue, so we generate each
+    // from a single helper and a named hue. The system-metric cluster
+    // (cpu→vram) is an even green→cyan→blue sweep; the rest pick distinct hues.
+    function hsv(hue) { return Qt.hsva(hue / 360.0, 0.6, 0.647, 0.5) }
+
+    // Every hue-shell pill gets an even slice of the full colour wheel, indexed
+    // in the order it appears along the bar — so the bar reads as one rainbow.
+    // To add a pill, insert an index, shift the rest, and bump pillCount.
+    readonly property int pillCount: 16
+    function pillColor(i) { return hsv(360.0 * i / pillCount) }
+
+    readonly property color idleBg:         pillColor(0)
+    readonly property color tailscaleBg:    pillColor(1)
+    readonly property color audioBg:        pillColor(2)
+    readonly property color networkBg:      pillColor(3)
+    readonly property color claude5hBg:     pillColor(4)
+    readonly property color claudeWklyBg:   pillColor(5)
+    readonly property color cpuBg:          pillColor(6)
+    readonly property color memoryBg:       pillColor(7)
+    readonly property color diskBg:         pillColor(8)
+    readonly property color gpuBg:          pillColor(9)
+    readonly property color vramBg:         pillColor(10)
+    readonly property color tempBg:         pillColor(11)
+    readonly property color backlightBg:    pillColor(12)
+    readonly property color batteryBg:      pillColor(13)
+    readonly property color trayBg:         pillColor(14)
+    readonly property color clockBg:        pillColor(15)
+    readonly property color mprisBg:        hsv(0)  // commented out in Bar.qml
+
+    // Semantic accent states — own saturation, deliberately off the hue shell.
+    readonly property color good:           "#803aa54b"  // green
+    readonly property color critical:       "#80a53a3a"  // red
+    readonly property color muted:          "#80696c72"  // grey
+    readonly property color batteryCharging: good
+    readonly property color batteryCritical: critical
+    readonly property color networkDown:    critical
+    readonly property color audioMuted:     muted
+    readonly property color tempCritical:   critical
     readonly property color idleActive:     "#80848aa5"
-    readonly property color powerPerf:      "#80a53a3a"
-    readonly property color powerBalanced:  "#80425da5"
-    readonly property color powerSaver:     "#803aa54b"
-    readonly property color mprisBg:        "#80a54242"
-    readonly property color tailscaleBg:    "#80a54242"
-    readonly property color tailscaleOn:    "#803aa54b"
-    readonly property color langBg:         "#80646e7d"
-    readonly property color claude5hBg:     "#8051a552"
-    readonly property color claudeWklyBg:   "#804aa561"
+    readonly property color powerPerf:      critical
+    readonly property color powerBalanced:  hsv(222)
+    readonly property color powerSaver:     good
+    readonly property color tailscaleOn:    good
+    readonly property color langBg:         "#80646e7d"  // neutral grey, off-shell
 
     readonly property string fontFamily: "Cozette"
     readonly property string fontStyle: "Regular"

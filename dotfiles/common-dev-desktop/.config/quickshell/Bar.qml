@@ -59,6 +59,7 @@ PanelWindow {
             ClaudeWeekly {}
             Cpu {}
             Memory {}
+            Disk {}
             Gpu {}
             Vram {}
             Backlight {}
