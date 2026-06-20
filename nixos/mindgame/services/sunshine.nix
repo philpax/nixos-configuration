@@ -1,18 +1,5 @@
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 let
-  # Pinned to the head of nixpkgs PR #521906, which updates sunshine to
-  # 2026.516.143833 (adapting to upstream's FFmpeg/Boost packaging refactor).
-  # https://github.com/NixOS/nixpkgs/pull/521906
-  # TODO: once that PR merges, drop this pin and switch back to
-  # `pkgs.sunshine.override` (and remove the deadline assertion below).
-  sunshinePkgs = import
-    (builtins.fetchTarball https://github.com/Qubasa/nixpkgs/tarball/9672041e168ea7e431074220bb71920ddbe4106d)
-    { config = config.nixpkgs.config; };
-
-  # If the PR hasn't merged by this date, fail the rebuild so we re-check
-  # rather than silently squatting on a stale fork commit forever.
-  sunshinePrDeadline = 1780876800; # 2026-06-08 UTC
-
   # Monitor description format matches `make model serial` from
   # `niri msg --json outputs`, same pattern as wayland-autostart.sh.
   monitorDesc = "Microstep MSI MAG342CQR DB6H261C01393";
@@ -300,9 +287,9 @@ in
     autoStart = true;
     capSysAdmin = false;   # niri speaks wlr-screencopy; no CAP_SYS_ADMIN needed
     openFirewall = true;
-    package = sunshinePkgs.sunshine.override {
+    # cudaPackages is wired automatically by callPackage; we only flip the flag.
+    package = pkgs.sunshine.override {
       cudaSupport = true;
-      cudaPackages = sunshinePkgs.cudaPackages;
     };
   };
 
@@ -326,21 +313,6 @@ in
     serviceConfig.LimitNOFILE = 65536;
     environment.PULSE_SERVER = "%t/pulse/native";
   };
-
-  assertions = [{
-    assertion = builtins.currentTime <= sunshinePrDeadline;
-    message = ''
-      The sunshine package is pinned to nixpkgs PR #521906
-      (https://github.com/NixOS/nixpkgs/pull/521906) and the 2026-06-08
-      deadline for re-checking has passed.
-
-      Has the PR merged?
-        - Yes: drop the `sunshinePkgs` pin in
-          nixos/mindgame/services/sunshine.nix and use `pkgs.sunshine`
-          (also remove this assertion).
-        - No:  bump `sunshinePrDeadline` in that file to a new date.
-    '';
-  }];
 
   services.udev.extraRules = ''
     KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
