@@ -14,6 +14,16 @@ QtObject {
     function focusWorkspaceById(id) { niri.focusWorkspaceById(id) }
     function isConnected() { return niri.isConnected() }
 
+    // Move a workspace (referenced by stable id) to a 1-based index on its
+    // monitor. niri has no typed wrapper for this in qml-niri, so we go through
+    // sendRawAction with the raw niri-ipc Action schema. Referencing by id (not
+    // the focused workspace) lets us reorder without stealing focus.
+    function moveWorkspaceToIndex(id, index) {
+        return niri.sendRawAction({
+            "MoveWorkspaceToIndex": { "index": index, "reference": { "Id": id } }
+        })
+    }
+
     // The bar in waybar froze every few hours because waybar's niri/workspaces
     // module has no socket error handling: when niri's event-stream socket
     // disconnected (silently, under load), the module sat on its last-known
