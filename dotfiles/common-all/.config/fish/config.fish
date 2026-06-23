@@ -106,7 +106,7 @@ end
 
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
-alias claudeglmd 'ANTHROPIC_AUTH_TOKEN=(head -1 ~/.glm-token) ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic" API_TIMEOUT_MS=3000000 ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7" ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.2[1m]" ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.2[1m]" CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 claude --dangerously-skip-permissions'
+alias claudeumansd 'ANTHROPIC_AUTH_TOKEN=(head -1 ~/.umans-token) ANTHROPIC_BASE_URL="https://api.code.umans.ai" claude --dangerously-skip-permissions'
 alias claudew 'CLAUDE_CONFIG_DIR=~/.claude-work claude'
 alias claudewd 'CLAUDE_CONFIG_DIR=~/.claude-work claude --dangerously-skip-permissions'
 
