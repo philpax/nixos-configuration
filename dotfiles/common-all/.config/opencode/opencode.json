@@ -28,5 +28,19 @@
         }
       }
     }
+  },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git *": "ask",
+      "git status *": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git describe *": "allow",
+      "git rev-parse *": "allow",
+      "git ls-files *": "allow",
+      "git ls-tree *": "allow"
+    }
   }
 }
