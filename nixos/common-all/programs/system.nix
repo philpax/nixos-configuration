@@ -18,6 +18,15 @@
     # System monitoring
     lm_sensors
 
+    # Diagnostics
+    lsof
+    psmisc
+    usbutils
+    smartmontools
+    ethtool
+    bind.dnsutils
+    libva-utils
+
     # Better utilities
     fd
     bat

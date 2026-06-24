@@ -7,5 +7,6 @@
     ripgrep
     direnv
     helix
+    gdb
   ];
 }

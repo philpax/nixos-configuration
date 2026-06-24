@@ -102,6 +102,12 @@ in
     quickemu
     quickgui
 
+    # AppImage support
+    appimage-run
+
+    # Keyboard configurator (Kaleidoscope)
+    chrysalis
+
     # Games
     prismlauncher
   ];

@@ -19,7 +19,7 @@ sudo nixos-rebuild switch
 Machines compose from shared layers via NixOS imports:
 
 ```
-common-all          → Base: users, SSH, packages, locale, unstable channel
+common-all          → Base: users, SSH, packages, locale
 common-desktop      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
 common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep
 common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
@@ -34,10 +34,6 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 ### Auto-importing Modules
 
 `programs/default.nix` and `services/default.nix` use `builtins.readDir` to auto-import all `.nix` files in their directory. Drop a new `.nix` file in and it's automatically included — no need to edit `default.nix`.
-
-### Unstable Channel
-
-`common-all/configuration.nix` pins an unstable nixpkgs tarball and passes it as `unstable` via `_module.args`. Use `unstable.packageName` for packages needing a newer version.
 
 ### Dotfiles
 
