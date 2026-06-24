@@ -24,7 +24,7 @@ description: Use when drafting or creating GitHub issues. Triggers on phrases li
    
    Don't ask all of these mechanically — only ask about what the user's description and the codebase context don't already answer. Batch the questions in a single `question` tool call so the user can answer them at once.
 
-3. **Draft the issue** — write the issue body following the structure below, then show it to the user for review before creating. Never create an issue without showing the draft first.
+3. **Draft the issue** — write the issue body following the structure below, then show it to the user for review. **Do not create the issue until the user explicitly approves.** Iterate on the draft until the user gives affirmative consent before proceeding to creation.
 
 4. **Create the issue** — after the user approves (or edits) the draft, create it with `gh issue create`.
 
