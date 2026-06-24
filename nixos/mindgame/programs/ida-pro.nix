@@ -213,9 +213,48 @@ let
       sourceProvenance = with sourceTypes; [ binaryNativeCode ];
     };
   };
+
+  # --- Headless idalib-mcp helpers -------------------------------------------
+  #
+  # idalib's libidalib.so is linked against IDA's bundled Python (pythonForIDA),
+  # so the ida-pro-mcp project venv must be built from that exact interpreter or
+  # init_library() segfaults. `ida-mcp-setup` (re)creates that venv and refreshes
+  # the IDADIR config; `ida-mcp` launches the server with IDADIR baked in, so it
+  # survives IDA-only rebuilds without re-running setup. After a python313/IDA
+  # rebuild, re-run `ida-mcp-setup`.
+
+  idaMcpSetup = pkgs.writeShellScriptBin "ida-mcp-setup" ''
+    set -euo pipefail
+    PROJECT="''${IDA_PRO_MCP_DIR:-$HOME/programming/ida-pro-mcp}"
+    cd "$PROJECT"
+
+    PYBIN="${pythonForIDA}/bin/python3.13"
+    IDADIR="${ida-pro}/opt"
+
+    echo ">> pinning project venv to IDA's python: $PYBIN"
+    uv python pin "$PYBIN"
+    # Not our repo; keep the machine-specific pin out of git status.
+    if [ -d .git ] && [ -f .git/info/exclude ]; then
+      grep -qxF .python-version .git/info/exclude || echo .python-version >> .git/info/exclude
+    fi
+
+    echo ">> uv sync"
+    uv sync
+
+    echo ">> activating idalib (refreshes ~/.idapro/ida-config.json -> $IDADIR)"
+    uv run "$IDADIR/idalib/python/py-activate-idalib.py"
+
+    echo
+    echo "Done. Start the MCP server with:  ida-mcp --stdio"
+  '';
+
+  idaMcp = pkgs.writeShellScriptBin "ida-mcp" ''
+    export IDADIR="${ida-pro}/opt"
+    exec uv run --directory "''${IDA_PRO_MCP_DIR:-$HOME/programming/ida-pro-mcp}" idalib-mcp "$@"
+  '';
 in
 {
-  environment.systemPackages = [ ida-pro ];
+  environment.systemPackages = [ ida-pro idaMcpSetup idaMcp ];
 
   # BinDiff looks for /etc/opt/bindiff/bindiff.json before ~/.bindiff/bindiff.json.
   # Provide it system-wide so the IDA plugin finds the bundled engine without any

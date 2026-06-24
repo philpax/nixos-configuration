@@ -1,5 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ida-pro-mcp": {
+      "type": "local",
+      "command": [
+        "ida-mcp",
+        "--stdio"
+      ],
+      "enabled": true
+    }
+  },
   "provider": {
     "llama-local": {
       "name": "ananke",
