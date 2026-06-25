@@ -1,0 +1,31 @@
+{
+  "env": {
+    "CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "model": "opus",
+  "enabledPlugins": {
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": false,
+    "ralph-loop@claude-plugins-official": true,
+    "ida-pro-mcp@mrexodia": true
+  },
+  "extraKnownMarketplaces": {
+    "mrexodia": {
+      "source": {
+        "source": "github",
+        "repo": "mrexodia/claude-marketplace"
+      }
+    }
+  },
+  "effortLevel": "medium",
+  "awaySummaryEnabled": false,
+  "skipDangerousModePermissionPrompt": true,
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true
+}
