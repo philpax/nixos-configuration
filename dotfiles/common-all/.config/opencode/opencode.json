@@ -50,7 +50,9 @@
       "git describe *": "allow",
       "git rev-parse *": "allow",
       "git ls-files *": "allow",
-      "git ls-tree *": "allow"
+      "git ls-tree *": "allow",
+      "git remote get-url *": "allow",
+      "gh issue create": "ask"
     }
   }
 }
