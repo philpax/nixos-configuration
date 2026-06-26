@@ -45,3 +45,14 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 - `ai/` — llama-cpp, large-model-proxy, ComfyUI (custom ONNX/CUDA overlay)
 - `folders.nix` — central mount point and directory definitions used across services
 - Services for Immich, Navidrome, Samba, Syncthing, DNS (dnsmasq)
+
+## Development
+
+Python scripts (`sync.py`) are linted and formatted with [ruff](https://docs.astral.sh/ruff/). Configuration lives in `pyproject.toml`.
+
+```bash
+uvx ruff check
+uvx ruff format --check
+```
+
+CI runs both on push/PR. Run `uvx ruff format` to auto-format before committing.

@@ -14,8 +14,8 @@ import json
 import os
 import subprocess
 import sys
-import tty
 import termios
+import tty
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -204,16 +204,17 @@ def main():
 
     if not args.machine:
         print(f"Usage: {sys.argv[0]} <machine_name> [--force]\n")
-        print("Creates symlinks for NixOS (only 'common-*' and '<machine_name>' folders) and dotfiles")
-        print("(only 'common-*' and '<machine_name>' folders), then creates a symlink from")
-        print(f"{NIXOS_TARGET}/configuration.nix to {NIXOS_SOURCE}/<machine_name>/configuration.nix\n")
+        print("Creates symlinks for NixOS (only 'common-*' and '<machine_name>' folders)")
+        print("and dotfiles (only 'common-*' and '<machine_name>' folders), then creates")
+        print(f"a symlink from {NIXOS_TARGET}/configuration.nix to")
+        print(f"{NIXOS_SOURCE}/<machine_name>/configuration.nix\n")
         print("Note: Only the 'common-*' and specified '<machine_name>' folders will be symlinked")
         print("from both the NixOS and dotfiles source directories.\n")
         print("Available targets:")
         for target in list_available_targets():
             print(f"  {target}")
         print("\nExamples:")
-        print(f"  {sys.argv[0]} <target>   # Create symlinks for 'common-*' + '<target>' for NixOS and dotfiles")
+        print(f"  {sys.argv[0]} <target>   # Symlink 'common-*' + '<target>'")
         sys.exit(1)
 
     folder_name = args.machine
@@ -264,7 +265,9 @@ def main():
         created_nixos = create_or_update_symlinks(nixos_symlinks, use_sudo=True, force=args.force)
 
         print(f"\nCreating/Updating symlinks for dotfiles (common-* + {folder_name})...")
-        created_dotfiles = create_or_update_symlinks(dotfiles_symlinks, use_sudo=False, force=args.force)
+        created_dotfiles = create_or_update_symlinks(
+            dotfiles_symlinks, use_sudo=False, force=args.force
+        )
 
         print("\nSymlinking complete!")
 
