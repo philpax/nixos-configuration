@@ -337,23 +337,6 @@ def remove_symlinks(targets: list[str], use_sudo: bool) -> list[str]:
     return removed
 
 
-def create_config_symlink(
-    folder_name: str,
-    nixos_source: Path = NIXOS_SOURCE,
-    nixos_target: Path = NIXOS_TARGET,
-) -> tuple[Path, Path] | None:
-    source = nixos_source / folder_name / "configuration.nix"
-    target = nixos_target / "configuration.nix"
-
-    if not source.is_file():
-        print(f"  {red('error')} configuration file not found: {source}")
-        return None
-
-    _run_sudo(["ln", "-sf", str(source), str(target)])
-    print(f"  {green('done')} {target} -> {source}")
-    return (target, source)
-
-
 def write_manifest(
     machine: str,
     symlinks: list[tuple[Path, Path]],
@@ -470,6 +453,15 @@ def main():
     dotfiles_symlinks = build_symlink_list(
         DOTFILES_SOURCE, DOTFILES_TARGET, folder_name, imported_layers, strip_layer_prefix=True
     )
+
+    # Add the top-level configuration.nix symlink (the NixOS entry point).
+    # This doesn't follow the layer/ path structure, so it's appended separately.
+    config_source = NIXOS_SOURCE / folder_name / "configuration.nix"
+    if not config_source.is_file():
+        print(f"Error: Configuration file not found at {config_source}")
+        sys.exit(1)
+    nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
+
     all_new_symlinks = nixos_symlinks + dotfiles_symlinks
 
     # Read previous manifest and compute stale symlinks
@@ -520,7 +512,6 @@ def main():
     # Create/Update symlinks — collect what was created even on partial failure
     created_nixos: list[tuple[Path, Path]] = []
     created_dotfiles: list[tuple[Path, Path]] = []
-    config_symlink: tuple[Path, Path] | None = None
 
     try:
         print(bold("NixOS configuration"))
@@ -546,19 +537,10 @@ def main():
                 for path in dotfile_stale:
                     cleanup_empty_dirs(Path(path), DOTFILES_TARGET, use_sudo=False)
 
-        # Create configuration.nix symlink
-        print(bold("configuration.nix"))
-        config_symlink = create_config_symlink(folder_name)
-        if config_symlink is None:
-            sys.exit(1)
-
         print(f"\n{green('✓')} Sync complete!")
 
     finally:
-        # Always write manifest, even on partial failure
         all_created = created_nixos + created_dotfiles
-        if config_symlink:
-            all_created.append(config_symlink)
         if all_created:
             write_manifest(folder_name, all_created)
 
