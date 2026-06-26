@@ -31,7 +31,7 @@
   # in this directory and commit the updated flake.lock.
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/ebc10770ac5a9331824c53ef0c6adad780904dc3";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/3fc4e105279105106b08a133a4e3e483116e621f";
 
   outputs = { llama-cpp, ... }:
     let
