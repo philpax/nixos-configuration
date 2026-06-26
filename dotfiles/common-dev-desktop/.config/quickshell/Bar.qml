@@ -57,6 +57,7 @@ PanelWindow {
             PowerProfile {}
             ClaudeSession {}
             ClaudeWeekly {}
+            UmansUsage {}
             Cpu {}
             Memory {}
             Disk {}

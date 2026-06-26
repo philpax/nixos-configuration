@@ -17,7 +17,7 @@ QtObject {
     // Every hue-shell pill gets an even slice of the full colour wheel, indexed
     // in the order it appears along the bar — so the bar reads as one rainbow.
     // To add a pill, insert an index, shift the rest, and bump pillCount.
-    readonly property int pillCount: 16
+    readonly property int pillCount: 17
     function pillColor(i) { return hsv(360.0 * i / pillCount) }
 
     readonly property color idleBg:         pillColor(0)
@@ -26,16 +26,17 @@ QtObject {
     readonly property color networkBg:      pillColor(3)
     readonly property color claude5hBg:     pillColor(4)
     readonly property color claudeWklyBg:   pillColor(5)
-    readonly property color cpuBg:          pillColor(6)
-    readonly property color memoryBg:       pillColor(7)
-    readonly property color diskBg:         pillColor(8)
-    readonly property color gpuBg:          pillColor(9)
-    readonly property color vramBg:         pillColor(10)
-    readonly property color tempBg:         pillColor(11)
-    readonly property color backlightBg:    pillColor(12)
-    readonly property color batteryBg:      pillColor(13)
-    readonly property color trayBg:         pillColor(14)
-    readonly property color clockBg:        pillColor(15)
+    readonly property color umansUsageBg:   pillColor(6)
+    readonly property color cpuBg:          pillColor(7)
+    readonly property color memoryBg:       pillColor(8)
+    readonly property color diskBg:         pillColor(9)
+    readonly property color gpuBg:          pillColor(10)
+    readonly property color vramBg:         pillColor(11)
+    readonly property color tempBg:         pillColor(12)
+    readonly property color backlightBg:    pillColor(13)
+    readonly property color batteryBg:     pillColor(14)
+    readonly property color trayBg:        pillColor(15)
+    readonly property color clockBg:       pillColor(16)
     readonly property color mprisBg:        hsv(0)  // commented out in Bar.qml
 
     // Semantic accent states — own saturation, deliberately off the hue shell.

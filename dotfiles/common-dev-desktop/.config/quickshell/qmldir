@@ -21,5 +21,6 @@ Poller 1.0 Poller.qml
 PowerProfile 1.0 PowerProfile.qml
 Tailscale 1.0 Tailscale.qml
 Tray 1.0 Tray.qml
+UmansUsage 1.0 UmansUsage.qml
 Vram 1.0 Vram.qml
 Workspaces 1.0 Workspaces.qml
