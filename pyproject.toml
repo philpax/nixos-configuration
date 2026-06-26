@@ -7,3 +7,6 @@ select = ["E", "F", "W", "I", "UP"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

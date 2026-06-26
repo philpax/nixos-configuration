@@ -37,7 +37,12 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 
 ### Dotfiles
 
-`dotfiles/` mirrors the `nixos/` layer structure. `sync.sh` symlinks contents of matching `dotfiles/{common-*,<machine>}/` directories into `$HOME`. Key configs: fish shell, Helix editor, Niri, Waybar, Alacritty, mimeapps.list.
+`sync.sh` reads `<machine_name>/configuration.nix` to determine which `common-*`
+layers the machine imports, then only symlinks dotfiles for those layers. This
+mirrors the NixOS import hierarchy — e.g. redline (headless, imports only
+`common-all`) won't receive desktop dotfiles like niri or quickshell configs.
+When re-syncing a different machine, symlinks from the previous sync that are
+no longer needed are detected via `.sync-state.json` and offered for removal.
 
 ### Redline Server
 
@@ -48,11 +53,12 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 
 ## Development
 
-Python scripts (`sync.py`) are linted and formatted with [ruff](https://docs.astral.sh/ruff/). Configuration lives in `pyproject.toml`.
+Python scripts (`sync.py`) are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Configuration lives in `pyproject.toml`.
 
 ```bash
-uvx ruff check
-uvx ruff format --check
+uvx ruff check           # lint
+uvx ruff format --check  # format check
+uvx pytest -v            # run tests
 ```
 
-CI runs both on push/PR. Run `uvx ruff format` to auto-format before committing.
+CI runs all three on push/PR. Run `uvx ruff format` to auto-format before committing.
