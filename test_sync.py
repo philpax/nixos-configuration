@@ -609,3 +609,62 @@ class TestRepoIntegration:
             assert config.is_file(), f"{entry.name} has no configuration.nix"
             layers = sync.get_imported_layers(config)
             assert len(layers) > 0, f"{entry.name} has no common-* imports"
+
+
+# ---------------------------------------------------------------------------
+# _init_state — generates a manifest for old (all common-*) sync behavior
+# ---------------------------------------------------------------------------
+
+
+class TestInitState:
+    def test_includes_all_common_layers(self, tmp_path, monkeypatch):
+        """Init state should include all common-* dirs, not just imported ones."""
+        source = tmp_path / "nixos"
+        for layer in ["common-all", "common-desktop", "common-dev", "common-dev-desktop"]:
+            (source / layer).mkdir(parents=True)
+            (source / layer / "config.nix").write_text("# config")
+        (source / "redline").mkdir()
+        (source / "redline" / "configuration.nix").write_text(
+            "{ imports = [ ../common-all/configuration.nix ]; }"
+        )
+
+        dotfiles = tmp_path / "dotfiles"
+        (dotfiles / "common-all").mkdir(parents=True)
+        (dotfiles / "common-all" / ".gitconfig").write_text("# git")
+        (dotfiles / "common-dev-desktop").mkdir(parents=True)
+        (dotfiles / "common-dev-desktop" / ".config" / "niri").mkdir(parents=True)
+        (dotfiles / "common-dev-desktop" / ".config" / "niri" / "config.kdl").write_text("# niri")
+
+        state_file = tmp_path / ".sync-state.json"
+
+        monkeypatch.setattr(sync, "NIXOS_SOURCE", source)
+        monkeypatch.setattr(sync, "NIXOS_TARGET", tmp_path / "etc-nixos")
+        monkeypatch.setattr(sync, "DOTFILES_SOURCE", dotfiles)
+        monkeypatch.setattr(sync, "DOTFILES_TARGET", tmp_path / "home")
+        monkeypatch.setattr(sync, "STATE_FILE", state_file)
+
+        sync._init_state("redline")
+
+        manifest = sync.read_manifest(state_file)
+        assert manifest is not None
+
+        # redline only imports common-all, but init-state includes all layers
+        targets = set(manifest.keys())
+        assert str(tmp_path / "etc-nixos" / "common-all" / "config.nix") in targets
+        assert str(tmp_path / "etc-nixos" / "common-desktop" / "config.nix") in targets
+        assert str(tmp_path / "etc-nixos" / "common-dev-desktop" / "config.nix") in targets
+        assert str(tmp_path / "home" / ".gitconfig") in targets
+        assert str(tmp_path / "home" / ".config" / "niri" / "config.kdl") in targets
+
+        # Subsequent layer-aware sync should detect the extra layers as stale
+        imported = sync.parse_imported_layers(
+            (source / "redline" / "configuration.nix").read_text()
+        )
+        new_symlinks = sync.build_symlink_list(
+            dotfiles, tmp_path / "home", "redline", imported, strip_layer_prefix=True
+        )
+        stale = sync.compute_stale_symlinks(manifest, new_symlinks)
+        # niri config should be stale (common-dev-desktop not imported by redline)
+        assert any("niri" in s for s in stale)
+        # git config should NOT be stale (common-all is imported)
+        assert not any("gitconfig" in s for s in stale)

@@ -234,8 +234,10 @@ def list_available_targets(nixos_source: Path = NIXOS_SOURCE) -> list[str]:
     return targets
 
 
-def read_manifest(path: Path = STATE_FILE) -> dict[str, str] | None:
+def read_manifest(path: Path | None = None) -> dict[str, str] | None:
     """Read sync state manifest. Returns the symlinks dict or None if no manifest exists."""
+    if path is None:
+        path = STATE_FILE
     if not path.is_file():
         return None
     state = json.loads(path.read_text())
@@ -340,8 +342,10 @@ def remove_symlinks(targets: list[str], use_sudo: bool) -> list[str]:
 def write_manifest(
     machine: str,
     symlinks: list[tuple[Path, Path]],
-    state_file: Path = STATE_FILE,
+    state_file: Path | None = None,
 ) -> None:
+    if state_file is None:
+        state_file = STATE_FILE
     state = {
         "machine": machine,
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -405,6 +409,41 @@ def _print_grouped(
     print()
 
 
+def _init_state(folder_name: str) -> None:
+    """Write a manifest representing the old (all common-*) sync behavior.
+
+    This lets machines that were synced before layer-aware syncing get a
+    baseline manifest, so the next regular sync detects extra symlinks
+    as stale and removes them.
+    """
+    for label, source_dir in [("NixOS", NIXOS_SOURCE), ("dotfiles", DOTFILES_SOURCE)]:
+        if not source_dir.is_dir():
+            print(f"Error: {label} source directory not found at {source_dir}")
+            sys.exit(1)
+
+    all_common = sorted(
+        d.name for d in NIXOS_SOURCE.iterdir() if d.is_dir() and is_common_dir(d.name)
+    )
+    nixos_symlinks = build_symlink_list(
+        NIXOS_SOURCE, NIXOS_TARGET, folder_name, all_common, strip_layer_prefix=False
+    )
+    dotfiles_symlinks = build_symlink_list(
+        DOTFILES_SOURCE, DOTFILES_TARGET, folder_name, all_common, strip_layer_prefix=True
+    )
+
+    config_source = NIXOS_SOURCE / folder_name / "configuration.nix"
+    if config_source.is_file():
+        nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
+
+    total = len(nixos_symlinks) + len(dotfiles_symlinks)
+    write_manifest(folder_name, nixos_symlinks + dotfiles_symlinks)
+    print(
+        f"\nInitialized state with {total} symlinks (all common-* layers).\n"
+        f"Run {bold(f'./sync.sh {folder_name}')} to sync with layer-awareness "
+        f"and clean up stale symlinks."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create symlinks for NixOS configuration and dotfiles.",
@@ -414,7 +453,20 @@ def main():
     parser.add_argument(
         "-f", "--force", action="store_true", help="Overwrite existing non-symlink files"
     )
+    parser.add_argument(
+        "--init-state",
+        action="store_true",
+        help="Write a manifest for the old (pre-layer-aware) sync behavior, "
+        "so the next regular sync detects and removes stale symlinks",
+    )
     args = parser.parse_args()
+
+    if args.init_state:
+        if not args.machine:
+            print("Error: --init-state requires a machine name")
+            sys.exit(1)
+        _init_state(args.machine)
+        return
 
     if not args.machine:
         print(f"Usage: {sys.argv[0]} <machine_name> [--force]\n")
