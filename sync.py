@@ -261,6 +261,7 @@ def create_or_update_symlinks(
 ) -> list[tuple[Path, Path]]:
     """Create or update symlinks. Returns list of successfully created (target, source) pairs."""
     created: list[tuple[Path, Path]] = []
+    skipped = 0
     for target, source in symlinks:
         target_dir = target.parent
         is_symlink = target.is_symlink()
@@ -274,7 +275,8 @@ def create_or_update_symlinks(
                 if force:
                     _run_sudo(["rm", "-f", str(target)])
                 else:
-                    print(f"Warning: {target} already exists and is not a symlink. Skipping.")
+                    print(f"  {yellow('skip')} {shorten_path(target)}")
+                    skipped += 1
                     continue
             _run_sudo(["ln", "-s", str(source), str(target)])
         else:
@@ -285,17 +287,20 @@ def create_or_update_symlinks(
                 if force:
                     target.unlink()
                 else:
-                    print(f"Warning: {target} already exists and is not a symlink. Skipping.")
+                    print(f"  {yellow('skip')} {shorten_path(target)}")
+                    skipped += 1
                     continue
             try:
                 target.symlink_to(source)
             except OSError as e:
-                print(f"Error: failed to create symlink {target} -> {source}: {e}")
+                print(f"  {red('error')} {shorten_path(target)}: {e}")
                 sys.exit(1)
 
-        print(f"Created/Updated symlink: {target} -> {source}")
         created.append((target, source))
 
+    total = len(symlinks)
+    summary = f"{green(str(len(created)))} created, {yellow(str(skipped))} skipped"
+    print(f"  {summary}, {dim(f'{total} total')}")
     return created
 
 
@@ -326,8 +331,9 @@ def remove_symlinks(targets: list[str], use_sudo: bool) -> list[str]:
             _run_sudo(["rm", "-f", str(path)])
         else:
             path.unlink()
-        print(f"Removed stale symlink: {path}")
         removed.append(target)
+    if removed:
+        print(f"  {red(str(len(removed)))} removed")
     return removed
 
 
@@ -340,12 +346,11 @@ def create_config_symlink(
     target = nixos_target / "configuration.nix"
 
     if not source.is_file():
-        print(f"Error: Configuration file not found at {source}")
+        print(f"  {red('error')} configuration file not found: {source}")
         return None
 
-    print(f"Creating symlink: {target} -> {source}")
     _run_sudo(["ln", "-sf", str(source), str(target)])
-    print("Symlink created successfully!")
+    print(f"  {green('done')} {target} -> {source}")
     return (target, source)
 
 
@@ -481,9 +486,18 @@ def main():
 
     # Display stale symlinks
     if stale:
-        print(f"{bold('Stale symlinks to remove')} {red(f'({len(stale)})')}:")
-        for path in stale:
-            print(f"  {red(shorten_path(path))}")
+        nixos_stale, dotfile_stale = split_by_target(stale, NIXOS_TARGET, DOTFILES_TARGET)
+        total = len(stale)
+        print(f"{bold('Stale symlinks to remove')} {red(f'({total})')}:")
+        if nixos_stale:
+            print(f"  {dim('NixOS')} ({len(nixos_stale)}):")
+            for path in sorted(nixos_stale):
+                rel = str(Path(path).relative_to(NIXOS_TARGET))
+                print(f"    {dim(rel)}")
+        if dotfile_stale:
+            print(f"  {dim('Dotfiles')} ({len(dotfile_stale)}):")
+            for path in sorted(dotfile_stale):
+                print(f"    {dim(shorten_path(path))}")
         print()
 
     # Show conflicts
@@ -509,34 +523,36 @@ def main():
     config_symlink: tuple[Path, Path] | None = None
 
     try:
-        print("\nCreating/Updating symlinks for NixOS configuration...")
+        print(bold("NixOS configuration"))
         created_nixos = create_or_update_symlinks(nixos_symlinks, use_sudo=True, force=args.force)
 
-        print("\nCreating/Updating symlinks for dotfiles...")
+        print(bold("Dotfiles"))
         created_dotfiles = create_or_update_symlinks(
             dotfiles_symlinks, use_sudo=False, force=args.force
         )
 
-        print("\nSymlinking complete!")
-
         # Remove stale symlinks
         if stale:
-            print("\nRemoving stale symlinks...")
+            print(bold("Stale symlinks"))
             nixos_stale, dotfile_stale = split_by_target(stale, NIXOS_TARGET, DOTFILES_TARGET)
             if nixos_stale:
+                print(f"  {dim('NixOS:')}")
                 remove_symlinks(nixos_stale, use_sudo=True)
                 for path in nixos_stale:
                     cleanup_empty_dirs(Path(path), NIXOS_TARGET, use_sudo=True)
             if dotfile_stale:
+                print(f"  {dim('Dotfiles:')}")
                 remove_symlinks(dotfile_stale, use_sudo=False)
                 for path in dotfile_stale:
                     cleanup_empty_dirs(Path(path), DOTFILES_TARGET, use_sudo=False)
 
         # Create configuration.nix symlink
-        print("\nCreating configuration.nix symlink...")
+        print(bold("configuration.nix"))
         config_symlink = create_config_symlink(folder_name)
         if config_symlink is None:
             sys.exit(1)
+
+        print(f"\n{green('✓')} Sync complete!")
 
     finally:
         # Always write manifest, even on partial failure
