@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    paths:
+      - "*.py"
+      - "pyproject.toml"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "*.py"
+      - "pyproject.toml"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx ruff check
+      - run: uvx ruff format --check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx pytest -v
