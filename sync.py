@@ -22,6 +22,7 @@ import subprocess
 import sys
 import termios
 import tty
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,45 @@ DOTFILES_TARGET = Path.home()
 STATE_FILE = REPO_DIR / ".sync-state.json"
 
 LAYER_IMPORT_RE = re.compile(r"\.\./(common-[a-z-]+)")
+
+
+# ---------------------------------------------------------------------------
+# Terminal colors (auto-disabled when not a TTY or NO_COLOR is set)
+# ---------------------------------------------------------------------------
+
+
+def _color_enabled() -> bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _wrap(code: str, text: str) -> str:
+    if not _color_enabled():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def bold(text: str) -> str:
+    return _wrap("1", text)
+
+
+def green(text: str) -> str:
+    return _wrap("32", text)
+
+
+def yellow(text: str) -> str:
+    return _wrap("33", text)
+
+
+def red(text: str) -> str:
+    return _wrap("31", text)
+
+
+def cyan(text: str) -> str:
+    return _wrap("36", text)
+
+
+def dim(text: str) -> str:
+    return _wrap("2", text)
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +120,34 @@ def split_by_target(
 
 def is_common_dir(name: str) -> bool:
     return name.startswith("common-")
+
+
+def group_by_layer(
+    symlinks: list[tuple[Path, Path]],
+    source_dir: Path,
+) -> dict[str, list[tuple[Path, Path]]]:
+    """Group symlinks by their source layer (first directory component).
+
+    Returns dict with common-* keys sorted first, then machine names.
+    """
+    groups: dict[str, list[tuple[Path, Path]]] = defaultdict(list)
+    for target, source in symlinks:
+        layer = source.relative_to(source_dir).parts[0]
+        groups[layer].append((target, source))
+    common = {k: v for k, v in sorted(groups.items()) if is_common_dir(k)}
+    machine = {k: v for k, v in sorted(groups.items()) if not is_common_dir(k)}
+    return {**common, **machine}
+
+
+def shorten_path(path: str | Path, home: Path | None = None) -> str:
+    """Shorten a path for display, using ~ for home directory."""
+    path_str = str(path)
+    if home is None:
+        home = Path.home()
+    home_str = str(home)
+    if path_str.startswith(home_str + "/"):
+        return "~" + path_str[len(home_str) :]
+    return path_str
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +387,36 @@ def confirm(prompt: str) -> bool:
     return char.lower() == "y"
 
 
+def _print_grouped(
+    title: str,
+    symlinks: list[tuple[Path, Path]],
+    source_dir: Path,
+    target_dir: Path,
+    use_home_prefix: bool = False,
+) -> None:
+    """Print symlinks grouped by source layer with relative paths."""
+    if not symlinks:
+        return
+
+    print(f"{bold(title)} {green(f'({len(symlinks)})')}:")
+
+    for layer, items in group_by_layer(symlinks, source_dir).items():
+        print(f"  {yellow(layer)} {dim(f'({len(items)})')}:")
+        for target, _ in items:
+            try:
+                if use_home_prefix:
+                    rel = target.relative_to(target_dir)
+                    path_str = f"~/{rel}"
+                else:
+                    rel = target.relative_to(target_dir / layer)
+                    path_str = str(rel)
+            except ValueError:
+                path_str = shorten_path(target)
+            print(f"    {dim(path_str)}")
+
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create symlinks for NixOS configuration and dotfiles.",
@@ -357,7 +455,8 @@ def main():
     # Determine which common-* layers this machine imports
     config_path = NIXOS_SOURCE / folder_name / "configuration.nix"
     imported_layers = get_imported_layers(config_path)
-    print(f"Imported layers for {folder_name}: {' '.join(imported_layers) or 'none'}\n")
+    layers_str = " ".join(imported_layers) or "none"
+    print(f"{bold('Imported layers:')} {cyan(layers_str)}\n")
 
     # Build the new sync-set
     nixos_symlinks = build_symlink_list(
@@ -374,33 +473,29 @@ def main():
     if previous:
         stale = compute_stale_symlinks(previous, all_new_symlinks)
 
-    # Display the proposed symlinks
-    print("Proposed symlinks for NixOS configuration:")
-    for target, source in nixos_symlinks:
-        print(f"  {target} -> {source}")
-    print()
-
-    print("Proposed symlinks for dotfiles:")
-    for target, source in dotfiles_symlinks:
-        print(f"  {target} -> {source}")
-    print()
+    # Display the proposed symlinks, grouped by layer
+    _print_grouped("NixOS configuration", nixos_symlinks, NIXOS_SOURCE, NIXOS_TARGET)
+    _print_grouped(
+        "Dotfiles", dotfiles_symlinks, DOTFILES_SOURCE, DOTFILES_TARGET, use_home_prefix=True
+    )
 
     # Display stale symlinks
     if stale:
-        print("The following symlinks from a previous sync are no longer needed:")
+        print(f"{bold('Stale symlinks to remove')} {red(f'({len(stale)})')}:")
         for path in stale:
-            print(f"  {path}")
+            print(f"  {red(shorten_path(path))}")
         print()
 
     # Show conflicts
     all_conflicts = find_conflicts(nixos_symlinks) + find_conflicts(dotfiles_symlinks)
     if all_conflicts:
-        print("The following existing files (not symlinks) would be overwritten:")
+        print(f"{bold('Conflicts')} {red(f'({len(all_conflicts)})')}:")
         for path in all_conflicts:
-            print(f"  {path}")
+            print(f"  {red(shorten_path(path))}")
         print()
         if not args.force:
-            print("Use --force / -f to overwrite them. Without it, these files will be skipped.")
+            msg = "Use --force / -f to overwrite them. Without it, these files will be skipped."
+            print(dim(msg))
             print()
 
     # Ask for confirmation

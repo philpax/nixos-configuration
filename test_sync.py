@@ -492,6 +492,65 @@ class TestIsCommonDir:
 
 
 # ---------------------------------------------------------------------------
+# group_by_layer — pure function
+# ---------------------------------------------------------------------------
+
+
+class TestGroupByLayer:
+    def test_groups_correctly(self):
+        source_dir = Path("/repo/nixos")
+        symlinks = [
+            (Path("/etc/nixos/common-all/a.nix"), source_dir / "common-all" / "a.nix"),
+            (Path("/etc/nixos/common-all/b.nix"), source_dir / "common-all" / "b.nix"),
+            (Path("/etc/nixos/redline/c.nix"), source_dir / "redline" / "c.nix"),
+        ]
+        groups = sync.group_by_layer(symlinks, source_dir)
+        assert "common-all" in groups
+        assert "redline" in groups
+        assert len(groups["common-all"]) == 2
+        assert len(groups["redline"]) == 1
+
+    def test_common_sorted_before_machine(self):
+        source_dir = Path("/repo")
+        symlinks = [
+            (Path("/t/z/a.nix"), source_dir / "zebra" / "a.nix"),
+            (Path("/t/common-all/b.nix"), source_dir / "common-all" / "b.nix"),
+            (Path("/t/common-desktop/c.nix"), source_dir / "common-desktop" / "c.nix"),
+        ]
+        groups = sync.group_by_layer(symlinks, source_dir)
+        keys = list(groups.keys())
+        assert keys[0] == "common-all"
+        assert keys[1] == "common-desktop"
+        assert keys[2] == "zebra"
+
+    def test_empty_input(self):
+        assert sync.group_by_layer([], Path("/repo")) == {}
+
+
+# ---------------------------------------------------------------------------
+# shorten_path — pure function
+# ---------------------------------------------------------------------------
+
+
+class TestShortenPath:
+    def test_home_prefix(self):
+        home = Path("/home/user")
+        assert sync.shorten_path("/home/user/.config/fish", home) == "~/.config/fish"
+
+    def test_non_home_path(self):
+        home = Path("/home/user")
+        assert sync.shorten_path("/etc/nixos/config.nix", home) == "/etc/nixos/config.nix"
+
+    def test_path_object(self):
+        home = Path("/home/user")
+        assert sync.shorten_path(Path("/home/user/.gitconfig"), home) == "~/.gitconfig"
+
+    def test_default_home(self):
+        result = sync.shorten_path(str(Path.home() / ".gitconfig"))
+        assert result == "~/.gitconfig"
+
+
+# ---------------------------------------------------------------------------
 # Integration: build_symlink_list with real repo structure
 # ---------------------------------------------------------------------------
 
