@@ -1,6 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION": "1"
+    "CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION": "1",
+    "CLAUDE_CODE_SCROLL_SPEED": "6"
   },
   "attribution": {
     "commit": "",
@@ -25,8 +26,8 @@
   },
   "effortLevel": "medium",
   "awaySummaryEnabled": false,
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "tui": "fullscreen"
+  "skipAutoPermissionPrompt": true
 }
