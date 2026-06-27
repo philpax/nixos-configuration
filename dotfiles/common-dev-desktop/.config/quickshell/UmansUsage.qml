@@ -2,17 +2,20 @@ import QtQuick
 
 // Umans Code usage: concurrency, daily token burn (in/out), and rate-limit
 // status. Hidden when there's no token or no concurrency data. Turns red
-// when deprioritized (priority.low) or auto-paused (boxed).
+// when deprioritized (priority.low) or auto-paused (boxed). When boxed, the
+// remaining timeout is appended in parens so concurrency/token burn stays
+// visible.
 Pill {
     color: parsed.status === "boxed" || parsed.status === "low"
            ? Theme.critical
            : Theme.umansUsageBg
     visible: parsed.concurrency !== ""
-    text: parsed.status === "boxed"
-          ? "umans boxed " + parsed.boxedRemaining
-          : "umans " + parsed.concurrency
-            + (parsed.tokensIn !== "" ? " " + parsed.tokensIn + "/" + parsed.tokensOut : "")
-    widthSample: "umans 8/4 12.3M/340K"
+    text: "umans " + parsed.concurrency
+          + (parsed.tokensIn !== "" ? " " + parsed.tokensIn + "/" + parsed.tokensOut : "")
+          + (parsed.status === "boxed" && parsed.boxedRemaining !== ""
+             ? " (boxed " + parsed.boxedRemaining + ")"
+             : (parsed.status === "low" ? " (low)" : ""))
+    widthSample: "umans 8/4 12.3M/340K (boxed 99h99m)"
 
     QtObject {
         id: parsed
