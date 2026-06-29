@@ -1,21 +1,21 @@
 { config, pkgs, ... }:
 
 let
-  # 0WD0's niri fork (wd/vertical-layout branch) — adds two-dimensional
-  # layouting so niri works on vertical monitors.
+  # philpax/niriad — niri fork adding two-dimensional layouting so niri
+  # works on vertical monitors.
   niri-src = pkgs.fetchFromGitHub {
-    owner = "0WD0";
-    repo = "niri";
-    rev = "49fe5ed546ae938829842d7e259b4bb5175d40c6";
-    hash = "sha256-WYYnuQhxiqBGs3+Dgz05nHzAVAAFwy+0yaFYo06u7Og=";
+    owner = "philpax";
+    repo = "niriad";
+    rev = "2f1ae1fd32a56a988dda2dac168b248fb27c8d9b";
+    hash = "sha256-Kj+ydDYHD1XXKtfGe6Dc/G9EdAH9e/dDkZ+Ljx2ObBc=";
   };
   niri-fork = pkgs.niri.overrideAttrs (oldAttrs: {
-    version = "26.04-fork-2026-04-28";
+    version = "26.04-niriad-2026-06-29";
     src = niri-src;
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       src = niri-src;
-      name = "niri-26.04-fork-2026-04-28-vendor";
-      hash = "sha256-gfnalA3qI3a9h3PvsxgQLCrzapfjLLkxhTMJpwRh+ro=";
+      name = "niri-26.04-niriad-2026-06-29-vendor";
+      hash = "sha256-jGORNwJ/F9UrajObXdGLbOTGEpCv919puUuWojbuVwo=";
     };
     # Fork's binary reports `niri 26.04`; our annotated version differs.
     doInstallCheck = false;
