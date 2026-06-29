@@ -7,8 +7,17 @@
 // Find the full list of options on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Input
 input {
+    // When running nested (windowed), use AltGr as the mod key so it doesn't
+    // collide with the host compositor's Super or our own Alt binds.
+    mod-key-nested "Iso_Level3_Shift"
+
     keyboard {
         xkb {
+            // Make Right Alt emit ISO_Level3_Shift so it can serve as the
+            // nested mod key (see mod-key-nested above). Inert in the real
+            // session on a plain us layout.
+            options "lv3:ralt_switch"
+
             // You can set rules, model, layout, variant and options.
             // For more information, see xkeyboard-config(7).
 
