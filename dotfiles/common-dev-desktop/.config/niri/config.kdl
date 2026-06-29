@@ -618,6 +618,15 @@ binds {
     // Expel the bottom window from the focused column to the right.
     Mod+Period { expel-window-from-column; }
 
+    // niriad: split the focused window so the next window opened in this column
+    // is placed side-by-side (main axis) instead of stacked. Mod+Ctrl+S splits
+    // the other way ("cross"), i.e. the usual stacked-column behaviour.
+    Mod+S      { split-window; }
+    Mod+Ctrl+S { split-window "cross"; }
+    // niriad: consume the window from the adjacent column into a split with the
+    // focused window (mirrors Mod+Comma, but side-by-side rather than stacked).
+    Mod+Shift+Comma { consume-window-into-split; }
+
     Mod+R { switch-preset-column-width; }
     Mod+Shift+R { spawn "sh" "-c" "~/.local/bin/record-screen.sh area"; }
     Mod+Shift+Ctrl+R { spawn "sh" "-c" "~/.local/bin/record-screen.sh window"; }
@@ -656,6 +665,14 @@ binds {
     // Windows in this column will appear as vertical tabs,
     // rather than stacked on top of each other.
     Mod+W { toggle-column-tabbed-display; }
+
+    // niriad: generalized tabs — toggle the active leaf's *parent* between a
+    // split and a tabbed container, so you can tab any nesting level, not just
+    // the column root. (Mod+Shift+W is taken by window-action.sh, so Mod+Ctrl+W.)
+    Mod+Ctrl+W { toggle-tabbed; }
+    // niriad: reorder the focused tab within its tabbed container.
+    Mod+Shift+BracketLeft  { move-tab-left; }
+    Mod+Shift+BracketRight { move-tab-right; }
 
     // Set or unset workspace name via popup prompt (enter "-" to clear)
     Mod+N { spawn "sh" "-c" "name=$(fuzzel --dmenu --prompt 'Workspace name (-=clear): '); [ -n \"$name\" ] && { [ \"$name\" = \"-\" ] && niri msg action unset-workspace-name || niri msg action set-workspace-name \"$name\"; }"; }
