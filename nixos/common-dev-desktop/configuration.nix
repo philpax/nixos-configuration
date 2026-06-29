@@ -29,6 +29,9 @@ in
 
   nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
 
+  # vesktop's nixpkgs recipe still pins pnpm 10.29.2 (build-time only).
+  nixpkgs.config.permittedInsecurePackages = [ "pnpm-10.29.2" ];
+
   # Desktop services
   programs.dconf.enable = true;
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
