@@ -5,10 +5,10 @@ let
   driftwm = driftwm-flake.packages.x86_64-linux.default;
 in
 {
-  services.displayManager.sessionPackages = [ driftwm ];
+  # services.displayManager.sessionPackages = [ driftwm ];
 
   environment.systemPackages = [
-    driftwm
+    # driftwm
     pkgs.grim
     pkgs.xdg-desktop-portal-wlr
   ];
