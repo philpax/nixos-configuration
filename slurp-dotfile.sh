@@ -124,8 +124,13 @@ resolve_path() {
     if [[ "$input" != /* ]]; then
         input="$(pwd)/$input"
     fi
-    # Normalize double slashes
-    echo "$input" | sed 's#/\+#/#g'
+    # Normalize double slashes and strip trailing slashes (keep root "/")
+    local result
+    result=$(echo "$input" | sed 's#/\+#/#g')
+    if [[ "$result" != "/" ]]; then
+        result="${result%/}"
+    fi
+    echo "$result"
 }
 
 # Function to slurp a single file/directory
