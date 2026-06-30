@@ -1,31 +1,11 @@
 { config, pkgs, ... }:
 
 let
-  # philpax/niriad — niri fork adding two-dimensional layouting so niri
-  # works on vertical monitors.
-  niri-src = pkgs.fetchFromGitHub {
-    owner = "philpax";
-    repo = "niriad";
-    rev = "2f1ae1fd32a56a988dda2dac168b248fb27c8d9b";
-    hash = "sha256-Kj+ydDYHD1XXKtfGe6Dc/G9EdAH9e/dDkZ+Ljx2ObBc=";
-  };
-  niri-fork = pkgs.niri.overrideAttrs (oldAttrs: {
-    version = "26.04-niriad-2026-06-29";
-    src = niri-src;
-    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-      src = niri-src;
-      name = "niri-26.04-niriad-2026-06-29-vendor";
-      hash = "sha256-jGORNwJ/F9UrajObXdGLbOTGEpCv919puUuWojbuVwo=";
-    };
-    # Fork's binary reports `niri 26.04`; our annotated version differs.
-    doInstallCheck = false;
-  });
-
   # bump `rev` to pull in new commits (an unpinned URL is cached for an hour by tarball-ttl and won't refetch promptly).
   blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=e57182d2076a28468ae4a6b3883c4578316030b8").packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
-  imports = [ ./quickshell.nix ];
+  imports = [ ./quickshell.nix ./niri.nix ];
 
   nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
 
@@ -40,10 +20,7 @@ in
   services.upower.enable = true;
   services.udev.packages = [ pkgs.libgphoto2 ];
 
-  # Niri compositor
-  services.displayManager.sddm.wayland.enable = true;
-  programs.niri = { enable = true; package = niri-fork; };
-  programs.xwayland.enable = true;
+  # Niri compositor + fork/config selection: see ./niri.nix.
 
   # Enable 32-bit graphics support for Wine etc.
   hardware.graphics.enable32Bit = true;

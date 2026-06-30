@@ -21,4 +21,7 @@
 
   time.timeZone = "Europe/Stockholm";
   networking.hostName = "paprika";
+
+  # niri fork/config selection — see ../common-dev-desktop/niri.nix.
+  philpax.niri.variant = "niriad";
 }
