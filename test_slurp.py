@@ -99,20 +99,28 @@ class TestPerformSlurp:
         src = tmp_path / "src"
         src.write_text("hello")
         dest = tmp_path / "dots" / "src"
-        slurp.perform_slurp(src, dest, str(dest))
+        count = slurp.perform_slurp(src, dest, under_home=False)
+        assert count == 1
         assert dest.read_text() == "hello"
         assert src.is_symlink()
         assert src.read_text() == "hello"
 
-    def test_directory(self, tmp_path):
+    def test_directory_makes_per_file_symlinks(self, tmp_path):
         src = tmp_path / "dir"
         (src / "sub").mkdir(parents=True)
         (src / "sub" / "f").write_text("x")
+        (src / "top").write_text("y")
         dest = tmp_path / "dots" / "dir"
-        slurp.perform_slurp(src, dest, str(dest))
-        assert (dest / "sub" / "f").read_text() == "x"
-        assert src.is_symlink()
+        count = slurp.perform_slurp(src, dest, under_home=False)
+        assert count == 2
+        # The original location is a real directory, not a symlink.
+        assert src.is_dir() and not src.is_symlink()
+        assert (src / "sub").is_dir() and not (src / "sub").is_symlink()
+        # ...whose leaves are individual symlinks into the dotfiles copy.
+        assert (src / "sub" / "f").is_symlink()
+        assert (src / "top").is_symlink()
         assert (src / "sub" / "f").read_text() == "x"
+        assert (dest / "sub" / "f").read_text() == "x"
 
     def test_rollback_when_symlink_fails(self, tmp_path, monkeypatch):
         src = tmp_path / "src"
@@ -124,10 +132,36 @@ class TestPerformSlurp:
 
         monkeypatch.setattr(slurp.os, "symlink", boom)
         with pytest.raises(OSError):
-            slurp.perform_slurp(src, dest, str(dest))
+            slurp.perform_slurp(src, dest, under_home=False)
         # Original restored, dotfiles copy gone.
         assert src.read_text() == "data"
         assert not src.is_symlink()
+        assert not dest.exists()
+
+    def test_directory_rollback_leaves_no_partial_tree(self, tmp_path, monkeypatch):
+        src = tmp_path / "dir"
+        src.mkdir()
+        (src / "a").write_text("1")
+        (src / "b").write_text("2")
+        dest = tmp_path / "dots" / "dir"
+
+        calls = {"n": 0}
+        real_symlink = slurp.os.symlink
+
+        def flaky(target, link):
+            calls["n"] += 1
+            if calls["n"] == 2:  # fail partway through the tree
+                raise OSError("nope")
+            return real_symlink(target, link)
+
+        monkeypatch.setattr(slurp.os, "symlink", flaky)
+        with pytest.raises(OSError):
+            slurp.perform_slurp(src, dest, under_home=False)
+        # Source fully restored as a real directory, nothing left in dotfiles.
+        assert src.is_dir() and not src.is_symlink()
+        assert (src / "a").read_text() == "1"
+        assert (src / "b").read_text() == "2"
+        assert not (src / "a").is_symlink()
         assert not dest.exists()
 
 
@@ -138,7 +172,7 @@ class TestOverwriteSlurp:
         dest = tmp_path / "dots" / "src"
         dest.parent.mkdir(parents=True)
         dest.write_text("old")
-        slurp.overwrite_slurp(src, dest, str(dest))
+        slurp.overwrite_slurp(src, dest, under_home=False)
         assert dest.read_text() == "new"
         assert src.read_text() == "new"
         # No backup left behind.
@@ -156,7 +190,7 @@ class TestOverwriteSlurp:
 
         monkeypatch.setattr(slurp.os, "symlink", boom)
         with pytest.raises(OSError):
-            slurp.overwrite_slurp(src, dest, str(dest))
+            slurp.overwrite_slurp(src, dest, under_home=False)
         # Old dotfiles copy restored, source untouched, no stray backup.
         assert dest.read_text() == "old"
         assert src.read_text() == "new"
@@ -170,10 +204,39 @@ class TestRelinkOnly:
         dest = tmp_path / "dots" / "src"
         dest.parent.mkdir(parents=True)
         dest.write_text("kept")
-        slurp.relink_only(src, dest, str(dest))
+        slurp.relink_only(src, dest, under_home=False)
         assert src.is_symlink()
         assert src.read_text() == "kept"
         assert dest.read_text() == "kept"
+
+
+class TestAlreadyLinked:
+    def test_file_linked(self, tmp_path):
+        src = tmp_path / "src"
+        src.write_text("x")
+        dest = tmp_path / "dots" / "src"
+        slurp.perform_slurp(src, dest, under_home=False)
+        assert slurp.already_linked(src, dest) is True
+
+    def test_directory_linked(self, tmp_path):
+        src = tmp_path / "dir"
+        (src / "sub").mkdir(parents=True)
+        (src / "sub" / "f").write_text("x")
+        dest = tmp_path / "dots" / "dir"
+        slurp.perform_slurp(src, dest, under_home=False)
+        assert slurp.already_linked(src, dest) is True
+
+    def test_directory_not_fully_linked(self, tmp_path):
+        # A whole-directory symlink (the old slurp style) is NOT considered linked.
+        dest = tmp_path / "dots" / "dir"
+        (dest / "sub").mkdir(parents=True)
+        (dest / "sub" / "f").write_text("x")
+        src = tmp_path / "dir"
+        src.symlink_to(dest)
+        assert slurp.already_linked(src, dest) is False
+
+    def test_missing_dest(self, tmp_path):
+        assert slurp.already_linked(tmp_path / "a", tmp_path / "b") is False
 
 
 class TestShowDiff:

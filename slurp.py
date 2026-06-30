@@ -2,7 +2,9 @@
 """slurp — move file(s) or director(ies) into dotfiles/ and symlink them back.
 
 For each path, the item is moved into ``dotfiles/<target>/<path-relative-to-home>``
-and replaced at its original location with a symlink pointing at the moved copy.
+and recreated at its original location as per-file symlinks: a file becomes a
+single symlink, a directory becomes a real directory tree whose files are each
+symlinked individually (matching sync.py, so directories round-trip cleanly).
 Symlinks are relative when the item lives under $HOME, absolute otherwise.
 
 Every move is transactional: if the symlink can't be created the original is
@@ -244,46 +246,84 @@ def choose_target(dotfiles_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def perform_slurp(absolute: Path, dest: Path, symlink_target: str) -> None:
-    """Move ``absolute`` to ``dest`` and replace it with a symlink, atomically.
+def create_links(dest: Path, link_root: Path, under_home: bool) -> int:
+    """Mirror ``dest`` at ``link_root`` using real dirs and per-file symlinks.
+
+    A plain file/symlink becomes a single symlink at ``link_root``; a directory
+    becomes a real directory whose files are individually symlinked (recursively).
+    This matches how ``sync.py`` lays out dotfiles, so a slurped directory
+    round-trips cleanly through a later sync. Returns the number of symlinks made.
+    """
+    if dest.is_dir() and not dest.is_symlink():
+        link_root.mkdir(parents=True, exist_ok=True)
+        return sum(
+            create_links(child, link_root / child.name, under_home)
+            for child in sorted(dest.iterdir())
+        )
+    os.symlink(symlink_target_for(dest, link_root, under_home), link_root)
+    return 1
+
+
+def perform_slurp(absolute: Path, dest: Path, under_home: bool) -> int:
+    """Move ``absolute`` to ``dest`` and recreate it as per-file symlinks, atomically.
 
     Assumes ``dest`` does not currently exist (the caller resolves conflicts
     first). On any failure the original is restored at ``absolute`` and the
-    function re-raises, never leaving a partial state.
+    function re-raises, never leaving a partial state. Returns the link count.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(absolute), str(dest))
     try:
-        os.symlink(symlink_target, absolute)
+        return create_links(dest, absolute, under_home)
     except OSError:
-        # Couldn't create the symlink — put the original back where it was.
+        # Couldn't lay out the links — tear down any partial tree (only dirs and
+        # symlinks, never the real files in dest) and put the original back.
+        if absolute.exists() or absolute.is_symlink():
+            _remove_path(absolute)
         shutil.move(str(dest), str(absolute))
         raise
 
 
-def overwrite_slurp(absolute: Path, dest: Path, symlink_target: str) -> None:
+def overwrite_slurp(absolute: Path, dest: Path, under_home: bool) -> int:
     """Like :func:`perform_slurp` but ``dest`` already exists and gets replaced.
 
-    The existing dest is stashed as a backup until the new copy and its symlink
+    The existing dest is stashed as a backup until the new copy and its symlinks
     are both in place; on failure the backup is restored.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     backup = _unique_backup(dest)
     os.replace(dest, backup)
     try:
-        perform_slurp(absolute, dest, symlink_target)
+        count = perform_slurp(absolute, dest, under_home)
     except BaseException:
         # Restore the previous dotfiles copy if the new move failed.
         if not dest.exists() and not dest.is_symlink():
             os.replace(backup, dest)
         raise
     _remove_path(backup)
+    return count
 
 
-def relink_only(absolute: Path, dest: Path, symlink_target: str) -> None:
+def relink_only(absolute: Path, dest: Path, under_home: bool) -> int:
     """Discard the source and point its location at the existing dotfiles copy."""
     _remove_path(absolute)
-    os.symlink(symlink_target, absolute)
+    return create_links(dest, absolute, under_home)
+
+
+def already_linked(absolute: Path, dest: Path) -> bool:
+    """True if ``absolute`` is already the per-file symlink mirror of ``dest``."""
+    if not (dest.exists() or dest.is_symlink()):
+        return False
+    if dest.is_dir() and not dest.is_symlink():
+        if absolute.is_symlink() or not absolute.is_dir():
+            return False
+        for child in dest.rglob("*"):
+            if child.is_dir() and not child.is_symlink():
+                continue
+            if not points_at(absolute / child.relative_to(dest), child):
+                return False
+        return True
+    return points_at(absolute, dest)
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +360,10 @@ def slurp_item(
 
     relative, under_home = relative_placement(absolute, home, cwd)
     dest = target_dir / relative
-    symlink_target = symlink_target_for(dest, absolute, under_home)
+    is_dir = absolute.is_dir() and not absolute.is_symlink()
 
     # Already slurped to this exact destination — nothing to do.
-    if points_at(absolute, dest) and (dest.exists() or dest.is_symlink()):
+    if already_linked(absolute, dest):
         print(f"{dim('skip')} {display}: already symlinked into dotfiles")
         return True
 
@@ -363,30 +403,31 @@ def slurp_item(
         print(f"{dim('skip')} {display}")
         return True
 
+    kind = "directory (per-file symlinks)" if is_dir else "file"
     if dry_run:
         action = {
             "move": "move into dotfiles",
             "overwrite": "overwrite dotfiles copy with this one",
             "relink": "discard source, relink to existing dotfiles copy",
         }[resolution]
-        print(f"{cyan('[dry-run]')} {display}")
-        print(f"            {action}")
-        print(f"            symlink -> {symlink_target}")
+        print(f"{cyan('[dry-run]')} {display} ({kind})")
+        print(f"            {action} -> {shorten_path(dest, home)}")
         return True
 
     try:
         if resolution == "overwrite":
-            overwrite_slurp(absolute, dest, symlink_target)
+            count = overwrite_slurp(absolute, dest, under_home)
         elif resolution == "relink":
-            relink_only(absolute, dest, symlink_target)
+            count = relink_only(absolute, dest, under_home)
         else:
-            perform_slurp(absolute, dest, symlink_target)
+            count = perform_slurp(absolute, dest, under_home)
     except OSError as e:
         print(f"{red('error')} {display}: {e}")
         return False
 
     verb = "relinked" if resolution == "relink" else "moved"
-    print(f"{green(verb)} {display} -> {shorten_path(dest, home)}")
+    suffix = f" ({count} symlinks)" if is_dir else ""
+    print(f"{green(verb)} {display} -> {shorten_path(dest, home)}{suffix}")
     return True
 
 
