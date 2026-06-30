@@ -1,0 +1,51 @@
+version: 2
+config_command_substitution: true
+defaults:
+  full: umans/umans-glm-5.2
+  mini: umans/umans-glm-5.2-nvfp4
+providers:
+  umans:
+    kind:
+      type: catalog
+      name: umans
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/umans-token)
+  llama-local:
+    kind:
+      type: custom_open_ai_compatible
+    url: http://redline:7070/v1
+    auth:
+      type: no_auth
+models:
+  llama-local/gemma-4-31b-it-qat:
+    provider_name: gemma-4-31b-it-qat
+    variant: other
+    class: mini
+    provider: llama-local
+    reasoning:
+      type: no_reasoning
+    context_window: 200000
+default_permission_matcher: bypass_plus
+mcp_servers:
+  ida-pro-mcp:
+    transport: stdio
+    command: /run/current-system/sw/bin/ida-mcp
+    args:
+    - '--stdio'
+    pass_env: ['HOME', 'PATH']
+    log_stderr: true
+    log_stdout: false
+    block_list: []
+integrations:
+  search:
+    providers:
+      tavily:
+        enabled: true
+        key: $(cat ~/.tokens/tavily-token)
+tui:
+  theme: dark
+  alt-screen: auto
+  density: standard
+  show-all-thinking-blocks: false
+  show-system-reminders: false

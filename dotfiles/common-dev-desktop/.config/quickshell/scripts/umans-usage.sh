@@ -7,11 +7,11 @@
 # status           — "" (normal), "low" (deprioritized), "boxed" (auto-paused)
 # boxed_remaining  — "3h12m" when boxed, "" otherwise
 #
-# Reads ~/.umans-token (first line) for auth. Responses cached in /tmp for ~5min.
+# Reads ~/.tokens/umans-token (first line) for auth. Responses cached in /tmp for ~5min.
 # Max plan has no request window; only concurrency (4, burst 8) is enforced.
 # Token totals are informational daily burn from the history endpoint.
 
-token_file="$HOME/.umans-token"
+token_file="$HOME/.tokens/umans-token"
 cache_usage="/tmp/umans-usage-$(id -u).json"
 cache_hist="/tmp/umans-usage-hist-$(id -u).json"
 base="https://api.code.umans.ai"

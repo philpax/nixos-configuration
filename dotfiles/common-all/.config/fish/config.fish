@@ -106,7 +106,7 @@ end
 
 # Other miscellaneous aliases
 alias clauded 'claude --dangerously-skip-permissions'
-alias claudeumansd 'ANTHROPIC_AUTH_TOKEN=(head -1 ~/.umans-token) ANTHROPIC_BASE_URL="https://api.code.umans.ai" claude --dangerously-skip-permissions'
+alias claudeumansd 'ANTHROPIC_AUTH_TOKEN=(head -1 ~/.tokens/umans-token) ANTHROPIC_BASE_URL="https://api.code.umans.ai" claude --dangerously-skip-permissions'
 alias claudew 'CLAUDE_CONFIG_DIR=~/.claude-work claude'
 alias claudewd 'CLAUDE_CONFIG_DIR=~/.claude-work claude --dangerously-skip-permissions'
 
