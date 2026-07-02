@@ -33,6 +33,12 @@ NIXOS_TARGET = Path("/etc/nixos")
 DOTFILES_TARGET = Path.home()
 STATE_FILE = REPO_DIR / ".sync-state.json"
 
+# Polytoken skills are the source of truth; these are symlinked into
+# Claude Code's personal skills directory (~/.claude/skills/<name>) so CC
+# loads the same skills. CC follows directory-level symlinks to read SKILL.md.
+POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / ".config" / "polytoken" / "skills"
+CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
+
 LAYER_IMPORT_RE = re.compile(r"\.\./(common-[a-z-]+)")
 
 
@@ -201,6 +207,30 @@ def build_symlink_list(
         target_path = target_dir / relative
         symlinks.append((target_path, source_path))
 
+    return symlinks
+
+
+def build_skill_symlinks(
+    source_dir: Path,
+    target_dir: Path,
+) -> list[tuple[Path, Path]]:
+    """Build (target, source) pairs for Polytoken skill directories.
+
+    Each immediate subdirectory of ``source_dir`` that contains a ``SKILL.md``
+    becomes a directory-level symlink at ``target_dir/<skill_name>``.
+    This lets Claude Code load the same skills Polytoken uses.
+    """
+    if not source_dir.is_dir():
+        return []
+
+    symlinks: list[tuple[Path, Path]] = []
+    for entry in sorted(source_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        if not (entry / "SKILL.md").is_file():
+            continue
+        target = target_dir / entry.name
+        symlinks.append((target, entry))
     return symlinks
 
 
@@ -435,8 +465,10 @@ def _init_state(folder_name: str) -> None:
     if config_source.is_file():
         nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
-    total = len(nixos_symlinks) + len(dotfiles_symlinks)
-    write_manifest(folder_name, nixos_symlinks + dotfiles_symlinks)
+    skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
+
+    total = len(nixos_symlinks) + len(dotfiles_symlinks) + len(skill_symlinks)
+    write_manifest(folder_name, nixos_symlinks + dotfiles_symlinks + skill_symlinks)
     print(
         f"\nInitialized state with {total} symlinks (all common-* layers).\n"
         f"Run {bold(f'./sync.sh {folder_name}')} to sync with layer-awareness "
@@ -514,7 +546,11 @@ def main():
         sys.exit(1)
     nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
-    all_new_symlinks = nixos_symlinks + dotfiles_symlinks
+    # Symlink Polytoken skills into Claude Code's skills directory so CC
+    # loads the same skills. These are common to all machines.
+    skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
+
+    all_new_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks
 
     # Read previous manifest and compute stale symlinks
     previous = read_manifest(STATE_FILE)
@@ -527,6 +563,12 @@ def main():
     _print_grouped(
         "Dotfiles", dotfiles_symlinks, DOTFILES_SOURCE, DOTFILES_TARGET, use_home_prefix=True
     )
+    if skill_symlinks:
+        print(f"{bold('Claude Code skills')} {green(f'({len(skill_symlinks)})')}:")
+        print(f"  {yellow('polytoken-skills')} {dim(f'({len(skill_symlinks)})')}:")
+        for target, _ in skill_symlinks:
+            print(f"    {dim(shorten_path(target))}")
+        print()
 
     # Display stale symlinks
     if stale:
@@ -545,7 +587,11 @@ def main():
         print()
 
     # Show conflicts
-    all_conflicts = find_conflicts(nixos_symlinks) + find_conflicts(dotfiles_symlinks)
+    all_conflicts = (
+        find_conflicts(nixos_symlinks)
+        + find_conflicts(dotfiles_symlinks)
+        + find_conflicts(skill_symlinks)
+    )
     if all_conflicts:
         print(f"{bold('Conflicts')} {red(f'({len(all_conflicts)})')}:")
         for path in all_conflicts:
@@ -564,6 +610,7 @@ def main():
     # Create/Update symlinks — collect what was created even on partial failure
     created_nixos: list[tuple[Path, Path]] = []
     created_dotfiles: list[tuple[Path, Path]] = []
+    created_skills: list[tuple[Path, Path]] = []
 
     try:
         print(bold("NixOS configuration"))
@@ -573,6 +620,12 @@ def main():
         created_dotfiles = create_or_update_symlinks(
             dotfiles_symlinks, use_sudo=False, force=args.force
         )
+
+        if skill_symlinks:
+            print(bold("Claude Code skills"))
+            created_skills = create_or_update_symlinks(
+                skill_symlinks, use_sudo=False, force=args.force
+            )
 
         # Remove stale symlinks
         if stale:
@@ -592,7 +645,7 @@ def main():
         print(f"\n{green('✓')} Sync complete!")
 
     finally:
-        all_created = created_nixos + created_dotfiles
+        all_created = created_nixos + created_dotfiles + created_skills
         if all_created:
             write_manifest(folder_name, all_created)
 

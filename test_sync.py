@@ -668,3 +668,94 @@ class TestInitState:
         assert any("niri" in s for s in stale)
         # git config should NOT be stale (common-all is imported)
         assert not any("gitconfig" in s for s in stale)
+
+
+# ---------------------------------------------------------------------------
+# build_skill_symlinks — filesystem-reading, testable with tmp_path
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSkillSymlinks:
+    def test_builds_symlinks_for_skill_dirs(self, tmp_path):
+        source = tmp_path / "skills"
+        (source / "committing").mkdir(parents=True)
+        (source / "committing" / "SKILL.md").write_text("# committing")
+        (source / "github-issue").mkdir(parents=True)
+        (source / "github-issue" / "SKILL.md").write_text("# github-issue")
+
+        target = tmp_path / "target"
+        symlinks = sync.build_skill_symlinks(source, target)
+
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"committing", "github-issue"}
+        for t, s in symlinks:
+            assert t.parent == target
+            assert s == source / t.name
+
+    def test_skips_dirs_without_skill_md(self, tmp_path):
+        source = tmp_path / "skills"
+        (source / "has-skill").mkdir(parents=True)
+        (source / "has-skill" / "SKILL.md").write_text("# skill")
+        (source / "no-skill").mkdir(parents=True)
+        (source / "no-skill" / "other.md").write_text("# other")
+
+        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"has-skill"}
+
+    def test_skips_files_in_source_dir(self, tmp_path):
+        source = tmp_path / "skills"
+        source.mkdir(parents=True)
+        (source / "README.md").write_text("# readme")
+        (source / "committing").mkdir()
+        (source / "committing" / "SKILL.md").write_text("# skill")
+
+        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"committing"}
+
+    def test_missing_source_returns_empty(self, tmp_path):
+        symlinks = sync.build_skill_symlinks(tmp_path / "nonexistent", tmp_path / "target")
+        assert symlinks == []
+
+    def test_empty_source_returns_empty(self, tmp_path):
+        source = tmp_path / "skills"
+        source.mkdir()
+        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
+        assert symlinks == []
+
+    def test_results_sorted(self, tmp_path):
+        source = tmp_path / "skills"
+        for name in ["zebra", "alpha", "mango"]:
+            (source / name).mkdir(parents=True)
+            (source / name / "SKILL.md").write_text("# skill")
+
+        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
+        names = [t.name for t, s in symlinks]
+        assert names == ["alpha", "mango", "zebra"]
+
+
+# ---------------------------------------------------------------------------
+# build_skill_symlinks — integration with real repo
+# ---------------------------------------------------------------------------
+
+
+class TestSkillSymlinksRepoIntegration:
+    """Smoke tests against the real repo's polytoken skills directory."""
+
+    def test_finds_real_skills(self):
+        symlinks = sync.build_skill_symlinks(sync.POLYTOKEN_SKILLS_SOURCE, sync.CC_SKILLS_TARGET)
+        names = {t.name for t, s in symlinks}
+        assert "committing" in names
+        assert "github-issue" in names
+
+    def test_targets_under_cc_skills_dir(self):
+        symlinks = sync.build_skill_symlinks(sync.POLYTOKEN_SKILLS_SOURCE, sync.CC_SKILLS_TARGET)
+        for target, _ in symlinks:
+            assert target.parent == sync.CC_SKILLS_TARGET
+
+    def test_sources_point_to_polytoken_skills(self):
+        symlinks = sync.build_skill_symlinks(sync.POLYTOKEN_SKILLS_SOURCE, sync.CC_SKILLS_TARGET)
+        for _, source in symlinks:
+            assert source.parent == sync.POLYTOKEN_SKILLS_SOURCE
+            assert (source / "SKILL.md").is_file()

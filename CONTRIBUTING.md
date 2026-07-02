@@ -44,6 +44,12 @@ mirrors the NixOS import hierarchy — e.g. redline (headless, imports only
 When re-syncing a different machine, symlinks from the previous sync that are
 no longer needed are detected via `.sync-state.json` and offered for removal.
 
+### Claude Code skills
+
+`sync.sh` also symlinks Polytoken skills (`dotfiles/common-all/.config/polytoken/skills/<name>/`)
+into Claude Code's personal skills directory (`~/.claude/skills/<name>`), so CC
+loads the same skills as Polytoken. These are common to all machines.
+
 ### Redline Server
 
 `redline/` is the most complex machine config with:
