@@ -1,0 +1,16 @@
+# Ported from alacritty.toml
+
+font-family = Cozette
+font-style = Regular
+
+background = 000000
+background-opacity = 0.8
+
+window-padding-x = 4
+window-padding-y = 4
+
+# Ctrl+Shift+Return: open a new window (was alacritty's SpawnNewInstance)
+keybind = ctrl+shift+enter=new_window
+
+# Shift+Return: send a literal newline
+keybind = shift+enter=text:\n

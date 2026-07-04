@@ -425,9 +425,10 @@ window-rule {
     // block-out-from "screencast"
 }
 
-// Enable blur behind the Alacritty terminal.
+// Enable blur behind the Alacritty and Ghostty terminals.
 window-rule {
     match app-id="^Alacritty$"
+    match app-id=r#"^com\.mitchellh\.ghostty$"#
 
     background-effect {
         blur true
@@ -461,7 +462,7 @@ binds {
     Mod+Shift+Slash { show-hotkey-overlay; }
 
     // Programs (sway: $mod+Return terminal, $mod+d launcher).
-    Mod+Return { spawn "alacritty"; }
+    Mod+Return { spawn "ghostty"; }
     Mod+D      { spawn "fuzzel"; }
     Super+Alt+L { spawn "swaylock"; }
 

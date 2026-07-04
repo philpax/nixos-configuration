@@ -26,7 +26,7 @@ same_edge = true
 zone = 0.0
 
 [keybindings]
-"mod+return" = "exec alacritty"
+"mod+return" = "exec ghostty"
 # Lock screen (matches niri's Super+Alt+L)
 "super+alt+l" = "spawn swaylock"
 # Quit (matches niri's Mod+Shift+E)
@@ -47,7 +47,12 @@ mode = "1920x1080@120"
 name = "DP-4"
 mode = "3440x1440@144"
 
-# Translucent + blurred terminal
+# Translucent + blurred terminals
+[[window_rules]]
+app_id = "com.mitchellh.ghostty"
+opacity = 0.85
+blur = true
+
 [[window_rules]]
 app_id = "Alacritty"
 opacity = 0.85

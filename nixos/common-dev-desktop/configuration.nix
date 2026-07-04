@@ -43,7 +43,10 @@ in
     gsettings-desktop-schemas  # provides org.gnome.desktop.interface schema
     nwg-look  # GTK theme/icon/cursor/font configuration
     mako
+    # Trialling ghostty as the primary terminal (spawned by niri/driftwm).
+    # If it sticks, drop alacritty here and its dotfiles/blur rules.
     alacritty
+    ghostty
     fuzzel
     polkit_gnome
     swaylock
