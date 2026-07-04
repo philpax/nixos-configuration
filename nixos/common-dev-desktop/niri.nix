@@ -44,10 +44,10 @@ let
       package = mkFork {
         owner = "philpax";
         repo = "niriad";
-        rev = "2f1ae1fd32a56a988dda2dac168b248fb27c8d9b";
-        hash = "sha256-Kj+ydDYHD1XXKtfGe6Dc/G9EdAH9e/dDkZ+Ljx2ObBc=";
-        version = "26.04-niriad-2026-06-29";
-        vendorHash = "sha256-jGORNwJ/F9UrajObXdGLbOTGEpCv919puUuWojbuVwo=";
+        rev = "6e130d190d340e13cc690042e9664090850ea9d8";
+        hash = "sha256-Pn0pjVdzxXhkg6rW2ZCqHAsZJ1g9bKX7UczbHnnZGgY=";
+        version = "26.04-niriad-2026-07-04";
+        vendorHash = "sha256-SqJX/T3VJPg5nmG9GN1T6hDP+YjkV8spj4AY5HybWgg=";
       };
       configFile = "${config.users.users.philpax.home}/.config/niri/config-niriad.kdl";
     };
