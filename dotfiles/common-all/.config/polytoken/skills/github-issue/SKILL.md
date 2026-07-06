@@ -25,7 +25,9 @@ description: Use when drafting or creating GitHub issues. Triggers on phrases li
 
 3. **Draft the issue** — write the issue body following the structure below, then show it to the user for review. **Do not create the issue until the user explicitly approves.** Iterate on the draft until the user gives affirmative consent before proceeding to creation.
 
-4. **Create the issue** — after the user approves (or edits) the draft, create it with `gh issue create`.
+   A correction or follow-up — answering an open question, asking for a wording change, pointing out a missing detail — is feedback on the draft, **not** consent to create it. Apply the feedback, re-show the updated draft, and wait for an explicit go-ahead (e.g. "looks good", "ship it", "go ahead and create it") before moving to creation. Do not infer approval from the user merely responding to the draft.
+
+4. **Create the issue** — after the user gives affirmative consent (a correction or follow-up does not count), create it with `gh issue create`.
 
 ## Issue structure
 
