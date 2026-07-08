@@ -17,6 +17,14 @@ let
   wivrnJson = "${config.services.wivrn.package}/share/openxr/1/openxr_wivrn.json";
   wayvr = "${pkgs.wayvr}/bin/wayvr";
 
+  # LÖVR OpenXR overlay that flashes the current IPD in-view when it changes.
+  ipdOverlay = pkgs.runCommand "vr-ipd-overlay" { } ''
+    mkdir -p $out
+    cp ${./vr-ipd-overlay/conf.lua} $out/conf.lua
+    cp ${./vr-ipd-overlay/main.lua} $out/main.lua
+  '';
+  ipdLauncher = "${pkgs.lovr}/bin/lovr ${ipdOverlay}";
+
   vr-mode = pkgs.writeShellApplication {
     name = "vr-mode";
     runtimeInputs = [ pkgs.systemd pkgs.coreutils pkgs.gnugrep ];
@@ -27,8 +35,9 @@ let
       # to be off / while WiVRn is active.
       stop_monado() { systemctl --user stop monado.service monado.socket 2>/dev/null || true; }
       stop_wivrn()  { systemctl --user stop wivrn.service  2>/dev/null || true; }
-      # WayVR runs as a transient user unit so we can stop it cleanly.
+      # WayVR + the IPD overlay run as transient user units so we can stop them cleanly.
       stop_wayvr()  { systemctl --user stop vr-wayvr.service 2>/dev/null || true; }
+      stop_ipd()    { systemctl --user stop vr-ipd-overlay.service 2>/dev/null || true; }
 
       # Monado needs several seconds to probe Lighthouse devices and lease the
       # Index panel before it accepts OpenXR clients, and it stays systemd-active
@@ -49,7 +58,7 @@ let
 
       case "''${1:-status}" in
         index)
-          stop_wivrn; stop_wayvr
+          stop_wivrn; stop_wayvr; stop_ipd
           mkdir -p "$(dirname "$active")"
           ln -sf "${monadoJson}" "$active"
           # The SteamVR-LH driver intermittently fails device creation, so retry.
@@ -75,18 +84,21 @@ let
           # overlay ourselves so the Index isn't a black void (mirrors WiVRn).
           systemctl --user reset-failed vr-wayvr.service 2>/dev/null || true
           systemd-run --user --unit=vr-wayvr --collect -- "${wayvr}"
-          echo "vr-mode: index (monado) active, WayVR launched"
+          # IPD heads-up overlay (LÖVR, composites on top of WayVR).
+          systemctl --user reset-failed vr-ipd-overlay.service 2>/dev/null || true
+          systemd-run --user --unit=vr-ipd-overlay --collect -- ${ipdLauncher}
+          echo "vr-mode: index (monado) active, WayVR + IPD overlay launched"
           ;;
         wivrn)
           stop_monado
-          stop_wayvr   # WiVRn launches its own WayVR on session start
+          stop_wayvr; stop_ipd   # WiVRn launches its own WayVR on session start
           mkdir -p "$(dirname "$active")"
           ln -sf "${wivrnJson}" "$active"
           systemctl --user start wivrn.service
           echo "vr-mode: wivrn (quest) active"
           ;;
         off)
-          stop_monado; stop_wivrn; stop_wayvr
+          stop_monado; stop_wivrn; stop_wayvr; stop_ipd
           rm -f "$active"
           echo "vr-mode: all runtimes stopped"
           ;;
@@ -100,9 +112,10 @@ let
           else
             echo "active runtime: none"
           fi
-          echo "  monado.service:   $(systemctl --user is-active monado.service 2>/dev/null || true)"
-          echo "  wivrn.service:    $(systemctl --user is-active wivrn.service 2>/dev/null || true)"
-          echo "  vr-wayvr.service: $(systemctl --user is-active vr-wayvr.service 2>/dev/null || true)"
+          echo "  monado.service:        $(systemctl --user is-active monado.service 2>/dev/null || true)"
+          echo "  wivrn.service:         $(systemctl --user is-active wivrn.service 2>/dev/null || true)"
+          echo "  vr-wayvr.service:      $(systemctl --user is-active vr-wayvr.service 2>/dev/null || true)"
+          echo "  vr-ipd-overlay.service:$(systemctl --user is-active vr-ipd-overlay.service 2>/dev/null || true)"
           ;;
         *)
           echo "usage: vr-mode {index|wivrn|off|status}" >&2
@@ -113,5 +126,6 @@ let
   };
 in
 {
-  environment.systemPackages = [ vr-mode ];
+  # lovr is also exposed directly so the overlay can be run/tweaked by hand.
+  environment.systemPackages = [ vr-mode pkgs.lovr ];
 }
