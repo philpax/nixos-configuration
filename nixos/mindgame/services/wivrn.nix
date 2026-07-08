@@ -4,7 +4,9 @@
   services.wivrn = {
     enable = true;
     openFirewall = true;
-    autoStart = true;
+    # No runtime active at login — pick one explicitly with `vr-mode`
+    # (see vr-mode.nix). Monado is socket-activated (also idle at startup).
+    autoStart = false;
     package = pkgs.wivrn.override { cudaSupport = true; };
   };
 
