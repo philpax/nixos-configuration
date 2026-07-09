@@ -44,9 +44,9 @@ let
       package = mkFork {
         owner = "philpax";
         repo = "niriad";
-        rev = "6e130d190d340e13cc690042e9664090850ea9d8";
+        rev = "008b31e9199724c335b0f57e7a5adfc9c63b45ac";
         hash = "sha256-Pn0pjVdzxXhkg6rW2ZCqHAsZJ1g9bKX7UczbHnnZGgY=";
-        version = "26.04-niriad-2026-07-04";
+        version = "26.04-niriad-2026-07-07";
         vendorHash = "sha256-SqJX/T3VJPg5nmG9GN1T6hDP+YjkV8spj4AY5HybWgg=";
       };
       configFile = "${config.users.users.philpax.home}/.config/niri/config-niriad.kdl";
