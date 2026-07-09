@@ -11,6 +11,10 @@ Every move is transactional: if the symlink can't be created the original is
 restored, and when overwriting an existing dotfiles copy the old copy is kept as
 a backup until the new one is safely in place. The tool never leaves a path in a
 half-moved state.
+
+``--reverse`` (``-r``) undoes a slurp: it follows the symlink(s) back to the
+dotfiles copy, removes the symlink mirror, and moves the real copy back to its
+original location, likewise transactionally.
 """
 
 from __future__ import annotations
@@ -327,6 +331,66 @@ def already_linked(absolute: Path, dest: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# The transactional reverse (unslurp)
+# ---------------------------------------------------------------------------
+
+
+def _count_leaves(path: Path) -> int:
+    """Number of non-directory entries in ``path`` (1 for a plain file)."""
+    if path.is_dir() and not path.is_symlink():
+        return sum(_count_leaves(child) for child in path.iterdir())
+    return 1
+
+
+def resolve_dest_from_links(absolute: Path) -> Path | None:
+    """Find the dotfiles copy a slurped path points into.
+
+    A slurped file is itself a symlink; a slurped directory is a real tree whose
+    leaves are symlinks into a mirrored copy. Follows one leaf back to recover
+    the dotfiles destination. Returns ``None`` if ``absolute`` isn't a
+    slurp-style symlink mirror.
+    """
+
+    def _target(link: Path) -> Path:
+        raw = Path(os.readlink(link))
+        resolved = raw if raw.is_absolute() else (link.parent / raw)
+        return Path(os.path.normpath(resolved))
+
+    if absolute.is_symlink():
+        return _target(absolute)
+    if absolute.is_dir():
+        for link in sorted(absolute.rglob("*")):
+            if link.is_symlink():
+                dest = _target(link)
+                # Strip the leaf's path-relative-to-root to get the dest root.
+                for _ in link.relative_to(absolute).parts:
+                    dest = dest.parent
+                return dest
+    return None
+
+
+def perform_unslurp(absolute: Path, dest: Path, under_home: bool) -> int:
+    """Move the dotfiles copy ``dest`` back to ``absolute`` and drop the symlinks.
+
+    The inverse of :func:`perform_slurp`. On failure the symlink mirror is
+    recreated from ``dest`` so nothing is lost, and the function re-raises.
+    Returns the number of files restored.
+    """
+    count = _count_leaves(dest)
+    if absolute.exists() or absolute.is_symlink():
+        _remove_path(absolute)
+    try:
+        absolute.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(dest), str(absolute))
+    except OSError:
+        # Put the symlink mirror back so the slurp stays intact.
+        if dest.exists() and not (absolute.exists() or absolute.is_symlink()):
+            create_links(dest, absolute, under_home)
+        raise
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Per-item orchestration
 # ---------------------------------------------------------------------------
 
@@ -431,6 +495,113 @@ def slurp_item(
     return True
 
 
+def _plan_unslurp(
+    absolute: Path, home: Path, cwd: Path, dotfiles_dir: Path
+) -> tuple[Path, Path, bool] | None:
+    """Resolve a reverse into ``(link_location, dest, under_home)``.
+
+    Accepts either end of a slurp: the original location (a symlink mirror
+    pointing into dotfiles) or the in-repo dotfiles copy itself. Returns
+    ``None`` if the path is neither. When given the dotfiles copy the original
+    location is reconstructed the way slurp lays it out — ``dotfiles/<target>/
+    <rel>`` came from ``$HOME/<rel>``.
+    """
+    dots = dotfiles_dir if dotfiles_dir.is_absolute() else (cwd / dotfiles_dir)
+    dots = Path(os.path.normpath(dots))
+
+    # The in-repo copy: a real path (not a symlink) under the dotfiles tree.
+    if not absolute.is_symlink():
+        try:
+            rel = absolute.relative_to(dots)
+        except ValueError:
+            rel = None
+        if rel is not None:
+            # rel is <target>/<path-relative-to-home>; need both halves.
+            if len(rel.parts) < 2:
+                return None
+            return home / Path(*rel.parts[1:]), absolute, True
+
+    # The original location: follow its symlink(s) back to the dotfiles copy.
+    dest = resolve_dest_from_links(absolute)
+    if dest is None:
+        return None
+    _, under_home = relative_placement(absolute, home, cwd)
+    return absolute, dest, under_home
+
+
+def unslurp_item(
+    input_path: str,
+    home: Path,
+    cwd: Path,
+    dotfiles_dir: Path,
+    force: bool,
+    dry_run: bool,
+) -> bool:
+    """Undo a slurp for one path. Returns True on success (or clean skip).
+
+    The path may be either the slurped location (a symlink into dotfiles) or the
+    in-repo dotfiles copy it points at — both reverse to the same thing.
+    """
+    absolute = resolve_input(input_path, home, cwd)
+
+    if not absolute.exists() and not absolute.is_symlink():
+        print(f"{red('error')} {shorten_path(absolute, home)}: path not found")
+        return False
+
+    plan = _plan_unslurp(absolute, home, cwd, dotfiles_dir)
+    if plan is None:
+        print(
+            f"{red('error')} {shorten_path(absolute, home)}: not a slurped path "
+            f"(neither a symlink into dotfiles nor an in-repo copy)"
+        )
+        return False
+    link, dest, under_home = plan
+    display = shorten_path(link, home)
+
+    if not (dest.exists() or dest.is_symlink()):
+        print(f"{red('error')} {display}: dangling link -> {shorten_path(dest, home)}")
+        return False
+
+    # Only ever reverse copies that actually live in the dotfiles tree, so a
+    # stray symlink elsewhere can't be dragged in by mistake.
+    try:
+        dest.resolve().relative_to(dotfiles_dir.resolve())
+    except ValueError:
+        print(
+            f"{yellow('skip')} {display}: points outside "
+            f"{shorten_path(dotfiles_dir, home)} ({shorten_path(dest, home)})"
+        )
+        return False
+
+    is_dir = dest.is_dir() and not dest.is_symlink()
+
+    # A clean mirror round-trips losslessly; anything else (the original
+    # location is missing, has extra real files, or is a partial link tree)
+    # needs --force since restoring drops whatever isn't in the dotfiles copy.
+    if not already_linked(link, dest) and not force:
+        print(
+            f"{yellow('skip')} {display}: not a clean symlink mirror of "
+            f"{shorten_path(dest, home)}; use --force to restore anyway."
+        )
+        return False
+
+    if dry_run:
+        kind = "directory" if is_dir else "file"
+        print(f"{cyan('[dry-run]')} {display} ({kind})")
+        print(f"            remove symlink(s), move {shorten_path(dest, home)} back to {display}")
+        return True
+
+    try:
+        count = perform_unslurp(link, dest, under_home)
+    except OSError as e:
+        print(f"{red('error')} {display}: {e}")
+        return False
+
+    suffix = f" ({count} files)" if is_dir else ""
+    print(f"{green('restored')} {display} <- {shorten_path(dest, home)}{suffix}")
+    return True
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -446,7 +617,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  slurp ~/.config/nvim\n"
             "  slurp -t common-all ~/.ssh\n"
             "  slurp -t redline ~/my-custom-config\n"
-            "  slurp --dry-run ~/.config/telescope"
+            "  slurp --dry-run ~/.config/telescope\n"
+            "  slurp --reverse ~/.config/nvim"
         ),
     )
     parser.add_argument("paths", nargs="+", help="file(s) or director(ies) to slurp")
@@ -464,6 +636,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-f", "--force", action="store_true", help="overwrite existing dotfiles copies"
     )
+    parser.add_argument(
+        "-r",
+        "--reverse",
+        action="store_true",
+        help="undo a slurp: remove the symlink(s) and move the dotfiles copy back",
+    )
     return parser
 
 
@@ -473,6 +651,23 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
 
     dotfiles_dir: Path = args.dotfiles
+
+    if args.reverse:
+        if not dotfiles_dir.is_dir():
+            print(f"Error: dotfiles directory not found: {dotfiles_dir}")
+            return 1
+        print(f"Reversing slurp (dotfiles: {bold(str(dotfiles_dir))})\n")
+        errors = 0
+        for path in args.paths:
+            if not unslurp_item(path, home, cwd, dotfiles_dir, args.force, args.dry_run):
+                errors += 1
+        print()
+        if errors:
+            print(f"Done with {red(str(errors))} error(s).")
+            return 1
+        print(green("Done!"))
+        return 0
+
     target = args.target
     if not target:
         if not dotfiles_dir.is_dir():

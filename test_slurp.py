@@ -320,3 +320,160 @@ class TestSlurpItem:
         assert item.read_text() == "cfg"
         assert not item.is_symlink()
         assert not (target / ".config" / "app").exists()
+
+
+# ---------------------------------------------------------------------------
+# The reverse (unslurp)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveDestFromLinks:
+    def test_file_symlink(self, tmp_path):
+        src = tmp_path / "src"
+        src.write_text("x")
+        dest = tmp_path / "dots" / "src"
+        slurp.perform_slurp(src, dest, under_home=False)
+        assert slurp.resolve_dest_from_links(src) == dest
+
+    def test_directory_mirror(self, tmp_path):
+        src = tmp_path / "dir"
+        (src / "sub").mkdir(parents=True)
+        (src / "sub" / "f").write_text("x")
+        (src / "top").write_text("y")
+        dest = tmp_path / "dots" / "dir"
+        slurp.perform_slurp(src, dest, under_home=False)
+        assert slurp.resolve_dest_from_links(src) == dest
+
+    def test_not_a_slurp(self, tmp_path):
+        plain = tmp_path / "plain"
+        plain.write_text("x")
+        assert slurp.resolve_dest_from_links(plain) is None
+        realdir = tmp_path / "d"
+        realdir.mkdir()
+        (realdir / "f").write_text("x")
+        assert slurp.resolve_dest_from_links(realdir) is None
+
+
+class TestPerformUnslurp:
+    def test_file_round_trip(self, tmp_path):
+        src = tmp_path / "src"
+        src.write_text("hello")
+        dest = tmp_path / "dots" / "src"
+        slurp.perform_slurp(src, dest, under_home=False)
+        count = slurp.perform_unslurp(src, dest, under_home=False)
+        assert count == 1
+        assert src.is_file() and not src.is_symlink()
+        assert src.read_text() == "hello"
+        assert not dest.exists()
+
+    def test_directory_round_trip(self, tmp_path):
+        src = tmp_path / "dir"
+        (src / "sub").mkdir(parents=True)
+        (src / "sub" / "f").write_text("x")
+        (src / "top").write_text("y")
+        dest = tmp_path / "dots" / "dir"
+        slurp.perform_slurp(src, dest, under_home=False)
+        count = slurp.perform_unslurp(src, dest, under_home=False)
+        assert count == 2
+        assert src.is_dir() and not src.is_symlink()
+        assert (src / "sub" / "f").is_file() and not (src / "sub" / "f").is_symlink()
+        assert (src / "sub" / "f").read_text() == "x"
+        assert (src / "top").read_text() == "y"
+        assert not dest.exists()
+
+    def test_rollback_when_move_fails(self, tmp_path, monkeypatch):
+        src = tmp_path / "src"
+        src.write_text("data")
+        dest = tmp_path / "dots" / "src"
+        slurp.perform_slurp(src, dest, under_home=False)
+
+        def boom(*a, **k):
+            raise OSError("nope")
+
+        monkeypatch.setattr(slurp.shutil, "move", boom)
+        with pytest.raises(OSError):
+            slurp.perform_unslurp(src, dest, under_home=False)
+        # Mirror restored, dotfiles copy still intact.
+        assert src.is_symlink()
+        assert src.read_text() == "data"
+        assert dest.read_text() == "data"
+
+
+class TestUnslurpItem:
+    def _run(self, path, home, cwd, dots, force=False, dry_run=False):
+        return slurp.unslurp_item(str(path), home, cwd, dots, force=force, dry_run=dry_run)
+
+    def test_reverses_a_slurped_file(self, tmp_path):
+        home = tmp_path / "home"
+        (home / ".config").mkdir(parents=True)
+        item = home / ".config" / "app"
+        item.write_text("cfg")
+        dots = tmp_path / "dots"
+        slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
+        assert item.is_symlink()
+        assert self._run(item, home, tmp_path, dots) is True
+        assert item.is_file() and not item.is_symlink()
+        assert item.read_text() == "cfg"
+        assert not (dots / "common-all" / ".config" / "app").exists()
+
+    def test_reverses_when_given_the_dotfiles_copy(self, tmp_path):
+        # Passing the in-repo copy reverses the same as passing the home link.
+        home = tmp_path / "home"
+        (home / ".config").mkdir(parents=True)
+        item = home / ".config" / "app"
+        item.write_text("cfg")
+        dots = tmp_path / "dots"
+        slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
+        copy = dots / "common-all" / ".config" / "app"
+        assert copy.is_file()
+        assert self._run(copy, home, tmp_path, dots) is True
+        assert item.is_file() and not item.is_symlink()
+        assert item.read_text() == "cfg"
+        assert not copy.exists()
+
+    def test_dotfiles_copy_directory(self, tmp_path):
+        home = tmp_path / "home"
+        (home / ".config").mkdir(parents=True)
+        item = home / ".config" / "nvim"
+        (item / "lua").mkdir(parents=True)
+        (item / "init.lua").write_text("a")
+        (item / "lua" / "p.lua").write_text("b")
+        dots = tmp_path / "dots"
+        slurp.slurp_item(str(item), dots / "cdd", home, tmp_path, force=False, dry_run=False)
+        copy = dots / "cdd" / ".config" / "nvim"
+        assert self._run(copy, home, tmp_path, dots) is True
+        assert item.is_dir() and not item.is_symlink()
+        assert (item / "lua" / "p.lua").read_text() == "b"
+        assert not copy.exists()
+
+    def test_not_slurped_errors(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        item = home / "plain"
+        item.write_text("x")
+        assert self._run(item, home, tmp_path, tmp_path / "dots") is False
+        assert item.read_text() == "x"
+
+    def test_skips_link_outside_dotfiles(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        outside = tmp_path / "elsewhere"
+        outside.write_text("x")
+        link = home / "link"
+        link.symlink_to(outside)
+        # dotfiles dir is a different subtree, so the link must not be reversed.
+        assert self._run(link, home, tmp_path, tmp_path / "dots") is False
+        assert link.is_symlink()
+        assert outside.read_text() == "x"
+
+    def test_dry_run_changes_nothing(self, tmp_path):
+        home = tmp_path / "home"
+        (home / ".config").mkdir(parents=True)
+        item = home / ".config" / "app"
+        item.write_text("cfg")
+        dots = tmp_path / "dots"
+        slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
+        assert self._run(item, home, tmp_path, dots, dry_run=True) is True
+        # Still the symlink mirror; nothing moved back.
+        assert item.is_symlink()
+        assert (dots / "common-all" / ".config" / "app").read_text() == "cfg"
