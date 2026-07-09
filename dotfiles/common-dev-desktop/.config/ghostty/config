@@ -9,6 +9,13 @@ background-opacity = 0.8
 window-padding-x = 4
 window-padding-y = 4
 
+# Don't inherit the working directory of the previous window; start new
+# windows in the home directory instead.
+window-inherit-working-directory = false
+# working-directory defaults to "inherit" (the launching process's cwd).
+# Force it to home so new windows always start there.
+working-directory = home
+
 # Ctrl+Shift+Return: open a new window (was alacritty's SpawnNewInstance)
 keybind = ctrl+shift+enter=new_window
 
