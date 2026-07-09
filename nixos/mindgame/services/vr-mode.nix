@@ -27,9 +27,50 @@ let
 
   vr-mode = pkgs.writeShellApplication {
     name = "vr-mode";
-    runtimeInputs = [ pkgs.systemd pkgs.coreutils pkgs.gnugrep ];
+    runtimeInputs = [ pkgs.systemd pkgs.coreutils pkgs.gnugrep pkgs.pulseaudio ];
     text = ''
       active="''${XDG_CONFIG_HOME:-$HOME/.config}/openxr/1/active_runtime.json"
+
+      # The Index takes audio over the GPU's DisplayPort link, not USB. That
+      # output is only exposed once the GB202's audio card is in its "Pro Audio"
+      # profile, where the HMD panel's PCM shows up as the "Pro 8" sink
+      # (pro-output-8). See https://wiki.vronlinux.org/docs/hardware/#valve-index-quirks
+      index_card="alsa_card.pci-0000_01_00.1"
+      index_sink="alsa_output.pci-0000_01_00.1.pro-output-8"
+      prev_sink_file="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/vr-mode.prev-sink"
+
+      # Route default audio to the Index panel, remembering what was default so
+      # off/wivrn can put it back.
+      index_audio_on() {
+        local cur routed=0
+        cur=$(pactl get-default-sink 2>/dev/null || true)
+        # Don't clobber the saved sink if we're already pointed at the Index.
+        if [ -n "$cur" ] && [ "$cur" != "$index_sink" ]; then
+          printf '%s\n' "$cur" > "$prev_sink_file"
+        fi
+        pactl set-card-profile "$index_card" pro-audio 2>/dev/null \
+          || echo "vr-mode: could not put $index_card into pro-audio" >&2
+        # The Pro 8 sink can take a beat to register after a profile change.
+        for _ in 1 2 3 4 5; do
+          if pactl set-default-sink "$index_sink" 2>/dev/null; then routed=1; break; fi
+          sleep 0.3
+        done
+        if [ "$routed" = 1 ]; then
+          echo "vr-mode: audio routed to Index (Pro 8)"
+        else
+          echo "vr-mode: Index sink $index_sink not available" >&2
+        fi
+      }
+
+      # Restore the pre-Index default sink and free the GPU audio card again.
+      index_audio_off() {
+        if [ -f "$prev_sink_file" ]; then
+          local prev; prev=$(cat "$prev_sink_file")
+          if [ -n "$prev" ]; then pactl set-default-sink "$prev" 2>/dev/null || true; fi
+          rm -f "$prev_sink_file"
+        fi
+        pactl set-card-profile "$index_card" off 2>/dev/null || true
+      }
 
       # Stop the socket too, so nothing socket-activates monado while it's meant
       # to be off / while WiVRn is active.
@@ -87,11 +128,13 @@ let
           # IPD heads-up overlay (LÖVR, composites on top of WayVR).
           systemctl --user reset-failed vr-ipd-overlay.service 2>/dev/null || true
           systemd-run --user --unit=vr-ipd-overlay --collect -- ${ipdLauncher}
+          index_audio_on
           echo "vr-mode: index (monado) active, WayVR + IPD overlay launched"
           ;;
         wivrn)
           stop_monado
           stop_wayvr; stop_ipd   # WiVRn launches its own WayVR on session start
+          index_audio_off        # Quest uses its own audio; give the desktop sink back
           mkdir -p "$(dirname "$active")"
           ln -sf "${wivrnJson}" "$active"
           systemctl --user start wivrn.service
@@ -99,6 +142,7 @@ let
           ;;
         off)
           stop_monado; stop_wivrn; stop_wayvr; stop_ipd
+          index_audio_off
           rm -f "$active"
           echo "vr-mode: all runtimes stopped"
           ;;
@@ -116,6 +160,7 @@ let
           echo "  wivrn.service:         $(systemctl --user is-active wivrn.service 2>/dev/null || true)"
           echo "  vr-wayvr.service:      $(systemctl --user is-active vr-wayvr.service 2>/dev/null || true)"
           echo "  vr-ipd-overlay.service:$(systemctl --user is-active vr-ipd-overlay.service 2>/dev/null || true)"
+          echo "  default sink:          $(pactl get-default-sink 2>/dev/null || echo unknown)"
           ;;
         *)
           echo "usage: vr-mode {index|wivrn|off|status}" >&2
