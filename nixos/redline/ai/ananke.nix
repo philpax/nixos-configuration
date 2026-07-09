@@ -543,7 +543,7 @@ let
     shutdown_command = [
       "${comfyuiShared.comfyuiStopScript}/bin/comfyui-stop"
     ];
-    idle_timeout = "30s";
+    idle_timeout = "30m";
     allocation = {
       mode = "dynamic";
       min_vram_gb = 2.0;
