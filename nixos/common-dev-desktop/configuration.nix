@@ -55,6 +55,7 @@ in
     brightnessctl
     playerctl
     nautilus
+    ffmpegthumbnailer  # video thumbnails/previews in nautilus
     file-roller
     networkmanagerapplet
     blueman
