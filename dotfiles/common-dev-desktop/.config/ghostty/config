@@ -21,3 +21,5 @@ keybind = ctrl+shift+enter=new_window
 
 # Shift+Return: send a literal newline
 keybind = shift+enter=text:\n
+
+shell-integration-features = ssh-env,ssh-terminfo
