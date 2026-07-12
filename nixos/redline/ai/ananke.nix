@@ -422,13 +422,16 @@ let
       description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 16K ctx — sized to co-run with qwen 200K). GPU 1 only.";
     }
 
-    # LFM2.5 embedder (llama.cpp-served, 1024-dim). ~0.9 GiB on one card at
-    # this context, which matches the jina embedder's 16384 cap.
+    # LFM2.5 embedder (llama.cpp-served, 1024-dim). The model's trained
+    # max_seq_length is 512 tokens — longer inputs are rejected by the
+    # server's physical batch limit, which is the correct behaviour (route
+    # long documents to the jina embedder instead). Context is 4 slots ×
+    # 512 so concurrent indexing requests don't queue. ~0.7 GiB on one card.
     {
       name = "lfm2.5-embedding-350m";
       file = "LFM2.5-Embedding-350M-Q8_0.gguf";
       extras = {
-        context = 16384;
+        context = 2048;
         modality = "embedding";
       };
     }
