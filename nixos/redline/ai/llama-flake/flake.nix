@@ -17,8 +17,9 @@
   #      /mnt/ssd0/ai/llm/unsloth/gemma-4-31B-it-qat-GGUF/bench/TRIALS.md.
   #      Drop the patch once upstream fixes graph reuse properly.
   #
-  # The rev below is pinned to the upstream master commit the patch was
-  # developed against (post-b9596, includes PR #24411), not a release tag.
+  # The rev below is pinned to an upstream master commit (2026-07-10,
+  # c749cb04), not a release tag. The patch was rebased onto it after upstream
+  # reordered the contiguity asserts in the meta buffer set/get_tensor paths.
   #
   # Note: NCCL was evaluated 2026-06-11 (add cudaPackages.nccl to the
   # llama-cpp buildInputs + LD_LIBRARY_PATH=/run/opengl-driver/lib for NVML)
@@ -31,7 +32,7 @@
   # in this directory and commit the updated flake.lock.
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/3fc4e105279105106b08a133a4e3e483116e621f";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/4f37f519722aa3242eecb7649466b4a4a2d6d6da";
 
   outputs = { llama-cpp, ... }:
     let
