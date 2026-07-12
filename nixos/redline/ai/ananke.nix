@@ -199,7 +199,7 @@ let
       file = "unsloth/gemma-4-31B-it-qat-GGUF/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf";
       mmproj = "unsloth/gemma-4-31B-it-qat-GGUF/mmproj-F16.gguf";
       extras = {
-        context = 204800;
+        context = 240000;
         flash_attn = true;
         cache_type_k = "f16";
         cache_type_v = "f16";
@@ -213,7 +213,7 @@ let
         draft_model = "${llmDir}/unsloth/gemma-4-31B-it-qat-GGUF/mtp-gemma-4-31B-it.gguf";
         devices = { split = "tensor"; };
         # -n: server-side generation cap. With kv_unified the 4 slots share one
-        # 204800-token pool, and uncapped runaway generations can exhaust it,
+        # context-sized pool, and uncapped runaway generations can exhaust it,
         # which llama-server handles by asserting (observed 2026-06-12, see
         # the model dir's bench/TRIALS.md). 16384 is far above any sane reply.
         #
@@ -420,6 +420,17 @@ let
         GPU_MEMORY_UTILIZATION = "0.16";
       };
       description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 16K ctx — sized to co-run with qwen 200K). GPU 1 only.";
+    }
+
+    # LFM2.5 embedder (llama.cpp-served, 1024-dim). ~0.9 GiB on one card at
+    # this context, which matches the jina embedder's 16384 cap.
+    {
+      name = "lfm2.5-embedding-350m";
+      file = "LFM2.5-Embedding-350M-Q8_0.gguf";
+      extras = {
+        context = 16384;
+        modality = "embedding";
+      };
     }
   ];
 
