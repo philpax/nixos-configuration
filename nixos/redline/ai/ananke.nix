@@ -604,6 +604,36 @@ let
     ++ (lib.imap0 (i: _: llmBasePort + i) models);
 in
 {
+  # Expose ananke's port constants as read-only options so other modules
+  # (e.g. grafana.nix) can reference them without hardcoding.
+  options.ai.ananke = {
+    openaiPort = lib.mkOption {
+      type = lib.types.port;
+      default = openaiPort;
+      readOnly = true;
+      description = "Port ananke's OpenAI-compatible API listens on.";
+    };
+    managementPort = lib.mkOption {
+      type = lib.types.port;
+      default = managementPort;
+      readOnly = true;
+      description = "Port ananke's management API (including /metrics) listens on.";
+    };
+    comfyuiPort = lib.mkOption {
+      type = lib.types.port;
+      default = comfyuiPort;
+      readOnly = true;
+      description = "Port ananke exposes ComfyUI on.";
+    };
+    llmBasePort = lib.mkOption {
+      type = lib.types.port;
+      default = llmBasePort;
+      readOnly = true;
+      description = "Base port for ananke's per-model LLM services (port = base + index).";
+    };
+  };
+
+  config = {
   # Sibling slice that holds the ComfyUI Docker container. The
   # `comfyui-start` wrapper passes `--cgroup-parent ananke-comfyui.slice`
   # so the resulting `docker-<id>.scope` lands inside this slice;
@@ -645,4 +675,5 @@ in
     comfyuiShared.comfyuiStartScript
     comfyuiShared.comfyuiStopScript
   ];
+  };
 }
