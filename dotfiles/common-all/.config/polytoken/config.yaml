@@ -2,7 +2,7 @@ version: 2
 config_command_substitution: true
 defaults:
   full: umans/umans-glm-5.2
-  mini: umans/umans-glm-5.2-nvfp4
+  mini: umans/umans-glm-5.2
 providers:
   umans:
     kind:
@@ -33,7 +33,10 @@ mcp_servers:
     command: /run/current-system/sw/bin/ida-mcp
     args:
     - '--stdio'
-    pass_env: ['HOME', 'PATH']
+    env: {}
+    pass_env:
+    - HOME
+    - PATH
     log_stderr: true
     log_stdout: false
     block_list: []
@@ -45,6 +48,7 @@ integrations:
         key: $(cat ~/.tokens/tavily-token)
 tui:
   theme: dark
+  theme-file: $USER_DIRECTORY/themes/catppuccin-mocha.yaml
   alt-screen: auto
   density: standard
   show-all-thinking-blocks: false

@@ -1,0 +1,691 @@
+version: 1
+title: Catppuccin Mocha
+palette:
+  # Catppuccin Mocha (dark) — https://catppuccin.com/palette
+  # Base #1e1e2e, Mantle #181825, Crust #11111b
+  # Text #cdd6f4, Subtext1 #bac2de, Subtext0 #a6adc8
+  # Overlay2 #9399b2, Overlay1 #7f849c, Overlay0 #6c7086
+  # Surface2 #585b70, Surface1 #45475a, Surface0 #313244
+  # Blue #89b4fa, Lavender #b4befe, Sapphire #74c7ec, Sky #89dceb
+  # Teal #94e2d5, Green #a6e3a1, Yellow #f9e2af, Peach #fab387
+  # Maroon #eba0ac, Red #f38ba8, Mauve #cba6f7, Pink #f5c2e7
+  # Flamingo #f2cdcd, Rosewater #f5e0dc
+  dark:
+    text:
+      body:
+        rgb: "#cdd6f4"
+      muted:
+        rgb: "#bac2de"
+      dim:
+        rgb: "#a6adc8"
+      inverse:
+        rgb: "#eff1f5"
+    surface:
+      app:
+        rgb: "#1e1e2e"
+      floating:
+        rgb: "#181825"
+      card:
+        rgb: "#181825"
+      system_reminder:
+        $ref: "#/palette/dark/surface/app"
+      status_bar:
+        rgb: "#11111b"
+      focus_ring:
+        rgb: "#313244"
+      selection:
+        rgb: "#585b70"
+    semantic:
+      error:
+        rgb: "#f38ba8"
+      warning:
+        rgb: "#f9e2af"
+      success:
+        rgb: "#a6e3a1"
+      info:
+        rgb: "#94e2d5"
+    chrome:
+      accent:
+        rgb: "#cba6f7"
+      border:
+        rgb: "#313244"
+      expansion_indicator:
+        $ref: "#/palette/dark/text/inverse"
+      detail_bar:
+        rgb: "#585b70"
+      facet:
+        rgb: "#fab387"
+      ask_user_question:
+        rgb: "#f5c2e7"
+      subagent:
+        rgb: "#94e2d5"
+      goal:
+        rgb: "#b4befe"
+    reference:
+      resolved:
+        rgb: "#a6e3a1"
+      unresolved:
+        rgb: "#f38ba8"
+    model_family:
+      claude:
+        rgb: "#fab387"
+      openai:
+        rgb: "#a6e3a1"
+      gemini:
+        rgb: "#89b4fa"
+      ollama:
+        rgb: "#cba6f7"
+      glm:
+        rgb: "#f38ba8"
+      deepseek:
+        rgb: "#89dceb"
+      mimo:
+        rgb: "#f9e2af"
+      minimax:
+        rgb: "#f5c2e7"
+      unknown:
+        rgb: "#6c7086"
+    diff:
+      added:
+        $ref: "#/palette/dark/semantic/success"
+      removed:
+        $ref: "#/palette/dark/semantic/error"
+      context:
+        rgb: "#a6adc8"
+      hunk_header:
+        $ref: "#/palette/dark/semantic/info"
+    syntax:
+      keyword:
+        rgb: "#cba6f7"
+      string:
+        rgb: "#a6e3a1"
+      comment:
+        rgb: "#9399b2"
+      literal:
+        rgb: "#fab387"
+      type:
+        rgb: "#f9e2af"
+      function:
+        rgb: "#89b4fa"
+      operator:
+        rgb: "#89dceb"
+      number:
+        rgb: "#fab387"
+      punctuation:
+        rgb: "#9399b2"
+    status_bar:
+      model:
+        $ref: "#/palette/dark/text/body"
+      facet:
+        $ref: "#/palette/dark/semantic/info"
+      monitor:
+        rgb: "#a6e3a1"
+      monitor_bypass_plus:
+        $ref: "#/palette/dark/syntax/type"
+      label:
+        $ref: "#/palette/dark/text/inverse"
+      dirty:
+        rgb: "#f9e2af"
+    sidebar:
+      pane_state_indicator:
+        $ref: "#/palette/dark/text/inverse"
+    inline:
+      link:
+        $ref: "#/palette/dark/semantic/info"
+      code:
+        rgb: "#f5c2e7"
+    animation:
+      completion_flash:
+        rgb: "#1e3a1e"
+      pedagogy_typing:
+        rgb: "#f9e2af"
+      error_pulse:
+        rgb: "#3a1e2a"
+    emphasis:
+      muted:
+        $ref: "#/palette/dark/text/muted"
+  # Catppuccin Latte (light) — https://catppuccin.com/palette
+  # Base #eff1f5, Mantle #e6e9ef, Crust #dce0e8
+  # Text #4c4f69, Subtext1 #5c5f77, Subtext0 #6c6f85
+  # Overlay2 #7c7f93, Overlay1 #8c8fa1, Overlay0 #9ca0b0
+  # Surface2 #acb0be, Surface1 #bcc0cc, Surface0 #ccd0da
+  # Blue #1e66f5, Lavender #7287fd, Sapphire #209fb5, Sky #04a5e5
+  # Teal #179299, Green #40a02b, Yellow #df8e1d, Peach #fe640b
+  # Maroon #e64553, Red #d20f39, Mauve #8839ef, Pink #ea76cb
+  # Flamingo #dd7878, Rosewater #dc8a78
+  light:
+    text:
+      body:
+        rgb: "#4c4f69"
+      muted:
+        rgb: "#5c5f77"
+      dim:
+        rgb: "#6c6f85"
+      inverse:
+        rgb: "#1e1e2e"
+    surface:
+      app:
+        rgb: "#eff1f5"
+      floating:
+        rgb: "#e6e9ef"
+      card:
+        rgb: "#e6e9ef"
+      system_reminder:
+        $ref: "#/palette/light/surface/app"
+      status_bar:
+        rgb: "#dce0e8"
+      focus_ring:
+        rgb: "#ccd0da"
+      selection:
+        rgb: "#acb0be"
+    semantic:
+      error:
+        rgb: "#d20f39"
+      warning:
+        rgb: "#df8e1d"
+      success:
+        rgb: "#40a02b"
+      info:
+        rgb: "#179299"
+    chrome:
+      accent:
+        rgb: "#8839ef"
+      border:
+        rgb: "#ccd0da"
+      expansion_indicator:
+        $ref: "#/palette/light/text/inverse"
+      detail_bar:
+        rgb: "#acb0be"
+      facet:
+        rgb: "#fe640b"
+      ask_user_question:
+        rgb: "#ea76cb"
+      subagent:
+        rgb: "#179299"
+      goal:
+        rgb: "#7287fd"
+    reference:
+      resolved:
+        rgb: "#40a02b"
+      unresolved:
+        rgb: "#d20f39"
+    model_family:
+      claude:
+        rgb: "#fe640b"
+      openai:
+        rgb: "#40a02b"
+      gemini:
+        rgb: "#1e66f5"
+      ollama:
+        rgb: "#8839ef"
+      glm:
+        rgb: "#d20f39"
+      deepseek:
+        rgb: "#04a5e5"
+      mimo:
+        rgb: "#df8e1d"
+      minimax:
+        rgb: "#ea76cb"
+      unknown:
+        rgb: "#9ca0b0"
+    diff:
+      added:
+        $ref: "#/palette/light/semantic/success"
+      removed:
+        $ref: "#/palette/light/semantic/error"
+      context:
+        rgb: "#6c6f85"
+      hunk_header:
+        $ref: "#/palette/light/semantic/info"
+    syntax:
+      keyword:
+        rgb: "#8839ef"
+      string:
+        rgb: "#40a02b"
+      comment:
+        rgb: "#7c7f93"
+      literal:
+        rgb: "#fe640b"
+      type:
+        rgb: "#df8e1d"
+      function:
+        rgb: "#1e66f5"
+      operator:
+        rgb: "#04a5e5"
+      number:
+        rgb: "#fe640b"
+      punctuation:
+        rgb: "#7c7f93"
+    status_bar:
+      model:
+        $ref: "#/palette/light/text/body"
+      facet:
+        $ref: "#/palette/light/semantic/info"
+      monitor:
+        rgb: "#40a02b"
+      monitor_bypass_plus:
+        $ref: "#/palette/light/syntax/type"
+      label:
+        $ref: "#/palette/light/text/inverse"
+      dirty:
+        rgb: "#df8e1d"
+    sidebar:
+      pane_state_indicator:
+        $ref: "#/palette/light/text/inverse"
+    inline:
+      link:
+        $ref: "#/palette/light/semantic/info"
+      code:
+        rgb: "#ea76cb"
+    animation:
+      completion_flash:
+        rgb: "#e0f0e0"
+      pedagogy_typing:
+        rgb: "#df8e1d"
+      error_pulse:
+        rgb: "#f0d8d8"
+    emphasis:
+      muted:
+        $ref: "#/palette/light/text/muted"
+dark:
+  error:
+    fg:
+      $ref: "#/palette/dark/semantic/error"
+  warning:
+    fg:
+      $ref: "#/palette/dark/semantic/warning"
+  success:
+    fg:
+      $ref: "#/palette/dark/semantic/success"
+  info:
+    fg:
+      $ref: "#/palette/dark/semantic/info"
+  dim:
+    fg:
+      $ref: "#/palette/dark/text/dim"
+  accent:
+    fg:
+      $ref: "#/palette/dark/chrome/accent"
+    b: true
+  body:
+    fg:
+      $ref: "#/palette/dark/text/body"
+  muted:
+    fg:
+      $ref: "#/palette/dark/text/muted"
+  border:
+    fg:
+      $ref: "#/palette/dark/chrome/border"
+  focus_ring:
+    bg:
+      $ref: "#/palette/dark/surface/focus_ring"
+  app_background:
+    bg:
+      $ref: "#/palette/dark/surface/app"
+  floating_window_background:
+    bg:
+      $ref: "#/palette/dark/surface/floating"
+  expansion_indicator:
+    fg:
+      $ref: "#/palette/dark/chrome/expansion_indicator"
+    b: true
+  tool_detail_bar:
+    fg:
+      $ref: "#/palette/dark/chrome/detail_bar"
+  user_message_background:
+    bg:
+      $ref: "#/palette/dark/surface/card"
+  prompt_reference_resolved:
+    fg:
+      $ref: "#/palette/dark/reference/resolved"
+  prompt_reference_unresolved:
+    fg:
+      $ref: "#/palette/dark/reference/unresolved"
+  system_reminder_background:
+    fg:
+      $ref: "#/palette/dark/text/muted"
+    bg:
+      $ref: "#/palette/dark/surface/system_reminder"
+  assistant_message_background:
+    bg:
+      $ref: "#/palette/dark/surface/card"
+  facet_chrome:
+    fg:
+      $ref: "#/palette/dark/chrome/facet"
+    b: true
+  ask_user_question_chrome:
+    fg:
+      $ref: "#/palette/dark/chrome/ask_user_question"
+    b: true
+  subagent_chrome:
+    fg:
+      $ref: "#/palette/dark/chrome/subagent"
+    b: true
+  family_claude:
+    fg:
+      $ref: "#/palette/dark/model_family/claude"
+  family_openai:
+    fg:
+      $ref: "#/palette/dark/model_family/openai"
+  family_gemini:
+    fg:
+      $ref: "#/palette/dark/model_family/gemini"
+  family_ollama:
+    fg:
+      $ref: "#/palette/dark/model_family/ollama"
+  family_glm:
+    fg:
+      $ref: "#/palette/dark/model_family/glm"
+  family_deepseek:
+    fg:
+      $ref: "#/palette/dark/model_family/deepseek"
+  family_mimo:
+    fg:
+      $ref: "#/palette/dark/model_family/mimo"
+  family_minimax:
+    fg:
+      $ref: "#/palette/dark/model_family/minimax"
+  family_unknown:
+    fg:
+      $ref: "#/palette/dark/model_family/unknown"
+  diff_added:
+    fg:
+      $ref: "#/palette/dark/diff/added"
+  diff_removed:
+    fg:
+      $ref: "#/palette/dark/diff/removed"
+  diff_context:
+    fg:
+      $ref: "#/palette/dark/diff/context"
+  diff_hunk_header:
+    fg:
+      $ref: "#/palette/dark/diff/hunk_header"
+    b: true
+  code_keyword:
+    fg:
+      $ref: "#/palette/dark/syntax/keyword"
+  code_string:
+    fg:
+      $ref: "#/palette/dark/syntax/string"
+  code_comment:
+    fg:
+      $ref: "#/palette/dark/syntax/comment"
+    i: true
+  code_literal:
+    fg:
+      $ref: "#/palette/dark/syntax/literal"
+  code_type:
+    fg:
+      $ref: "#/palette/dark/syntax/type"
+  code_function:
+    fg:
+      $ref: "#/palette/dark/syntax/function"
+  code_operator:
+    fg:
+      $ref: "#/palette/dark/syntax/operator"
+  code_number:
+    fg:
+      $ref: "#/palette/dark/syntax/number"
+  code_punctuation:
+    fg:
+      $ref: "#/palette/dark/syntax/punctuation"
+  status_bar_model:
+    fg:
+      $ref: "#/palette/dark/status_bar/model"
+    b: true
+  status_bar_facet:
+    fg:
+      $ref: "#/palette/dark/status_bar/facet"
+    b: true
+  status_bar_monitor:
+    fg:
+      $ref: "#/palette/dark/status_bar/monitor"
+  status_bar_monitor_bypass_plus:
+    fg:
+      $ref: "#/palette/dark/status_bar/monitor_bypass_plus"
+  status_bar_label:
+    fg:
+      $ref: "#/palette/dark/status_bar/label"
+    b: true
+  status_bar_dirty:
+    fg:
+      $ref: "#/palette/dark/status_bar/dirty"
+  status_bar_block:
+    bg:
+      $ref: "#/palette/dark/surface/status_bar"
+  sidebar_pane_state_indicator:
+    fg:
+      $ref: "#/palette/dark/sidebar/pane_state_indicator"
+    b: true
+  link:
+    fg:
+      $ref: "#/palette/dark/inline/link"
+    u: true
+  code_inline:
+    fg:
+      $ref: "#/palette/dark/inline/code"
+  selected:
+    bg:
+      $ref: "#/palette/dark/surface/selection"
+  prompt_selection:
+    bg:
+      $ref: "#/palette/dark/surface/selection"
+  completion_flash:
+    bg:
+      $ref: "#/palette/dark/animation/completion_flash"
+  pedagogy_typing:
+    fg:
+      $ref: "#/palette/dark/animation/pedagogy_typing"
+    b: true
+  error_pulse:
+    bg:
+      $ref: "#/palette/dark/animation/error_pulse"
+  goal_accent:
+    fg:
+      $ref: "#/palette/dark/chrome/goal"
+    b: true
+  muted_emphasis:
+    fg:
+      $ref: "#/palette/dark/emphasis/muted"
+    i: true
+light:
+  error:
+    fg:
+      $ref: "#/palette/light/semantic/error"
+  warning:
+    fg:
+      $ref: "#/palette/light/semantic/warning"
+  success:
+    fg:
+      $ref: "#/palette/light/semantic/success"
+  info:
+    fg:
+      $ref: "#/palette/light/semantic/info"
+  dim:
+    fg:
+      $ref: "#/palette/light/text/dim"
+  accent:
+    fg:
+      $ref: "#/palette/light/chrome/accent"
+    b: true
+  body:
+    fg:
+      $ref: "#/palette/light/text/body"
+  muted:
+    fg:
+      $ref: "#/palette/light/text/muted"
+  border:
+    fg:
+      $ref: "#/palette/light/chrome/border"
+  focus_ring:
+    bg:
+      $ref: "#/palette/light/surface/focus_ring"
+  app_background:
+    bg:
+      $ref: "#/palette/light/surface/app"
+  floating_window_background:
+    bg:
+      $ref: "#/palette/light/surface/floating"
+  expansion_indicator:
+    fg:
+      $ref: "#/palette/light/chrome/expansion_indicator"
+    b: true
+  tool_detail_bar:
+    fg:
+      $ref: "#/palette/light/chrome/detail_bar"
+  user_message_background:
+    bg:
+      $ref: "#/palette/light/surface/card"
+  prompt_reference_resolved:
+    fg:
+      $ref: "#/palette/light/reference/resolved"
+  prompt_reference_unresolved:
+    fg:
+      $ref: "#/palette/light/reference/unresolved"
+  system_reminder_background:
+    fg:
+      $ref: "#/palette/light/text/muted"
+    bg:
+      $ref: "#/palette/light/surface/system_reminder"
+  assistant_message_background:
+    bg:
+      $ref: "#/palette/light/surface/card"
+  facet_chrome:
+    fg:
+      $ref: "#/palette/light/chrome/facet"
+    b: true
+  ask_user_question_chrome:
+    fg:
+      $ref: "#/palette/light/chrome/ask_user_question"
+    b: true
+  subagent_chrome:
+    fg:
+      $ref: "#/palette/light/chrome/subagent"
+    b: true
+  family_claude:
+    fg:
+      $ref: "#/palette/light/model_family/claude"
+  family_openai:
+    fg:
+      $ref: "#/palette/light/model_family/openai"
+  family_gemini:
+    fg:
+      $ref: "#/palette/light/model_family/gemini"
+  family_ollama:
+    fg:
+      $ref: "#/palette/light/model_family/ollama"
+  family_glm:
+    fg:
+      $ref: "#/palette/light/model_family/glm"
+  family_deepseek:
+    fg:
+      $ref: "#/palette/light/model_family/deepseek"
+  family_mimo:
+    fg:
+      $ref: "#/palette/light/model_family/mimo"
+  family_minimax:
+    fg:
+      $ref: "#/palette/light/model_family/minimax"
+  family_unknown:
+    fg:
+      $ref: "#/palette/light/model_family/unknown"
+  diff_added:
+    fg:
+      $ref: "#/palette/light/diff/added"
+  diff_removed:
+    fg:
+      $ref: "#/palette/light/diff/removed"
+  diff_context:
+    fg:
+      $ref: "#/palette/light/diff/context"
+  diff_hunk_header:
+    fg:
+      $ref: "#/palette/light/diff/hunk_header"
+    b: true
+  code_keyword:
+    fg:
+      $ref: "#/palette/light/syntax/keyword"
+  code_string:
+    fg:
+      $ref: "#/palette/light/syntax/string"
+  code_comment:
+    fg:
+      $ref: "#/palette/light/syntax/comment"
+    i: true
+  code_literal:
+    fg:
+      $ref: "#/palette/light/syntax/literal"
+  code_type:
+    fg:
+      $ref: "#/palette/light/syntax/type"
+  code_function:
+    fg:
+      $ref: "#/palette/light/syntax/function"
+  code_operator:
+    fg:
+      $ref: "#/palette/light/syntax/operator"
+  code_number:
+    fg:
+      $ref: "#/palette/light/syntax/number"
+  code_punctuation:
+    fg:
+      $ref: "#/palette/light/syntax/punctuation"
+  status_bar_model:
+    fg:
+      $ref: "#/palette/light/status_bar/model"
+    b: true
+  status_bar_facet:
+    fg:
+      $ref: "#/palette/light/status_bar/facet"
+    b: true
+  status_bar_monitor:
+    fg:
+      $ref: "#/palette/light/status_bar/monitor"
+  status_bar_monitor_bypass_plus:
+    fg:
+      $ref: "#/palette/light/status_bar/monitor_bypass_plus"
+  status_bar_label:
+    fg:
+      $ref: "#/palette/light/status_bar/label"
+    b: true
+  status_bar_dirty:
+    fg:
+      $ref: "#/palette/light/status_bar/dirty"
+  status_bar_block:
+    bg:
+      $ref: "#/palette/light/surface/status_bar"
+  sidebar_pane_state_indicator:
+    fg:
+      $ref: "#/palette/light/sidebar/pane_state_indicator"
+    b: true
+  link:
+    fg:
+      $ref: "#/palette/light/inline/link"
+    u: true
+  code_inline:
+    fg:
+      $ref: "#/palette/light/inline/code"
+  selected:
+    bg:
+      $ref: "#/palette/light/surface/selection"
+  prompt_selection:
+    bg:
+      $ref: "#/palette/light/surface/selection"
+  completion_flash:
+    bg:
+      $ref: "#/palette/light/animation/completion_flash"
+  pedagogy_typing:
+    fg:
+      $ref: "#/palette/light/animation/pedagogy_typing"
+    b: true
+  error_pulse:
+    bg:
+      $ref: "#/palette/light/animation/error_pulse"
+  goal_accent:
+    fg:
+      $ref: "#/palette/light/chrome/goal"
+    b: true
+  muted_emphasis:
+    fg:
+      $ref: "#/palette/light/emphasis/muted"
+    i: true
