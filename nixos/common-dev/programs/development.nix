@@ -15,6 +15,7 @@
     uv
     stylua
     python3Packages.huggingface-hub
+    python3Packages.hf-xet # Xet-accelerated `hf download` for large model pulls
 
     # Development utilities
     gnumake
