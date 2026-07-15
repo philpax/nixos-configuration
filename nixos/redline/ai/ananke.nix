@@ -99,32 +99,32 @@ let
     # Qwen family.
     {
       name = "qwen3-4b-instruct";
-      file = "Qwen3-4B-Instruct-2507-UD-Q5_K_XL.gguf";
+      file = "unsloth/Qwen3-4B-Instruct-2507-GGUF/Qwen3-4B-Instruct-2507-UD-Q5_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "qwen3-30b-a3b-instruct-2507";
-      file = "Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
+      file = "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "qwen3-30b-a3b-thinking-2507";
-      file = "Qwen3-30B-A3B-Thinking-2507-UD-Q4_K_XL.gguf";
+      file = "unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF/Qwen3-30B-A3B-Thinking-2507-UD-Q4_K_XL.gguf";
       extras = { context = 8192; };
     }
     {
       name = "qwen3-30b-a3b-coder-2507";
-      file = "Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
+      file = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
       extras = { context = 8192; };
     }
     {
       name = "qwen3-32b";
-      file = "Qwen3-32B-UD-Q4_K_XL.gguf";
+      file = "unsloth/Qwen3-32B-GGUF/Qwen3-32B-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "qwen3-235b-a22b-instruct";
-      file = "Qwen3-235B-A22B-Instruct-2507-UD-Q2_K_XL-00001-of-00002.gguf";
+      file = "unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF/UD-Q2_K_XL/Qwen3-235B-A22B-Instruct-2507-UD-Q2_K_XL-00001-of-00002.gguf";
       extras = {
         context = 16384;
         threads = 24;
@@ -141,14 +141,14 @@ let
     }
     {
       name = "qwen3-vl-30b-a3b-instruct";
-      file = "Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
-      mmproj = "Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL-mmproj-F16.gguf";
+      file = "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
+      mmproj = "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/mmproj-F16.gguf";
       extras = { context = 8192; };
     }
     {
       name = "qwen3.6-35b-a3b";
-      file = "Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
-      mmproj = "Qwen3.6-35B-A3B-GGUF-mmproj-F16.gguf";
+      file = "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+      mmproj = "unsloth/Qwen3.6-35B-A3B-GGUF/mmproj-F16.gguf";
       # Double the context so both parallel slots keep the full 262144;
       # the A3B's lighter KV leaves room for this where the 27B can't.
       extras = qwen36Extras // {
@@ -161,36 +161,36 @@ let
     }
     {
       name = "qwen3.6-27b";
-      file = "Qwen3.6-27B-UD-Q5_K_XL.gguf";
-      mmproj = "Qwen3.6-27B-GGUF-mmproj-F16.gguf";
+      file = "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+      mmproj = "unsloth/Qwen3.6-27B-GGUF/mmproj-F16.gguf";
       extras = qwen36Extras // { context = 2*180*1000; } // discordVisible;
     }
 
     # Gemma family.
     {
       name = "gemma-3-27b-it";
-      file = "gemma-3-27b-it-UD-Q4_K_XL.gguf";
+      file = "unsloth/gemma-3-27b-it-GGUF/gemma-3-27b-it-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "gemma-3-27b-it-abliterated";
-      file = "gemma-3-27b-it-abliterated.q4_k_m.gguf";
+      file = "mlabonne/gemma-3-27b-it-abliterated-GGUF/gemma-3-27b-it-abliterated.q4_k_m.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "gemma-3-glitter-27b";
-      file = "Gemma-3-Glitter-27B.i1-Q5_K_M.gguf";
+      file = "mradermacher/Gemma-3-Glitter-27B-i1-GGUF/Gemma-3-Glitter-27B.i1-Q5_K_M.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "gemma-3n-e4b-it";
-      file = "gemma-3n-E4B-it-UD-Q4_K_XL.gguf";
+      file = "unsloth/gemma-3n-E4B-it-GGUF/gemma-3n-E4B-it-UD-Q4_K_XL.gguf";
       extras = { context = 16384; } // discordVisible;
     }
     {
       name = "gemma-4-31b-it";
-      file = "gemma-4-31B-it-UD-Q4_K_XL.gguf";
-      mmproj = "gemma-4-31B-it-GGUF-mmproj-F16.gguf";
+      file = "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      mmproj = "unsloth/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
       extras = gemma4Extras // discordVisible;
     }
     # QAT build with a tuned 2×3090 MTP config from the model.
@@ -236,31 +236,31 @@ let
     }
     {
       name = "gemma-4-26b-a4b-it";
-      file = "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
-      mmproj = "gemma-4-26B-A4B-it-GGUF-mmproj-F16.gguf";
+      file = "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf";
+      mmproj = "unsloth/gemma-4-26B-A4B-it-GGUF/mmproj-F16.gguf";
       extras = gemma4Extras // discordVisible;
     }
     {
       name = "gemma-4-e4b-it";
-      file = "gemma-4-E4B-it-UD-Q5_K_XL.gguf";
-      mmproj = "gemma-4-E4B-it-GGUF-mmproj-F16.gguf";
+      file = "unsloth/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-UD-Q5_K_XL.gguf";
+      mmproj = "unsloth/gemma-4-E4B-it-GGUF/mmproj-F16.gguf";
       extras = gemma4Extras;
     }
 
     # GLM family.
     {
       name = "glm-4-32b-0414";
-      file = "GLM-4-32B-0414-UD-Q4_K_XL.gguf";
+      file = "unsloth/GLM-4-32B-0414-GGUF/GLM-4-32B-0414-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "glm-z1-9b-0414";
-      file = "GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
+      file = "unsloth/GLM-Z1-9B-0414-GGUF/GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
       extras = { context = 8192; };
     }
     {
       name = "glm-4-5-air";
-      file = "GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf";
+      file = "unsloth/GLM-4.5-Air-GGUF/UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf";
       extras = {
         context = 16384;
         threads = 24;
@@ -272,31 +272,31 @@ let
     # Llama family.
     {
       name = "llama-3.3-70b-instruct-abliterated";
-      file = "Llama-3.3-70B-Instruct-abliterated-IQ2_XS.gguf";
+      file = "bartowski/Llama-3.3-70B-Instruct-abliterated-GGUF/Llama-3.3-70B-Instruct-abliterated-IQ2_XS.gguf";
       extras = { context = 8192; };
     }
     {
       name = "llama-3.3-nemotron-super-49b-v1_5";
-      file = "Llama-3_3-Nemotron-Super-49B-v1_5-UD-Q4_K_XL.gguf";
+      file = "unsloth/Llama-3_3-Nemotron-Super-49B-v1_5-GGUF/Llama-3_3-Nemotron-Super-49B-v1_5-UD-Q4_K_XL.gguf";
       extras = { context = 8192; };
     }
 
     # Mistral family.
     {
       name = "mistral-small-3.2-24b-instruct-2506";
-      file = "Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf";
+      file = "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
     {
       name = "magidonia-24b-v4.3";
-      file = "TheDrummer_Magidonia-24B-v4.3-Q5_K_M.gguf";
+      file = "bartowski/TheDrummer_Magidonia-24B-v4.3-GGUF/TheDrummer_Magidonia-24B-v4.3-Q5_K_M.gguf";
       extras = { context = 8192; };
     }
 
     # GPT-OSS family.
     {
       name = "gpt-oss-20b";
-      file = "gpt-oss-20b-UD-Q4_K_XL.gguf";
+      file = "unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-UD-Q4_K_XL.gguf";
       extras = { context = 8192; } // discordVisible;
     }
 
@@ -304,7 +304,7 @@ let
     # treats it as llama-family. Native context tops out at 2048.
     {
       name = "talkie-1930-13b-it";
-      file = "talkie-1930-13b-it-hf.Q6_K.gguf";
+      file = "mradermacher/talkie-1930-13b-it-hf-GGUF/talkie-1930-13b-it-hf.Q6_K.gguf";
       extras = { context = 2048; } // discordVisible;
     }
 
@@ -429,7 +429,7 @@ let
     # 512 so concurrent indexing requests don't queue. ~0.7 GiB on one card.
     {
       name = "lfm2.5-embedding-350m";
-      file = "LFM2.5-Embedding-350M-Q8_0.gguf";
+      file = "LiquidAI/LFM2.5-Embedding-350M-GGUF/LFM2.5-Embedding-350M-Q8_0.gguf";
       extras = {
         context = 2048;
         modality = "embedding";
