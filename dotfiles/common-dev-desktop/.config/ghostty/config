@@ -9,12 +9,16 @@ background-opacity = 0.8
 window-padding-x = 4
 window-padding-y = 4
 
-# Don't inherit the working directory of the previous window; start new
-# windows in the home directory instead.
-window-inherit-working-directory = false
-# working-directory defaults to "inherit" (the launching process's cwd).
-# Force it to home so new windows always start there.
+# New windows inherit the current window's working directory (via shell
+# integration's cwd reporting), so ctrl+shift+enter opens in the same dir.
+window-inherit-working-directory = true
+# Fresh launches (e.g. niri's Mod+Return) start in home, not the last dir.
 working-directory = home
+# Required for the above split to work: with single-instance mode (the
+# `detect` default here, since niri spawns ghostty with no args), a fresh
+# launch would join the running process and inherit its focused window's
+# cwd. Separate processes keep launcher windows in home.
+gtk-single-instance = false
 
 # Ctrl+Shift+Return: open a new window (was alacritty's SpawnNewInstance)
 keybind = ctrl+shift+enter=new_window
