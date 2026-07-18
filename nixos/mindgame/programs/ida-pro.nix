@@ -54,15 +54,22 @@ let
     fi
   '') hexPatch.files;
 
+  # The licensed installer, added to the store manually with
+  #   nix-store --add-fixed sha256 ida-pro_93_x64linux.run
+  # It's only a build-time input to ida-pro, so it's kept alive against
+  # `nix-collect-garbage` by a GC root (see systemd.tmpfiles below) — otherwise
+  # the next GC deletes it and the build fails until it's re-added by hand.
+  installerSrc = pkgs.requireFile {
+    name = "ida-pro_93_x64linux.run";
+    url = "https://my.hex-rays.com/";
+    sha256 = "2ed43ae4bb84d74dcae6f0099210dfa8d61bfea4952f5f9a07a9aae16cb70f82";
+  };
+
   ida-pro = pkgs.stdenv.mkDerivation rec {
     pname = "ida-pro";
     version = "9.3.260213";
 
-    src = pkgs.requireFile {
-      name = "ida-pro_93_x64linux.run";
-      url = "https://my.hex-rays.com/";
-      sha256 = "2ed43ae4bb84d74dcae6f0099210dfa8d61bfea4952f5f9a07a9aae16cb70f82";
-    };
+    src = installerSrc;
 
     desktopItem = pkgs.makeDesktopItem {
       name = "ida-pro";
@@ -266,4 +273,11 @@ in
     directory = "${ida-pro}/opt/bindiff";
     ida.directory = "${ida-pro}/opt";
   };
+
+  # Pin the licensed installer as a GC root. It's a build-only input, so without
+  # this `nix-collect-garbage` reclaims it and the next rebuild fails until it's
+  # manually re-added from backup. `L+` recreates the symlink if the target moves.
+  systemd.tmpfiles.rules = [
+    "L+ /nix/var/nix/gcroots/ida-pro-installer - - - - ${installerSrc}"
+  ];
 }
