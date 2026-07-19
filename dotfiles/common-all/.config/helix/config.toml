@@ -1,4 +1,19 @@
 theme = "tokyonight_transparent"
 
+[editor]
+bufferline = "multiple"   # tab strip along the top, shown only when >1 buffer is open
+cursorline = true         # highlight the line the cursor is on
+color-modes = true        # tint the mode indicator by editor mode
+
+[editor.statusline]
+left = ["mode", "spinner", "file-name", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "selections", "position", "file-encoding", "file-line-ending", "file-type"]
+
 [editor.file-picker]
 hidden = false
+
+[keys.normal]
+"A-," = "goto_previous_buffer"
+"A-." = "goto_next_buffer"
+"A-w" = ":buffer-close"
