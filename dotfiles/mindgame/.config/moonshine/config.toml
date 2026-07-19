@@ -1,0 +1,49 @@
+# Moonshine streaming config for mindgame.
+#
+# This mirrors Moonshine's own generated schema. NOTE: the config uses flattened,
+# renamed keys (e.g. compositor.hdr -> `hdr_support`, stream.timeout ->
+# `stream_timeout`) and these do NOT fall back to defaults if omitted, so keep the
+# [webserver]/[stream]/[keyboard] blocks present even at their default values.
+
+name = "mindgame"
+address = "0.0.0.0"
+# Compositor adapts to the connecting client's resolution/refresh. HDR offered
+# when the client supports it.
+hdr_support = true
+stream_timeout = 60
+
+[webserver]
+port = 47989
+port_https = 47984
+enable_pairing = true
+certificate = "$HOME/.config/moonshine/cert.pem"
+private_key = "$HOME/.config/moonshine/key.pem"
+
+[stream]
+port = 48010
+
+[stream.video]
+port = 47998
+fec_percentage = 20
+encrypt = false
+log_frame_spikes = false
+
+[stream.audio]
+port = 48000
+
+[stream.control]
+port = 47999
+
+# Each app runs in its own isolated compositor session.
+[[application]]
+title = "Steam"
+command = ["/run/current-system/sw/bin/steam", "-bigpicture"]
+
+[[application]]
+title = "Prism Launcher"
+command = ["/run/current-system/sw/bin/prismlauncher"]
+
+[keyboard]
+layout = "us"
+variant = ""
+model = ""
