@@ -26,13 +26,14 @@
   # and measured ~4% SLOWER than llama.cpp's internal AllReduce for 2-GPU
   # tensor split over PCIe — deliberately not enabled. See TRIALS.md above.
   #
-  # To move to a newer llama.cpp rev: change the rev below (re-check that
-  # fattn-graph-reuse-fix.patch still applies!), then run
-  #   nix flake update llama-cpp
-  # in this directory and commit the updated flake.lock.
+  # To move to a newer llama.cpp rev: run ./update.sh [ref] in this directory
+  # (defaults to master). It resolves the ref, rewrites the rev below, and
+  # relocks. Commit this file and the updated flake.lock afterwards.
+  # (The rev can't live in a separate file: flake inputs must be literal
+  # strings, so readFile-based interpolation is rejected by nix.)
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/4f37f519722aa3242eecb7649466b4a4a2d6d6da";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/571d0d540df04f25298d0e159e520d9fc62ed121";
 
   outputs = { llama-cpp, ... }:
     let
