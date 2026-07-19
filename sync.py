@@ -162,10 +162,20 @@ def shorten_path(path: str | Path, home: Path | None = None) -> str:
 
 
 def get_imported_layers(config_path: Path) -> list[str]:
-    """Read a machine's configuration.nix and extract its common-* layer imports."""
+    """Read a machine's configuration.nix and extract its common-* layer imports.
+
+    Scans configuration.nix and all .nix files in the machine's directory to
+    find transitive common-* layer imports — e.g. redline imports common-dev
+    via programs/development.nix, not directly in configuration.nix.
+    """
     if not config_path.is_file():
         return []
-    return parse_imported_layers(config_path.read_text())
+
+    machine_dir = config_path.parent
+    layers: set[str] = set()
+    for nix_file in machine_dir.rglob("*.nix"):
+        layers.update(parse_imported_layers(nix_file.read_text()))
+    return sorted(layers)
 
 
 def build_symlink_list(

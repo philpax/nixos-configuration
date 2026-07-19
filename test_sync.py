@@ -114,6 +114,46 @@ in {
         ]
 
 
+class TestGetImportedLayersTransitive:
+    """get_imported_layers scans all .nix files in the machine dir, not just
+    configuration.nix — so transitive imports (e.g. redline's
+    programs/development.nix importing ../../common-dev/...) are detected."""
+
+    def test_finds_transitive_import_in_subdir(self, tmp_path):
+        """A layer imported only by a nested .nix file is detected."""
+        machine = tmp_path / "my-machine"
+        machine.mkdir()
+        (machine / "configuration.nix").write_text(
+            "{ imports = [ ../common-all/configuration.nix ]; }"
+        )
+        (machine / "programs").mkdir()
+        (machine / "programs" / "development.nix").write_text(
+            "{ imports = [ ../../common-dev/programs/development.nix ]; }"
+        )
+
+        layers = sync.get_imported_layers(machine / "configuration.nix")
+        assert layers == ["common-all", "common-dev"]
+
+    def test_deduplicates_across_files(self, tmp_path):
+        """Same layer imported by multiple files is listed once."""
+        machine = tmp_path / "my-machine"
+        machine.mkdir()
+        (machine / "configuration.nix").write_text(
+            "{ imports = [ ../common-all/configuration.nix ]; }"
+        )
+        (machine / "services").mkdir()
+        (machine / "services" / "default.nix").write_text(
+            "{ imports = [ ../../common-all/services/ssh.nix ]; }"
+        )
+
+        layers = sync.get_imported_layers(machine / "configuration.nix")
+        assert layers == ["common-all"]
+
+    def test_no_machine_dir_returns_empty(self, tmp_path):
+        """Missing configuration.nix returns empty list."""
+        assert sync.get_imported_layers(tmp_path / "nonexistent.nix") == []
+
+
 # ---------------------------------------------------------------------------
 # compute_stale_symlinks — pure function, no I/O
 # ---------------------------------------------------------------------------
@@ -558,11 +598,12 @@ class TestShortenPath:
 class TestRepoIntegration:
     """Smoke tests against the real repo to catch structural regressions."""
 
-    def test_redline_only_gets_common_all_dotfiles(self):
-        """redline imports only common-all — must not get common-dev-desktop dotfiles."""
+    def test_redline_gets_common_all_and_dev_dotfiles(self):
+        """redline imports common-all directly and common-dev transitively
+        (via programs/development.nix) — but not common-desktop or common-dev-desktop."""
         config = sync.NIXOS_SOURCE / "redline" / "configuration.nix"
         layers = sync.get_imported_layers(config)
-        assert layers == ["common-all"]
+        assert layers == ["common-all", "common-dev"]
 
         dotfiles = sync.build_symlink_list(
             sync.DOTFILES_SOURCE,
@@ -575,6 +616,8 @@ class TestRepoIntegration:
         # common-all dotfiles should be present
         assert any("fish/config.fish" in t for t in targets)
         assert any(".gitconfig" in t for t in targets)
+        # common-dev dotfiles should be present (transitive import)
+        assert any("fish/functions/vrchat-transcode.fish" in t for t in targets)
         # common-dev-desktop dotfiles should NOT be present
         assert not any("niri/config.kdl" in t for t in targets)
         assert not any("alacritty" in t for t in targets)
