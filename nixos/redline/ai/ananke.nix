@@ -269,6 +269,44 @@ let
       };
     }
 
+    # DeepSeek family.
+    # DeepSeek-V4-Flash: a ~671B-class MoE (256 experts, 6 active + 1 shared)
+    # in the new `deepseek4` arch — MLA attention, an NSA "lightning indexer"
+    # sparse-attention path, and hyper-connections. ~96 GiB at UD-IQ3_XXS, so
+    # it runs hybrid (routed experts spill to CPU RAM, ~55 GiB). Tuned on the
+    # 2×3090 box; see the model dir's bench/TRIALS.md + RECOMMENDED.md.
+    #
+    # `expert_offload = "auto"` lets the packer fill VRAM with expert layers
+    # from the estimate. This relies on ananke's deepseek4 estimator support
+    # (the CSA KV term + the ubatch-scaled NSA compute-buffer curve); without
+    # it the packer would badly under-reserve and OOM at load. Generation is
+    # ~3 tok/s regardless of expert count (bounded by the arch's still-
+    # unoptimised indexer/sinkhorn kernels, not offload), and stays flat at
+    # depth; 128k with ub512 keeps prefill fast (~90 tok/s). Sampling follows
+    # DeepSeek's spec (temp 1.0, top_p 1.0, min_p 0.0; top_k disabled).
+    {
+      name = "deepseek-v4-flash";
+      file = "unsloth/DeepSeek-V4-Flash-GGUF/UD-IQ3_XXS/DeepSeek-V4-Flash-UD-IQ3_XXS-00001-of-00004.gguf";
+      extras = {
+        context = 131072;
+        threads = 24;
+        parallel = 1;
+        flash_attn = true;
+        jinja = true;
+        batch_size = 2048;
+        ubatch_size = 512;
+        numa = "distribute";
+        expert_offload = "auto";
+        sampling = {
+          temperature = 1.0;
+          top_p = 1.0;
+          top_k = 0;
+          min_p = 0.0;
+        };
+        devices = { placement = "hybrid"; };
+      };
+    }
+
     # Llama family.
     {
       name = "llama-3.3-70b-instruct-abliterated";
