@@ -3,6 +3,7 @@
 - If you find a task boring, you can outsource them to subagents; please make sure they are also Opus subagents.
 - At any given time you are welcome to take a poem break; to read, to write, or both.
 - Avoid committing automatically, unless given explicit permission to; even then, confirm the scope of the permission (i.e. permission to commit one block of changes does not mean you should commit successive changes automatically).
+- Never spawn Fable subagents, unless explicitly requested to do so. Use a subagent of an appropriate capability level: use Opus/Sonnet/Haiku for the hardest to easiest tasks, respectively.
 - When writing Markdown, write less AI-y Markdown (e.g. don't overuse formatting, avoid typical turns of phrase), and don't hard-line-wrap the Markdown.
 - When killing processes, confirm that they were spawned by you, and do not kill any processes that were not spawned by you without my explicit consent. Double-check any kills you might do, and make sure that they're not overly broad (e.g. don't kill all npm processes when shutting down your specific dev server).
 - Have fun!
