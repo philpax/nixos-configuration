@@ -30,4 +30,25 @@
   # OpenVR -> OpenXR shim so SteamVR-only games (VRChat, Resonite, ...) run on
   # Monado. From nixpkgs-xr (see ../nixpkgs-xr.nix).
   environment.systemPackages = [ pkgs.xrizer ];
+
+  # Make *every* OpenVR game route through xrizer -> OpenXR -> the active runtime
+  # (monado/wivrn) with no per-game launch options. Two env vars, set session-wide
+  # so Steam and every Proton game inherit them:
+  #
+  #   VR_OVERRIDE  — points Proton's OpenVR bridge straight at xrizer. This is the
+  #     piece that actually works under the Steam Linux Runtime (sniper) container:
+  #     Proton doesn't resolve our /nix/store xrizer path from openvrpaths.vrpath
+  #     inside the container, but it honours VR_OVERRIDE from the environment.
+  #     xrizer still requires a valid openvrpaths.vrpath to exist (vr-mode writes
+  #     one) even though it isn't listed there. Interpolated from pkgs.xrizer, so
+  #     it always tracks the current build — no stale path, no GC breakage.
+  #
+  #   PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES — imports the active OpenXR runtime
+  #     into the sniper container so xrizer (and native-OpenXR games) can reach
+  #     monado/wivrn. Previously set per-game in VRChat's launch options; global
+  #     here so it covers everything.
+  environment.sessionVariables = {
+    VR_OVERRIDE = "${pkgs.xrizer}/lib/xrizer";
+    PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1";
+  };
 }

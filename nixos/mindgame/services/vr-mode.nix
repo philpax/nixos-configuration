@@ -17,6 +17,12 @@ let
   wivrnJson = "${config.services.wivrn.package}/share/openxr/1/openxr_wivrn.json";
   wayvr = "${pkgs.wayvr}/bin/wayvr";
 
+  # xrizer's OpenVR runtime dir (contains bin/linux64/vrclient.so). Pinned to the
+  # built package so the path stays valid across nix-collect-garbage — a
+  # hand-written openvrpaths.vrpath pointing at an ephemeral store path silently
+  # rots when that path is GC'd.
+  xrizerRuntime = "${pkgs.xrizer}/lib/xrizer";
+
   # LÖVR OpenXR overlay that flashes the current IPD in-view when it changes.
   ipdOverlay = pkgs.runCommand "vr-ipd-overlay" { } ''
     mkdir -p $out
@@ -72,6 +78,23 @@ let
         pactl set-card-profile "$index_card" off 2>/dev/null || true
       }
 
+      # SteamVR-only games (VRChat, Resonite, ...) reach VR through the OpenVR
+      # API, which resolves its runtime from openvrpaths.vrpath. Point that at
+      # xrizer (the OpenVR -> OpenXR shim) so those games route through whichever
+      # OpenXR runtime is active (monado/wivrn) instead of launching SteamVR —
+      # SteamVR can't lease the Index panel out from under monado, so the game
+      # would drop to flatscreen. SteamVR rewrites this file and re-registers
+      # itself as the first runtime whenever it runs, so we (re)assert xrizer as
+      # the sole runtime on every activation rather than trusting it to stick.
+      write_openvrpaths() {
+        local steam="$HOME/.local/share/Steam"
+        local f="''${XDG_CONFIG_HOME:-$HOME/.config}/openvr/openvrpaths.vrpath"
+        mkdir -p "$(dirname "$f")"
+        printf '{\n\t"config" : [ "%s/config" ],\n\t"external_drivers" : null,\n\t"jsonid" : "vrpathreg",\n\t"log" : [ "%s/logs" ],\n\t"runtime" : [ "%s" ],\n\t"version" : 1\n}\n' \
+          "$steam" "$steam" "${xrizerRuntime}" > "$f"
+        echo "vr-mode: openvrpaths -> xrizer (OpenVR games route through OpenXR)"
+      }
+
       # Stop the socket too, so nothing socket-activates monado while it's meant
       # to be off / while WiVRn is active.
       stop_monado() { systemctl --user stop monado.service monado.socket 2>/dev/null || true; }
@@ -102,6 +125,7 @@ let
           stop_wivrn; stop_wayvr; stop_ipd
           mkdir -p "$(dirname "$active")"
           ln -sf "${monadoJson}" "$active"
+          write_openvrpaths
           # The SteamVR-LH driver intermittently fails device creation, so retry.
           # Each attempt starts from a clean socket: a stale/unlinked
           # monado_comp_ipc (e.g. from an unclean exit) leaves the unit "active"
@@ -137,6 +161,7 @@ let
           index_audio_off        # Quest uses its own audio; give the desktop sink back
           mkdir -p "$(dirname "$active")"
           ln -sf "${wivrnJson}" "$active"
+          write_openvrpaths
           systemctl --user start wivrn.service
           echo "vr-mode: wivrn (quest) active"
           ;;
