@@ -15,8 +15,13 @@
 
   system.stateVersion = "25.11";
 
-  time.timeZone = "Europe/Stockholm";  # placeholder — update for actual location
+  time.timeZone = "Europe/Stockholm";
   networking.hostName = "mindgame";
+
+  # Give plenty of time at the boot menu to pick Windows.
+  boot.loader.timeout = 60;
+  # Push our main NixOS instance to the bottom, so that Windows is next to it.
+  boot.loader.systemd-boot.sortKey = "z_nixos";
 
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia.open = true;
