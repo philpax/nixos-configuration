@@ -18,7 +18,13 @@ in {
     "nvidia"
   ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
-  boot.kernelParams = [ "nomodeset" "nvme_core.default_ps_max_latency_us=0" "pcie_aspm=off" ];
+  # acpi_enforce_resources=lax: the Aorus TRX40 DSDT declares an ACPI OperationRegion
+  # over the FCH SMBus I/O range (0xB00-0xB0F), so i2c-piix4's probe hits
+  # acpi_check_region() and returns -ENODEV before claiming it. The module loads but
+  # never binds to 00:14.0, so no SMBus adapter appears and OpenRGB can't see the
+  # Corsair DDR4 DIMMs. `lax` downgrades that conflict to a warning.
+  # Caveat: AML and the driver can now both drive the bus.
+  boot.kernelParams = [ "nomodeset" "nvme_core.default_ps_max_latency_us=0" "pcie_aspm=off" "acpi_enforce_resources=lax" ];
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
