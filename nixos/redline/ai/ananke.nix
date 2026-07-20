@@ -103,49 +103,6 @@ let
       extras = { context = 8192; } // discordVisible;
     }
     {
-      name = "qwen3-30b-a3b-instruct-2507";
-      file = "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/Qwen3-30B-A3B-Instruct-2507-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
-    }
-    {
-      name = "qwen3-30b-a3b-thinking-2507";
-      file = "unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF/Qwen3-30B-A3B-Thinking-2507-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; };
-    }
-    {
-      name = "qwen3-30b-a3b-coder-2507";
-      file = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; };
-    }
-    {
-      name = "qwen3-32b";
-      file = "unsloth/Qwen3-32B-GGUF/Qwen3-32B-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
-    }
-    {
-      name = "qwen3-235b-a22b-instruct";
-      file = "unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF/UD-Q2_K_XL/Qwen3-235B-A22B-Instruct-2507-UD-Q2_K_XL-00001-of-00002.gguf";
-      extras = {
-        context = 16384;
-        threads = 24;
-        override_tensor = [ ".ffn_(up|down)_exps.=CPU" ];
-        sampling = {
-          temperature = 0.7;
-          top_p = 0.8;
-          top_k = 20;
-          min_p = 0.0;
-        };
-        extra_args = [ "--prio" "3" ];
-        devices = { placement = "hybrid"; };
-      };
-    }
-    {
-      name = "qwen3-vl-30b-a3b-instruct";
-      file = "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf";
-      mmproj = "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/mmproj-F16.gguf";
-      extras = { context = 8192; };
-    }
-    {
       name = "qwen3.6-35b-a3b";
       file = "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       mmproj = "unsloth/Qwen3.6-35B-A3B-GGUF/mmproj-F16.gguf";
@@ -168,11 +125,6 @@ let
 
     # Gemma family.
     {
-      name = "gemma-3-27b-it";
-      file = "unsloth/gemma-3-27b-it-GGUF/gemma-3-27b-it-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
-    }
-    {
       name = "gemma-3-27b-it-abliterated";
       file = "mlabonne/gemma-3-27b-it-abliterated-GGUF/gemma-3-27b-it-abliterated.q4_k_m.gguf";
       extras = { context = 8192; } // discordVisible;
@@ -181,11 +133,6 @@ let
       name = "gemma-3-glitter-27b";
       file = "mradermacher/Gemma-3-Glitter-27B-i1-GGUF/Gemma-3-Glitter-27B.i1-Q5_K_M.gguf";
       extras = { context = 8192; } // discordVisible;
-    }
-    {
-      name = "gemma-3n-e4b-it";
-      file = "unsloth/gemma-3n-E4B-it-GGUF/gemma-3n-E4B-it-UD-Q4_K_XL.gguf";
-      extras = { context = 16384; } // discordVisible;
     }
     {
       name = "gemma-4-31b-it";
@@ -247,28 +194,6 @@ let
       extras = gemma4Extras;
     }
 
-    # GLM family.
-    {
-      name = "glm-4-32b-0414";
-      file = "unsloth/GLM-4-32B-0414-GGUF/GLM-4-32B-0414-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
-    }
-    {
-      name = "glm-z1-9b-0414";
-      file = "unsloth/GLM-Z1-9B-0414-GGUF/GLM-Z1-9B-0414-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; };
-    }
-    {
-      name = "glm-4-5-air";
-      file = "unsloth/GLM-4.5-Air-GGUF/UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf";
-      extras = {
-        context = 16384;
-        threads = 24;
-        override_tensor = [ "\\.([0-9][0-9])\\.ffn_(up|down)_exps.=CPU" ];
-        devices = { placement = "hybrid"; };
-      };
-    }
-
     # DeepSeek family.
     # DeepSeek-V4-Flash: a ~671B-class MoE (256 experts, 6 active + 1 shared)
     # in the new `deepseek4` arch — MLA attention, an NSA "lightning indexer"
@@ -307,35 +232,11 @@ let
       };
     }
 
-    # Llama family.
-    {
-      name = "llama-3.3-70b-instruct-abliterated";
-      file = "bartowski/Llama-3.3-70B-Instruct-abliterated-GGUF/Llama-3.3-70B-Instruct-abliterated-IQ2_XS.gguf";
-      extras = { context = 8192; };
-    }
-    {
-      name = "llama-3.3-nemotron-super-49b-v1_5";
-      file = "unsloth/Llama-3_3-Nemotron-Super-49B-v1_5-GGUF/Llama-3_3-Nemotron-Super-49B-v1_5-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; };
-    }
-
     # Mistral family.
-    {
-      name = "mistral-small-3.2-24b-instruct-2506";
-      file = "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
-    }
     {
       name = "magidonia-24b-v4.3";
       file = "bartowski/TheDrummer_Magidonia-24B-v4.3-GGUF/TheDrummer_Magidonia-24B-v4.3-Q5_K_M.gguf";
       extras = { context = 8192; };
-    }
-
-    # GPT-OSS family.
-    {
-      name = "gpt-oss-20b";
-      file = "unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-UD-Q4_K_XL.gguf";
-      extras = { context = 8192; } // discordVisible;
     }
 
     # Talkie family. Dense 13B (talkie arch) with full MHA — the estimator
@@ -360,35 +261,6 @@ let
       vram_gb = 44;
       per_gpu_mib = 22000;
       description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4).";
-    }
-    # Lower-VRAM 200K-context variant of the 27B, sized to co-run with the
-    # GPU-1-pinned Jina embedder. Shares the image and weights with
-    # qwen3.6-27b-vllm (same script, same upstream_model); CONTAINER_SUFFIX
-    # gives it a distinct docker container so the two never collide on the
-    # fixed `vllm_qwen36_27b` name during an eviction handover.
-    #
-    # The binding constraint is GPU 1: this runs TP=2 (a shard on each
-    # card), and GPU 1 also carries the embedder. vLLM grabs
-    # `gpu-memory-utilization * 24122` up front, so util 0.80 (~19.3
-    # GiB/GPU) holds 200K and still leaves room once the embedder is
-    # shrunk to ~3.5 GiB (max-len 8192, util 0.12) — see its entry below:
-    # 19.3 + 3.5 ≈ 22.8 GiB on GPU 1, ~0.8 GiB headroom. (262K needs ~0.92
-    # util / ~22 GiB/GPU and can't coexist with the embedder.) If vLLM
-    # rejects 200000 at boot ("max seq len > KV cache"), nudge
-    # GPU_MEMORY_UTILIZATION up and bump the pledge to match.
-    {
-      kind = "vllm";
-      name = "qwen3.6-27b-lowvram-vllm";
-      script = "${vllmDir}/qwen36_27b.sh";
-      upstream_model = "qwen3.6-27b-autoround";
-      vram_gb = 39;
-      per_gpu_mib = 19500;
-      extra_env = {
-        MAX_MODEL_LEN = "200000";
-        GPU_MEMORY_UTILIZATION = "0.80";
-        CONTAINER_SUFFIX = "_lowvram";
-      };
-      description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4, 200K ctx — co-runs with the embedder).";
     }
     {
       kind = "vllm";
@@ -436,14 +308,19 @@ let
     # /v1/models + /api/services, rendered as a badge in the
     # ServicesTable + ServiceDetail).
     #
-    # Sized to co-tenant GPU 1 with qwen3.6-27b-lowvram-vllm's TP=2 shard.
     # The model itself is tiny (~1.3 GiB bf16, Qwen3-0.6B backbone); the
     # footprint is almost all KV pool (~110 KiB/token). Capping inputs at
     # 16384 needs ~1.7 GiB KV → util 0.16 (~3.9 GiB total) per the script's
-    # two-point calibration, vs the 32K/util-0.25 (~7 GiB) default. That
-    # leaves GPU 1 at ~19.3 (qwen) + ~3.9 = ~23.2 GiB of ~23.3 — it fits
-    # but headroom is slim. If either OOMs at boot, drop MAX_MODEL_LEN to
-    # 12288 (or qwen to ~192K) to buy margin.
+    # two-point calibration, vs the 32K/util-0.25 (~7 GiB) default.
+    #
+    # That cap dates from co-tenanting GPU 1 with the 200K-context
+    # qwen3.6-27b-lowvram-vllm variant, which was pruned in #22. The
+    # surviving qwen3.6-27b-vllm pledges 22000 MiB/GPU, so it and the
+    # embedder no longer fit on GPU 1 together — ananke evicts one for the
+    # other rather than co-scheduling them. The 16384/0.16 sizing is
+    # therefore conservative rather than required; raising it toward the
+    # 32K/util-0.25 default is now free, at the cost of giving up any
+    # future co-tenancy path.
     {
       kind = "vllm";
       name = "jina-embeddings-v5-text-small-retrieval-vllm";
