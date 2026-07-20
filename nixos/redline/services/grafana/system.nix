@@ -140,6 +140,43 @@ let
       ];
     };
 
+  # Corsair H150i Pro XT, via the liquidctl textfile collector in
+  # services/h150i-metrics.nix. Fan 3 idles at 0 rpm under its zero-RPM
+  # curve, so a flat zero there is expected rather than a dead fan.
+  coolantTempPanel =
+    tsPanel {
+      id = 11;
+      title = "Coolant Temperature (°C)";
+      gridPos = { h = 8; w = 12; x = 0; y = 40; };
+      unit = "celsius";
+      targets = [ (mkTarget "A" "liquidctl_liquid_temperature_celsius" "coolant") ];
+    };
+
+  coolerRpmPanel =
+    tsPanel {
+      id = 12;
+      title = "Pump & Fan Speed (rpm)";
+      gridPos = { h = 8; w = 12; x = 12; y = 40; };
+      unit = "rotrpm";
+      targets = [
+        (mkTarget "A" "liquidctl_pump_speed_rpm" "pump")
+        (mkTarget "B" "liquidctl_fan_speed_rpm" "fan {{fan}}")
+      ];
+    };
+
+  coolerDutyPanel =
+    tsPanel {
+      id = 13;
+      title = "Pump & Fan Duty (%)";
+      gridPos = { h = 8; w = 24; x = 0; y = 48; };
+      unit = "percent";
+      softMax = 100;
+      targets = [
+        (mkTarget "A" "liquidctl_pump_duty_percent" "pump")
+        (mkTarget "B" "liquidctl_fan_duty_percent" "fan {{fan}}")
+      ];
+    };
+
   dashboard = {
     annotations = { list = []; };
     editable = true;
@@ -159,6 +196,9 @@ let
       gpuMemPanel
       zfsHealthPanel
       zfsSpacePanel
+      coolantTempPanel
+      coolerRpmPanel
+      coolerDutyPanel
     ];
     refresh = "10s";
     schemaVersion = 39;
