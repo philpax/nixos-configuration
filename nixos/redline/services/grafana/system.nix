@@ -5,7 +5,7 @@ let
   h = import ./helpers.nix { inherit lib; };
   inherit (h) mkTarget tsPanel;
 
-  ramBytes = 128 * 1024 * 1024 * 1024;
+  ramBytes = 256 * 1024 * 1024 * 1024;
   gpuMemBytes = 24 * 1024 * 1024 * 1024;
   ssd0Bytes = 4000785104896;
   storageBytes = 46354617335808;
