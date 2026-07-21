@@ -21,6 +21,10 @@ This skill was written for one deployment. Everything below is a local value; su
 | the model list config | `~/nixos-configuration/nixos/redline/ai/ananke.nix` |
 | llama.cpp flake pin | `~/nixos-configuration/nixos/redline/ai/llama-flake/flake.nix` |
 | llama.cpp source checkout | `~/programming/llama.cpp` |
+| ik_llama.cpp flake pin | `~/nixos-configuration/nixos/redline/ai/ik-llama-flake/flake.nix` |
+| ik_llama.cpp source checkout | `~/programming/ik_llama.cpp` |
+
+Both llama-server binaries are on `PATH`: mainline as `llama-server`, the fork (ikawrakow's ik_llama.cpp) as `ik-llama-server` — prefixed so the names don't collide. See *Serving with ik_llama.cpp*.
 
 **Ports.** OpenAI-compatible API on **7070**; management API + dashboard on **7071**; each service also gets a raw llama-server reverse proxy on **8200 + its index** in the model list.
 
@@ -28,7 +32,9 @@ This skill was written for one deployment. Everything below is a local value; su
 
 **Integrations.** `discordVisible` is a bespoke helper (yours may differ or be absent) — see *Vocabulary*.
 
-**The performance numbers here come from one model.** The reference is DeepSeek-V4-Flash (UD-IQ3_XXS, ~96 GiB on disk, 256 experts with 6 active, run hybrid with most experts on CPU) on the *Machine* above. They illustrate *shape*, not targets. A dense 27B that fits on one card behaves nothing like this — its speed is bounded by GPU memory bandwidth, not by a CPU-resident expert stack.
+**The performance numbers here come from two models.** The mainline-hybrid reference is DeepSeek-V4-Flash (UD-IQ3_XXS, ~96 GiB on disk, 256 experts with 6 active, most experts on CPU) at ~3 tok/s. The ik_llama.cpp reference is GLM-5.2 (`glm-dsa`, 744B-A40B, muzzy smol-IQ2_KS, ~205 GiB) at ~8 tok/s flat to 58k+ depth — larger on disk yet more than twice as fast, because the fork's CPU kernels and DSA sparse attention change the shape entirely. Both ran on the *Machine* above.
+
+They illustrate *shape*, not targets. A dense 27B that fits on one card behaves like neither — its speed is bounded by GPU memory bandwidth, not a CPU-resident expert stack.
 
 ## Vocabulary
 
@@ -36,6 +42,7 @@ This skill was written for one deployment. Everything below is a local value; su
 - **estimator** — ananke's per-architecture VRAM model: weights, KV per token, compute buffer. Lives in `ananke/src/estimator/`. It's what rejects an unknown architecture.
 - **packer** (allocator) — decides placement given the estimate: which layers land on which GPU, which experts spill to CPU, and it synthesises the `-ot` rules. Lives in `ananke/src/allocator/`. The estimator predicts; the packer places.
 - **operator** — the human running the box. When something is a judgement call about use case, it's theirs.
+- **ik_llama.cpp** — ikawrakow's fork of llama.cpp, with CPU-optimised kernels for i-quants and its own feature set (DSA sparse attention, MTP, `--fit`). ananke serves it as a first-class runtime via `runtime = { kind = "ik-llama"; … }`. Reach for it when a hybrid i-quant is CPU-dequant-bound — see *Serving with ik_llama.cpp*.
 
 Config nouns, all set in your `ananke.nix` (path in *Parameters*):
 
@@ -112,6 +119,7 @@ ananke owns the llama-server command line. Set knobs as config keys; raw flags o
 | `--split-mode row\|tensor` | `devices.split = "row"\|"tensor"` |
 | `-ot` | `override_tensor` (list of rules) |
 | `--cpu-moe` / `--n-cpu-moe` | **`expert_offload`** — see below |
+| ik_llama.cpp + its `-mla`/`-dsa`/`--fit`/`-amb`/`-rtr` | `runtime = { kind = "ik-llama"; … }` — see *Serving with ik_llama.cpp* |
 | anything else | `extra_args = [ "--flag" "value" ]` |
 
 `expert_offload` is the coarse MoE fit knob: `"off"` (default), `"auto"` (the packer fills VRAM with expert layers from the estimate and offloads the rest), or an integer layer count. **There is no `n_cpu_moe` key** — writing one is a hard config error. `"auto"` depends on the estimator understanding the architecture; without that it under-reserves and OOMs at load.
@@ -123,9 +131,9 @@ When the model won't fit at the context you want, the operator chooses what to s
 1. **Quantised KV** (`cache_type_k`/`cache_type_v = "q8_0"`, needs `flash_attn`). Small quality cost, often halves KV.
 2. **Less context.** Free, if the use case doesn't need the full window.
 3. **A smaller quant.** A Q4 that fits entirely on GPU beats a Q5 that spills to CPU, by a wide margin.
-4. **CPU offload (hybrid).** Last resort. It's a cliff, not a slope: DeepSeek-V4-Flash ran ~3 tok/s hybrid.
+4. **CPU offload (hybrid).** Last resort, and a cliff rather than a slope: DeepSeek-V4-Flash ran ~3 tok/s hybrid on mainline. But if the quant is an i-quant (`IQ*`), don't accept a mainline hybrid number before trying **ik_llama.cpp** (below) — its CPU kernels routinely multiply hybrid generation several-fold, because the wall is usually CPU dequant, not RAM bandwidth.
 
-Only option 4 pulls in the next section.
+Options 3 and 4 both interact with the runtime: a smaller *ik-native* quant served through ik_llama.cpp can beat a larger mainline quant on both speed and quality at once. Only these two pull in the next two sections.
 
 ## Hybrid tuning (CPU offload only)
 
@@ -139,9 +147,65 @@ Useful knobs beyond the defaults: `threads` (physical cores, 24 on the *Machine*
 
 Find the knee, then stop. Moving expert layers onto the GPU bought about +0.7 tok/s and then flattened — the ceiling was unoptimised attention kernels in a new architecture, not the CPU experts everyone blames. Past the knee, extra GPU capacity buys nothing; spend it on context or give a card back.
 
+## Serving with ik_llama.cpp
+
+When a hybrid MoE's generation ceiling is **CPU dequant compute, not RAM bandwidth**, ik_llama.cpp (ikawrakow's fork) is the biggest lever available — bigger than any placement tweak. i-quants (`IQ1_*`, `IQ2_XXS`, …) encode weights with per-group codebook lookups that mainline's CPU path handles slowly, and the fork exists to make exactly that fast.
+
+It also ships features mainline lacked at our pin: DSA sparse attention, MTP speculative decoding, `-sm graph`, and `--fit` auto-placement.
+
+**Is it your case?** Multiply expert bytes read per token by tok/s to get effective GB/s, and compare to the box's memory bandwidth. Far below it → dequant-bound, and ik helps a lot. Near it → bandwidth-bound, and ik won't. (GLM-5.2 at 1 tok/s on mainline was reading ~6 GB/s against ~70 available — squarely dequant-bound.)
+
+**Pick an ik-native quant.** The muzzy, sokann, and ubergarm HF repos publish quants built for the fork — `IQ2_KS`, `IQ2_KT`, `IQ2_KL`, the `IQ*_KT` trellis family — which dequant faster on CPU than the equivalent mainline i-quant and are often smaller at equal perplexity. `KS` dequants faster than `KT` (speed over quality); `KT` is smaller at equal quality. ananke's GGUF reader knows these dtypes (ggml ids 133–158) and the estimator sizes `glm-dsa`, so `dump-gguf`/`estimate` work on them unchanged.
+
+**Config.** Point `llama_server` at `ik-llama-server` and add the tagged runtime table; fork-only knobs live inside it. The GLM-5.2 reference entry:
+
+```nix
+{
+  name = "glm-5.2";
+  file = "muzzy/GLM-5.2-GGUF/IQ2_KS/GLM-5.2-smol-IQ2_KS-00001-of-00033.gguf";
+  extras = {
+    context = 131072;
+    threads = 24;
+    ubatch_size = 2048;
+    mmap = false;                         # 205 GiB resident; --no-mmap avoids fault stalls
+    llama_server = "${config.ai.ikLlamaCppCuda}/bin/llama-server";
+    runtime = { kind = "ik-llama"; mla = 1; dsa = true; fit = true; attn_max_batch = 512; };
+    devices = { placement = "hybrid"; };
+  };
+}
+```
+
+**The `--fit` margin trap — read this before benchmarking by hand.** ik's `--fit` auto-places layers, but accounts only weights + KV, *not* per-feature runtime buffers (prefill scratch, the DSA indexer, an MTP draft context). An unmargined `--fit` loads clean, passes the health check, then **OOMs on the first request** — a deferred failure that looks healthy until traffic arrives.
+
+ananke computes `--gpu-fit-margin` per device automatically from the runtime config. Driving `ik-llama-server` directly for a benchmark, you set it yourself: budget ~2 GiB/card for ub2048 prefill scratch, +3 GiB/card if `dsa`, and +~4 GiB on device 0 if MTP is on.
+
+**Knobs that mattered** (GLM-5.2 smol-IQ2_KS; your model will differ, but the shape of the lessons holds):
+
+- `-mla` **1, not 3, when using DSA.** mla 3 buys ~8% shallow prefill but silently defeats DSA's deep-prefill advantage (measured 143 → 61 tok/s at 58k). Without DSA the tradeoff reverses; benchmark it.
+- `-dsa -fidx` — sparse attention. Flat generation and ~2× deep prefill vs dense MLA. Requires f16 KV: it rejects quantised cache types and `-sm graph`.
+- `-rtr` (runtime repack) — unnecessary for `KS` quants (already CPU-fast) and adds minutes to load. Worth a trial on other i-quants.
+- `-sm graph`, `-khad` — both rejected here: `-sm graph` gave noise-level gains while saturating one card and OOMing prefill; `-khad` + quantised KV broke `--fit`. Don't assume; they may suit another model.
+
+**MTP is a mirage on real text.** `--spec-type mtp:n_max=4` benched at 10.6 tok/s — but that was **1.00 draft acceptance on repetitive benchmark text**. On real prompts acceptance fell to 0.63 and MTP dropped *below* the no-MTP baseline, because rejected drafts cost more than they save.
+
+Always measure acceptance on realistic prompts. MTP only wins for highly predictable output — structured JSON, code edits. (The dialect differs too: ik takes `mtp:n_max=…`, mainline takes `draft-mtp`.)
+
+The reference config (`mla=1`, `dsa`, `fit`, f16 KV, ub2048, 128k) lands ~8 tok/s flat to 58k+ depth and ~195/143 tok/s prefill shallow/deep on the *Machine*. See the model dir's `bench/TRIALS.md` + `RECOMMENDED.md` for the full trail.
+
 ## Benchmarking
 
 Only worth doing when tuning a hybrid config or comparing placements.
+
+**Two cheap checks before you trust any number:**
+
+- **Governor.** `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor`. `powersave` on `acpi-cpufreq` pins every core to the base-clock floor and silently halves CPU-bound throughput — it cost ~40% here before it was caught, invalidating a run of earlier numbers. Want `schedutil`, `ondemand`, or `performance`.
+- **What others found.** For a big or novel model, skim r/LocalLLaMA and the HF quant-repo discussions (unsloth, ubergarm, muzzy, sokann) for comparable hardware first. They set expectations and surface known-good flags and quants before you sweep blind — and reveal dead ends (e.g. that MTP is a mirage, or which fork features have landed).
+
+**How to run the sweep:**
+
+- **Benchmark before you import.** For a model that needs tuning, drive `llama-server` / `ik-llama-server` directly and settle the config first; write the ananke entry *last*. Importing an untuned config just makes you tune through the daemon, slowly.
+- **One benchmark at a time.** Runs are CPU/GPU/RAM/page-cache bound; a build or a second trial alongside corrupts the numbers. Never compile during a run.
+- **Drive it adaptively.** A findings-driven sweep beats a fixed script — the next trial almost always depends on the last result (a dead branch, a surprising win). Keep a script as the playbook and the idle-GPU gate, not as the unattended driver.
 
 The service must be **loaded first** (they're on-demand and idle out), and the script needs the **raw llama-server proxy**, not the OpenAI multiplexer — 7070 speaks a different API and has no `/completion`. Find the port with `anankectl services` or count the model's index in `models` and add it to 8200.
 
@@ -160,6 +224,9 @@ Traps that produce wrong numbers:
 - **Discard the first run.** A cold GGUF read measured 1.5 tok/s where warm was 2.9. The script warms up for you.
 - **Measure generation and prefill separately.** Different knobs, and they trade against each other.
 - **Expect ±0.5 tok/s of noise.** Don't chase smaller differences.
+- **Spec-decode acceptance is workload-specific.** A draft-model / MTP config that looks great on repetitive bench text can lose on real text (0.63 vs 1.00 acceptance → below baseline). Measure acceptance on realistic prompts, not the synthetic loop.
+- **Wait for CUDA teardown between trials.** Killing a multi-GiB server takes seconds to release VRAM; launching the next too fast makes `--fit` (and ananke placement) under-count free memory and fail on args that worked a moment earlier.
+- **Depth matters for sparse-attention models.** A shallow-context number hides how generation and prefill hold up as context fills — run the `depth` scenario, since that's where DSA-style architectures earn their keep or don't.
 
 Log trials to `bench/TRIALS.md` in the model's directory under the model dir. Worked examples exist for DeepSeek-V4-Flash and gemma-4-31B-it-qat, including the `RECOMMENDED.md` companion that `ananke.nix` comments cite by name — copy their format.
 
@@ -177,7 +244,7 @@ Pin a llama-cpp service to one card with `devices.placement_override = { "gpu:0"
 
 ## Adding an architecture
 
-Two halves: llama.cpp must support it, and ananke's estimator must size it.
+Two halves: llama.cpp must support it, and ananke's estimator must size it. Check **both** runtimes — ik_llama.cpp may support an arch (or a quant, or a feature like DSA) that mainline at your pin doesn't, and sometimes lands it first. If mainline rejects the arch, the fork is worth a look before you write off the model.
 
 **Check llama.cpp against the revision you actually run.** The pin lives in `inputs.llama-cpp.url` in the llama.cpp flake (path in *Parameters*); the source checkout drifts from it, so sync first:
 
