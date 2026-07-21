@@ -232,6 +232,58 @@ let
       };
     }
 
+    # GLM family.
+    # GLM-5.2: a 744B-A40B MoE (256 experts, 8 active + 1 shared) in the
+    # `glm-dsa` arch — MLA attention plus a DSA sparse-attention indexer.
+    # Served by ik_llama.cpp (`ai.ikLlamaCppCuda`), which unlocks the DSA
+    # path (`-dsa -fidx`, flat generation and 2.2× faster deep prefill vs
+    # dense MLA) on the muzzy smol-IQ2_KS quant (205.7 GiB, ~187 GiB of
+    # experts in CPU RAM under --no-mmap). Tuned overnight 2026-07-22:
+    # ~8 tok/s generation flat to 58k+ depth, ~195/143 tok/s prefill
+    # shallow/deep at 128k. Config rationale (incl. why -mla 1 and no
+    # MTP) in the model dir's RECOMMENDED.md; trials in
+    # unsloth/GLM-5.2-GGUF/bench/TRIALS.md. ananke computes the
+    # --gpu-fit-margin companions for `fit` from the same calibration.
+    # Sampling follows Unsloth's guide (temp 1.0, top_p 0.95, min_p 0.01).
+    {
+      name = "glm-5.2";
+      file = "muzzy/GLM-5.2-GGUF/IQ2_KS/GLM-5.2-smol-IQ2_KS-00001-of-00033.gguf";
+      extras = {
+        context = 131072;
+        threads = 24;
+        parallel = 1;
+        jinja = true;
+        batch_size = 2048;
+        ubatch_size = 2048;
+        mmap = false;
+        llama_server = "${config.ai.ikLlamaCppCuda}/bin/llama-server";
+        runtime = {
+          kind = "ik-llama";
+          mla = 1;
+          dsa = true;
+          fit = true;
+          attn_max_batch = 512;
+        };
+        sampling = {
+          temperature = 1.0;
+          top_p = 0.95;
+          min_p = 0.01;
+        };
+        devices = { placement = "hybrid"; };
+        # A cold 205 GiB --no-mmap load takes minutes; the default 3m
+        # probe timeout killed the child mid-load.
+        health = {
+          http = "/health";
+          timeout = "10m";
+        };
+        extra_args = [
+          "--parallel-tool-calls"
+          "--chat-template-kwargs"
+          (builtins.toJSON { reasoning_effort = "high"; })
+        ];
+      };
+    }
+
     # Mistral family.
     {
       name = "magidonia-24b-v4.3";
