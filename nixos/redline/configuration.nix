@@ -73,7 +73,11 @@ in {
   };
 
   # Use powersave governor for quieter operation
-  powerManagement.cpuFreqGovernor = "powersave";
+  # schedutil scales with load: idles low but boosts to 3.8-4.5 GHz under
+  # inference. The previous "powersave" + acpi-cpufreq pinned all cores to
+  # the 2.2 GHz floor, costing ~40% CPU throughput on hybrid LLM serving
+  # (discovered tuning GLM-5.2, 2026-07-21).
+  powerManagement.cpuFreqGovernor = "schedutil";
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
