@@ -779,6 +779,59 @@ class TestBuildSkillSymlinks:
 
 
 # ---------------------------------------------------------------------------
+# build_layered_skill_symlinks — filesystem-reading, testable with tmp_path
+# ---------------------------------------------------------------------------
+
+
+class TestBuildLayeredSkillSymlinks:
+    def _make_skill(self, dotfiles, layer, name):
+        skill = dotfiles / layer / ".config" / "polytoken" / "skills" / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(f"# {name}")
+
+    def test_collects_across_layers(self, tmp_path):
+        dotfiles = tmp_path / "dotfiles"
+        self._make_skill(dotfiles, "common-all", "committing")
+        self._make_skill(dotfiles, "redline", "llama-cpp-model-tuning")
+        target = tmp_path / "target"
+
+        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "redline", ["common-all"])
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"committing", "llama-cpp-model-tuning"}
+
+    def test_only_included_layers(self, tmp_path):
+        dotfiles = tmp_path / "dotfiles"
+        self._make_skill(dotfiles, "common-all", "committing")
+        self._make_skill(dotfiles, "redline", "llama-cpp-model-tuning")
+        target = tmp_path / "target"
+
+        # jinroh doesn't include the redline layer, so it shouldn't get the skill.
+        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "jinroh", ["common-all"])
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"committing"}
+
+    def test_machine_layer_overrides_common(self, tmp_path):
+        dotfiles = tmp_path / "dotfiles"
+        self._make_skill(dotfiles, "common-all", "shared")
+        self._make_skill(dotfiles, "redline", "shared")
+        target = tmp_path / "target"
+
+        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "redline", ["common-all"])
+        assert len(symlinks) == 1
+        target_path, source = symlinks[0]
+        assert target_path.name == "shared"
+        assert "redline" in source.parts and "common-all" not in source.parts
+
+    def test_no_skills_returns_empty(self, tmp_path):
+        dotfiles = tmp_path / "dotfiles"
+        (dotfiles / "common-all").mkdir(parents=True)
+        symlinks = sync.build_layered_skill_symlinks(
+            dotfiles, tmp_path / "target", "redline", ["common-all"]
+        )
+        assert symlinks == []
+
+
+# ---------------------------------------------------------------------------
 # build_skill_symlinks — integration with real repo
 # ---------------------------------------------------------------------------
 

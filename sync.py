@@ -36,7 +36,12 @@ STATE_FILE = REPO_DIR / ".sync-state.json"
 # Polytoken skills are the source of truth; these are symlinked into
 # Claude Code's personal skills directory (~/.claude/skills/<name>) so CC
 # loads the same skills. CC follows directory-level symlinks to read SKILL.md.
-POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / ".config" / "polytoken" / "skills"
+# Skills live per-layer at <layer>/.config/polytoken/skills/<name>, so which
+# skills a machine gets follows the same layer hierarchy as the dotfiles —
+# e.g. redline's llama-cpp-model-tuning skill only syncs to machines that
+# include the redline layer.
+POLYTOKEN_SKILLS_SUBPATH = Path(".config") / "polytoken" / "skills"
+POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / POLYTOKEN_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
 
 LAYER_IMPORT_RE = re.compile(r"\.\./(common-[a-z-]+)")
@@ -242,6 +247,29 @@ def build_skill_symlinks(
         target = target_dir / entry.name
         symlinks.append((target, entry))
     return symlinks
+
+
+def build_layered_skill_symlinks(
+    dotfiles_source: Path,
+    target_dir: Path,
+    folder_name: str,
+    allowed_layers: list[str],
+) -> list[tuple[Path, Path]]:
+    """Collect Polytoken skill symlinks across every layer the machine syncs.
+
+    Skills are stored per-layer at ``<layer>/.config/polytoken/skills/<name>``,
+    so a machine only gets a skill if it includes that layer — mirroring the
+    dotfiles hierarchy. When two layers define a skill of the same name, the
+    machine-specific layer wins over the shared common-* layers.
+    """
+    # common-* layers first so a machine-specific layer of the same name wins.
+    layers = [*allowed_layers, folder_name]
+    by_target: dict[Path, Path] = {}
+    for layer in layers:
+        skills_dir = dotfiles_source / layer / POLYTOKEN_SKILLS_SUBPATH
+        for target, source in build_skill_symlinks(skills_dir, target_dir):
+            by_target[target] = source
+    return sorted(by_target.items())
 
 
 def find_conflicts(symlinks: list[tuple[Path, Path]]) -> list[Path]:
@@ -557,8 +585,11 @@ def main():
     nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
     # Symlink Polytoken skills into Claude Code's skills directory so CC
-    # loads the same skills. These are common to all machines.
-    skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
+    # loads the same skills. Skills follow the same layer hierarchy as the
+    # dotfiles, so a machine only gets the skills for the layers it includes.
+    skill_symlinks = build_layered_skill_symlinks(
+        DOTFILES_SOURCE, CC_SKILLS_TARGET, folder_name, imported_layers
+    )
 
     all_new_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks
 
