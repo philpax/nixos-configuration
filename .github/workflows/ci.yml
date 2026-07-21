@@ -24,6 +24,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Steel cogs are git submodules; the repo-integration tests in test_sync.py
+      # need them checked out to find the real forest/notify/glyph cog dirs.
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: astral-sh/setup-uv@v6
       - run: uvx pytest -v

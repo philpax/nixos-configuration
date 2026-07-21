@@ -5,7 +5,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import sync
+
+
+def _cogs_checked_out() -> bool:
+    """True if the steel-cogs submodules are populated (have their cog.scm).
+
+    A fresh clone without `git submodule update --init` leaves them as empty
+    directories, in which case the repo-integration tests below can't run.
+    """
+    if not sync.STEEL_COGS_SOURCE.is_dir():
+        return False
+    return any((d / "cog.scm").is_file() for d in sync.STEEL_COGS_SOURCE.iterdir() if d.is_dir())
+
 
 # ---------------------------------------------------------------------------
 # parse_imported_layers — pure function, no I/O
@@ -927,6 +941,10 @@ class TestBuildCogSymlinks:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not _cogs_checked_out(),
+    reason="steel-cogs submodules not checked out (run `git submodule update --init`)",
+)
 class TestCogSymlinksRepoIntegration:
     """Smoke tests against the real repo's steel-cogs submodules."""
 
