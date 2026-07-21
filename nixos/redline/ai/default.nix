@@ -7,6 +7,8 @@ let
   });
   llamaCpp = (flake-compat { src = ./llama-flake; }).defaultNix;
   llamaCppCuda = llamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
+  ikLlamaCpp = (flake-compat { src = ./ik-llama-flake; }).defaultNix;
+  ikLlamaCppCuda = ikLlamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
 in
 {
   imports = [
@@ -21,12 +23,17 @@ in
         description = "CUDA-enabled llama-cpp package";
         default = llamaCppCuda;
       };
+      ikLlamaCppCuda = pkgs.lib.mkOption {
+        type = pkgs.lib.types.package;
+        description = "CUDA-enabled ik_llama.cpp (ikawrakow fork) package";
+        default = ikLlamaCppCuda;
+      };
     };
   };
 
   config = {
     ai = {
-      inherit llamaCppCuda;
+      inherit llamaCppCuda ikLlamaCppCuda;
     };
   };
 }
