@@ -33,6 +33,10 @@ fish_add_path $HOME/.cargo/bin
 # Set default editor
 set -gx EDITOR hx
 
+# Steel cog root for the plugin-enabled Helix (forest.hx etc). Steel's own default is
+# ambiguous (~/.steel if it happens to exist, else ~/.local/share/steel), so pin it.
+set -gx STEEL_HOME $HOME/.config/steel
+
 # Initialize direnv
 direnv hook fish | source
 

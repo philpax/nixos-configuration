@@ -44,6 +44,14 @@ POLYTOKEN_SKILLS_SUBPATH = Path(".config") / "polytoken" / "skills"
 POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / POLYTOKEN_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
 
+# Steel plugins ("cogs") for the plugin-enabled Helix fork are git submodules under
+# steel-cogs/. Each is directory-symlinked into steel's cog root ($STEEL_HOME/cogs; STEEL_HOME
+# is pinned to ~/.config/steel in the fish config) so `(require "forest/...")` resolves. They
+# live outside dotfiles/ so the per-file dotfiles flow doesn't also grab their
+# LICENSE/README/.git; here they get one clean directory symlink each.
+STEEL_COGS_SOURCE = REPO_DIR / "steel-cogs"
+STEEL_COGS_TARGET = Path.home() / ".config" / "steel" / "cogs"
+
 LAYER_IMPORT_RE = re.compile(r"\.\./(common-[a-z-]+)")
 
 
@@ -270,6 +278,31 @@ def build_layered_skill_symlinks(
         for target, source in build_skill_symlinks(skills_dir, target_dir):
             by_target[target] = source
     return sorted(by_target.items())
+
+
+def build_cog_symlinks(
+    source_dir: Path,
+    target_dir: Path,
+) -> list[tuple[Path, Path]]:
+    """Build (target, source) pairs for Steel cog directories (git submodules).
+
+    Each immediate subdirectory of ``source_dir`` that contains a ``cog.scm``
+    becomes a directory-level symlink at ``target_dir/<cog_name>``, so steel
+    resolves ``(require "<cog>/<file>.scm")`` from ``$STEEL_HOME/cogs/<cog>``.
+    A submodule that hasn't been checked out has no ``cog.scm`` and is skipped.
+    """
+    if not source_dir.is_dir():
+        return []
+
+    symlinks: list[tuple[Path, Path]] = []
+    for entry in sorted(source_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        if not (entry / "cog.scm").is_file():
+            continue
+        target = target_dir / entry.name
+        symlinks.append((target, entry))
+    return symlinks
 
 
 def find_conflicts(symlinks: list[tuple[Path, Path]]) -> list[Path]:
@@ -504,9 +537,11 @@ def _init_state(folder_name: str) -> None:
         nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
     skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
+    cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
-    total = len(nixos_symlinks) + len(dotfiles_symlinks) + len(skill_symlinks)
-    write_manifest(folder_name, nixos_symlinks + dotfiles_symlinks + skill_symlinks)
+    all_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks + cog_symlinks
+    total = len(all_symlinks)
+    write_manifest(folder_name, all_symlinks)
     print(
         f"\nInitialized state with {total} symlinks (all common-* layers).\n"
         f"Run {bold(f'./sync.sh {folder_name}')} to sync with layer-awareness "
@@ -591,7 +626,11 @@ def main():
         DOTFILES_SOURCE, CC_SKILLS_TARGET, folder_name, imported_layers
     )
 
-    all_new_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks
+    # Symlink Steel cogs into $STEEL_HOME/cogs for the plugin-enabled Helix.
+    # These are common to all machines (helix-steel lives in common-all).
+    cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
+
+    all_new_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks + cog_symlinks
 
     # Read previous manifest and compute stale symlinks
     previous = read_manifest(STATE_FILE)
@@ -608,6 +647,12 @@ def main():
         print(f"{bold('Claude Code skills')} {green(f'({len(skill_symlinks)})')}:")
         print(f"  {yellow('polytoken-skills')} {dim(f'({len(skill_symlinks)})')}:")
         for target, _ in skill_symlinks:
+            print(f"    {dim(shorten_path(target))}")
+        print()
+    if cog_symlinks:
+        print(f"{bold('Steel cogs')} {green(f'({len(cog_symlinks)})')}:")
+        print(f"  {yellow('steel-cogs')} {dim(f'({len(cog_symlinks)})')}:")
+        for target, _ in cog_symlinks:
             print(f"    {dim(shorten_path(target))}")
         print()
 
@@ -632,6 +677,7 @@ def main():
         find_conflicts(nixos_symlinks)
         + find_conflicts(dotfiles_symlinks)
         + find_conflicts(skill_symlinks)
+        + find_conflicts(cog_symlinks)
     )
     if all_conflicts:
         print(f"{bold('Conflicts')} {red(f'({len(all_conflicts)})')}:")
@@ -652,6 +698,7 @@ def main():
     created_nixos: list[tuple[Path, Path]] = []
     created_dotfiles: list[tuple[Path, Path]] = []
     created_skills: list[tuple[Path, Path]] = []
+    created_cogs: list[tuple[Path, Path]] = []
 
     try:
         print(bold("NixOS configuration"))
@@ -667,6 +714,10 @@ def main():
             created_skills = create_or_update_symlinks(
                 skill_symlinks, use_sudo=False, force=args.force
             )
+
+        if cog_symlinks:
+            print(bold("Steel cogs"))
+            created_cogs = create_or_update_symlinks(cog_symlinks, use_sudo=False, force=args.force)
 
         # Remove stale symlinks
         if stale:
@@ -686,7 +737,7 @@ def main():
         print(f"\n{green('✓')} Sync complete!")
 
     finally:
-        all_created = created_nixos + created_dotfiles + created_skills
+        all_created = created_nixos + created_dotfiles + created_skills + created_cogs
         if all_created:
             write_manifest(folder_name, all_created)
 

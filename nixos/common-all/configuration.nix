@@ -10,6 +10,7 @@
   system.autoUpgrade.enable = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
+  nixpkgs.overlays = [ (import ./overlays/helix-steel.nix) ];
 
   boot.kernelPackages =
     if config.boot.zfs.enabled

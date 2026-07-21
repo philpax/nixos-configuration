@@ -855,3 +855,95 @@ class TestSkillSymlinksRepoIntegration:
         for _, source in symlinks:
             assert source.parent == sync.POLYTOKEN_SKILLS_SOURCE
             assert (source / "SKILL.md").is_file()
+
+
+# ---------------------------------------------------------------------------
+# build_cog_symlinks — filesystem-reading, testable with tmp_path
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCogSymlinks:
+    def test_builds_symlinks_for_cog_dirs(self, tmp_path):
+        source = tmp_path / "steel-cogs"
+        (source / "forest").mkdir(parents=True)
+        (source / "forest" / "cog.scm").write_text("(define package-name 'forest)")
+        (source / "notify").mkdir(parents=True)
+        (source / "notify" / "cog.scm").write_text("(define package-name 'notify)")
+
+        target = tmp_path / "target"
+        symlinks = sync.build_cog_symlinks(source, target)
+
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"forest", "notify"}
+        for t, s in symlinks:
+            assert t.parent == target
+            assert s == source / t.name
+
+    def test_skips_dirs_without_cog_scm(self, tmp_path):
+        source = tmp_path / "steel-cogs"
+        (source / "has-cog").mkdir(parents=True)
+        (source / "has-cog" / "cog.scm").write_text("(define package-name 'has-cog)")
+        # An un-checked-out submodule is an empty directory: no cog.scm.
+        (source / "empty-submodule").mkdir(parents=True)
+
+        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"has-cog"}
+
+    def test_skips_files_in_source_dir(self, tmp_path):
+        source = tmp_path / "steel-cogs"
+        source.mkdir(parents=True)
+        (source / "README.md").write_text("# readme")
+        (source / "forest").mkdir()
+        (source / "forest" / "cog.scm").write_text("(define package-name 'forest)")
+
+        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"forest"}
+
+    def test_missing_source_returns_empty(self, tmp_path):
+        symlinks = sync.build_cog_symlinks(tmp_path / "nonexistent", tmp_path / "target")
+        assert symlinks == []
+
+    def test_empty_source_returns_empty(self, tmp_path):
+        source = tmp_path / "steel-cogs"
+        source.mkdir()
+        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
+        assert symlinks == []
+
+    def test_results_sorted(self, tmp_path):
+        source = tmp_path / "steel-cogs"
+        for name in ["zebra", "alpha", "mango"]:
+            (source / name).mkdir(parents=True)
+            (source / name / "cog.scm").write_text(f"(define package-name '{name})")
+
+        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
+        names = [t.name for t, s in symlinks]
+        assert names == ["alpha", "mango", "zebra"]
+
+
+# ---------------------------------------------------------------------------
+# build_cog_symlinks — integration with real repo
+# ---------------------------------------------------------------------------
+
+
+class TestCogSymlinksRepoIntegration:
+    """Smoke tests against the real repo's steel-cogs submodules."""
+
+    def test_finds_real_cogs(self):
+        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
+        names = {t.name for t, s in symlinks}
+        # forest.hx's dependencies resolve by cog package-name, so the dirs are
+        # named forest/notify/glyph regardless of repo name.
+        assert names == {"forest", "notify", "glyph"}
+
+    def test_targets_under_steel_cogs_dir(self):
+        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
+        for target, _ in symlinks:
+            assert target.parent == sync.STEEL_COGS_TARGET
+
+    def test_sources_have_cog_scm(self):
+        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
+        for _, source in symlinks:
+            assert source.parent == sync.STEEL_COGS_SOURCE
+            assert (source / "cog.scm").is_file()

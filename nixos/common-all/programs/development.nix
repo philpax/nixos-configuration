@@ -6,7 +6,6 @@
     git
     ripgrep
     direnv
-    helix
     gdb
   ];
 }
