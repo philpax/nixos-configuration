@@ -78,6 +78,8 @@ in
     zed-editor
     foliate
 
+    chromium
+
     # Wine (Full variant includes wine-mono)
     wineWow64Packages.stableFull
     winetricks

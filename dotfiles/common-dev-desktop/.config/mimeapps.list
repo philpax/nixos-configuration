@@ -5,6 +5,11 @@ application/pdf=firefox.desktop;
 video/x-matroska=vlc.desktop;
 
 [Default Applications]
+x-scheme-handler/http=firefox.desktop
+x-scheme-handler/https=firefox.desktop
+x-scheme-handler/chrome=firefox.desktop
+text/html=firefox.desktop
+application/xhtml+xml=firefox.desktop
 inode/directory=org.gnome.Nautilus.desktop
 image/jpeg=org.gnome.gThumb.desktop
 image/png=org.gnome.gThumb.desktop
