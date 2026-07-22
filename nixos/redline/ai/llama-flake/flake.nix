@@ -8,14 +8,7 @@
   # The `cuda` package is rebuilt here rather than re-exported, for two reasons:
   #   1. CUDA architectures pinned to SM 8.6 (RTX 3090); upstream builds every
   #      supported arch, which drastically inflates compile time.
-  #   2. fattn-graph-reuse-fix.patch: ownership refactor of the meta backend's
-  #      external-view shard registrations (per-instance containers, lazy
-  #      registration, scratch shard pools), fixing reused compute graphs
-  #      executing foreign/stale K/V cache views under Gemma 4 MTP +
-  #      -sm tensor (fattn.cu abort or silent corruption; upstream issues
-  #      #24324/#24440). Full investigation:
-  #      /mnt/ssd0/ai/llm/unsloth/gemma-4-31B-it-qat-GGUF/bench/TRIALS.md.
-  #      Drop the patch once upstream fixes graph reuse properly.
+  #   2. fattn-graph-reuse-fix.patch: fixes tensor split crash in meta backend shard registration. Duplicated in ../poolside-llama-flake/ — keep in sync.
   #
   # The rev below is pinned to an upstream master commit (2026-07-10,
   # c749cb04), not a release tag. The patch was rebased onto it after upstream
