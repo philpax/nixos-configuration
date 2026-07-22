@@ -284,6 +284,41 @@ let
       };
     }
 
+    # Laguna family.
+    # Laguna S 2.1: a 118B-A8B MoE (48 layers, 1 dense + 47 routed, shared
+    # expert) in the `laguna` arch — variable per-layer Q head counts, plain
+    # GQA KV (8 heads × 128 dim), sliding window 512. Served by ik_llama.cpp
+    # (`ai.ikLlamaCppCuda`) on the unsloth UD-IQ4_NL quant (55 GiB, i-quant):
+    # ik's CPU kernels make the hybrid expert dequant ~2× faster than
+    # mainline/poolside at the same ~4-bit quality tier. Tuned overnight
+    # 2026-07-22: ~30 tok/s gen at 2K, ~19 tok/s at 128K, ~35 tok/s on
+    # coding prompts, ~1127 tok/s prefill at 8K. Config rationale and
+    # DFlash findings in the model dir's RECOMMENDED.md; trials in
+    # unsloth/Laguna-S-2.1-GGUF/bench/TRIALS.md.
+    {
+      name = "laguna-s-2.1-iq4-nl";
+      file = "unsloth/Laguna-S-2.1-GGUF/UD-IQ4_NL/Laguna-S-2.1-UD-IQ4_NL-00001-of-00003.gguf";
+      extras = {
+        context = 131072;
+        threads = 24;
+        parallel = 1;
+        jinja = true;
+        batch_size = 2048;
+        ubatch_size = 2048;
+        mmap = false;
+        flash_attn = true;
+        cache_type_k = "q8_0";
+        cache_type_v = "q8_0";
+        numa = "distribute";
+        llama_server = "${config.ai.ikLlamaCppCuda}/bin/llama-server";
+        runtime = {
+          kind = "ik-llama";
+          fit = true;
+        };
+        devices = { placement = "hybrid"; };
+      };
+    }
+
     # Mistral family.
     {
       name = "magidonia-24b-v4.3";
