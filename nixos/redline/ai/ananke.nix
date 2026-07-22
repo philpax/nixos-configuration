@@ -277,6 +277,7 @@ let
           timeout = "10m";
         };
         extra_args = [
+          "--log-disable"
           "--parallel-tool-calls"
           "--chat-template-kwargs"
           (builtins.toJSON { reasoning_effort = "high"; })
@@ -316,6 +317,7 @@ let
           fit = true;
         };
         devices = { placement = "hybrid"; };
+        extra_args = [ "--log-disable" ];
       };
     }
 
