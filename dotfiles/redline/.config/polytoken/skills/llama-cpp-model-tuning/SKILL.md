@@ -113,6 +113,7 @@ ananke owns the llama-server command line. Set knobs as config keys; raw flags o
 | `-t` | `threads` |
 | `-b` / `-ub` | `batch_size` / `ubatch_size` |
 | `-np` | `parallel` |
+| `--kv-unified` | `kv_unified = true` (enabled by default if `parallel` is auto) |
 | `-fa` | `flash_attn = true` |
 | `--cache-type-k/v` | `cache_type_k` / `cache_type_v` |
 | `--numa distribute` | `numa = "distribute"` |
@@ -123,6 +124,8 @@ ananke owns the llama-server command line. Set knobs as config keys; raw flags o
 | anything else | `extra_args = [ "--flag" "value" ]` |
 
 `expert_offload` is the coarse MoE fit knob: `"off"` (default), `"auto"` (the packer fills VRAM with expert layers from the estimate and offloads the rest), or an integer layer count. **There is no `n_cpu_moe` key** — writing one is a hard config error. `"auto"` depends on the estimator understanding the architecture; without that it under-reserves and OOMs at load.
+
+`parallel` defaults to auto (4 slots), which allocates 4 separate KV caches. For single-user setups, set `parallel = 1` to free VRAM for more context. For concurrency, use `parallel = N` with `kv_unified = true` — slots share one context-sized KV pool, so the cost is nearly free. Cap generation length (`-n`) when using `kv_unified`: uncapped runaway generations exhaust the shared pool and trigger an assertion (see the gemma-4-31b-it-qat entry for the pattern).
 
 ## Making it fit
 
@@ -138,6 +141,10 @@ Options 3 and 4 both interact with the runtime: a smaller *ik-native* quant serv
 ## Hybrid tuning (CPU offload only)
 
 Skip this entirely unless the weights can't all live on the GPUs.
+
+**Test placement before writing the ananke entry.** Drive `llama-server` / `ik-llama-server` directly with `--fit` (both forks ship it) to auto-discover the optimal per-tensor placement. This is faster and usually better than hand-tuning `-cmoe`/`-ncmoe`/`-ot` — on Laguna S 2.1, `--fit on` was 50% faster than the best manual `-cmoe` placement because it distributes individual expert tensors across cards rather than whole layers. Once you've found the config that works, translate it to ananke keys: `devices.placement = "hybrid"` + `expert_offload = "auto"` should reproduce the same placement once the estimator knows the architecture.
+
+ik_llama's `--fit` needs an explicit margin (`--fit-margin N`, in MiB) because it accounts only weights + KV, not compute buffers. Budget ~4 GiB/card for ub2048 prefill scratch. An unmargined `--fit` loads clean then OOMs on the first request — the same deferred failure as *The `--fit` margin trap* below.
 
 Start with `devices = { placement = "hybrid"; }` and `expert_offload = "auto"`. That's the whole config for the common case — the packer balances experts across both cards and synthesises the `-ot` rules. The DeepSeek-V4-Flash entry is exactly this plus `threads`, `numa`, and batch sizes.
 
@@ -216,6 +223,8 @@ anankectl start <name>
 
 Scenarios: `turns` (agent loop with prompt-cache reuse), `prefill` (cold, cache off), `depth` (generation as context fills).
 
+For spec-decode acceptance testing, use `coding-bench.py` (also alongside this skill). It sends realistic coding prompts (system + tool defs + multi-language requests) instead of repetitive filler text, so acceptance numbers reflect what an agent actually produces rather than what a drafter can memorise.
+
 Use `turns` for anything agentic — coding agents, tool-driven loops. Those loops re-send a growing prefix every turn, so llama.cpp's prompt cache prefills only the delta and felt latency is far better than a cold-prefill number implies. Benchmarking with `cache_prompt: false` understates agentic performance badly. Prefill *seconds per turn* is what the agent waits on; quote that.
 
 Traps that produce wrong numbers:
@@ -224,7 +233,7 @@ Traps that produce wrong numbers:
 - **Discard the first run.** A cold GGUF read measured 1.5 tok/s where warm was 2.9. The script warms up for you.
 - **Measure generation and prefill separately.** Different knobs, and they trade against each other.
 - **Expect ±0.5 tok/s of noise.** Don't chase smaller differences.
-- **Spec-decode acceptance is workload-specific.** A draft-model / MTP config that looks great on repetitive bench text can lose on real text (0.63 vs 1.00 acceptance → below baseline). Measure acceptance on realistic prompts, not the synthetic loop.
+- **Spec-decode acceptance is workload-specific.** A draft-model / MTP config that looks great on repetitive bench text can lose on real text (0.63 vs 1.00 acceptance → below baseline). Measure acceptance on realistic prompts, not the synthetic loop. If acceptance is low, try `--spec-draft-p-min 0.8` (poolside) or the equivalent minimum-probability filter on the drafter — it prevents low-confidence drafts from wasting forward passes, and was the difference between 0.12 acceptance (net loss, 2.75 tok/s) and 0.84 acceptance (near break-even, 17.4 tok/s) on Laguna DFlash coding prompts. Without a p_min filter, the drafter submits everything it generates; with one, it only submits when it's confident enough to be worth verifying.
 - **Wait for CUDA teardown between trials.** Killing a multi-GiB server takes seconds to release VRAM; launching the next too fast makes `--fit` (and ananke placement) under-count free memory and fail on args that worked a moment earlier.
 - **Depth matters for sparse-attention models.** A shallow-context number hides how generation and prefill hold up as context fills — run the `depth` scenario, since that's where DSA-style architectures earn their keep or don't.
 
@@ -234,7 +243,7 @@ Log trials to `bench/TRIALS.md` in the model's directory under the model dir. Wo
 
 Two cards aren't automatically faster, and for hybrid models they're often worse. Test it.
 
-`--split-mode layer` is a pipeline, not parallelism: for a single request only one GPU computes at a time. Spanning two cards buys **VRAM capacity, not single-stream speed**. `devices.split = "tensor"` does give real parallelism (the Qwen 3.6 and Gemma 4 QAT entries use it), but it requires `placement = "gpu-only"` and isn't supported by every architecture.
+`--split-mode layer` is a pipeline, not parallelism: for a single request only one GPU computes at a time. Spanning two cards buys **VRAM capacity, not single-stream speed**. `devices.split = "tensor"` does give real parallelism (the Qwen 3.6 and Gemma 4 QAT entries use it), but it requires `placement = "gpu-only"` and isn't supported by every architecture. On MoE models, `-sm tensor` is crash-prone: the meta backend's `GGML_ASSERT` failures in `ggml_backend-meta.cpp` need patching (the `fattn-graph-reuse-fix` and a `SUM_ROWS` axis-0 fix). Layer split (`-sm layer`, the default) is the safe path; test tensor split before relying on it.
 
 A second card also costs a full compute buffer and CUDA context (per-device, so a large buffer is paid twice), cross-GPU transfers at every layer boundary that spans cards, and a card that can't host anything else.
 
@@ -244,7 +253,7 @@ Pin a llama-cpp service to one card with `devices.placement_override = { "gpu:0"
 
 ## Adding an architecture
 
-Two halves: llama.cpp must support it, and ananke's estimator must size it. Check **both** runtimes — ik_llama.cpp may support an arch (or a quant, or a feature like DSA) that mainline at your pin doesn't, and sometimes lands it first. If mainline rejects the arch, the fork is worth a look before you write off the model.
+Two halves: llama.cpp must support it, and ananke's estimator must size it. Check **both** runtimes — ik_llama.cpp may support an arch (or a quant, or a feature like DSA) that mainline at your pin doesn't, and sometimes lands it first. If mainline rejects the arch, the fork is worth a look before you write off the model. Vendors may also publish their own llama.cpp fork with arch support before it reaches mainline or ik_llama — check the model card for a recommended fork/branch if neither runtime recognises the architecture.
 
 **Check llama.cpp against the revision you actually run.** The pin lives in `inputs.llama-cpp.url` in the llama.cpp flake (path in *Parameters*); the source checkout drifts from it, so sync first:
 
