@@ -23,3 +23,5 @@ video/mp4=vlc.desktop
 x-scheme-handler/claude-cli=claude-code-url-handler.desktop
 x-scheme-handler/discord=vesktop.desktop
 video/x-matroska=vlc.desktop
+text/markdown=inlyne.desktop
+text/x-markdown=inlyne.desktop

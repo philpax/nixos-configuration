@@ -43,6 +43,7 @@ in
     anki-bin
     gthumb
     cups-dev
+    inlyne
   ];
 
   # Fonts
