@@ -73,5 +73,17 @@ in
 
   # The wrapper takes helix-unwrapped as an argument, so overriding it reuses nixpkgs'
   # tree-sitter grammar farm and HELIX_RUNTIME wiring verbatim.
-  helix-steel = prev.helix.override { helix-unwrapped = unwrapped; };
+  #
+  # The `src` swap is load-bearing: the wrapper takes grammars from nixpkgs' grammars.json
+  # (pinned to 25.07.1) but queries from `helix-unwrapped.src`, so the fork's master-era
+  # queries hit year-old parsers and fail to compile, silently killing highlighting for that
+  # language ("Failed to compile highlights for 'rust'" in ~/.cache/helix/helix.log; note
+  # `hx --health` still reports ✓, it only checks the files exist). `//` rather than
+  # overrideAttrs so this changes what the wrapper reads, not what the fork compiles.
+  # Trade-off: languages added upstream since 25.07.1 go unhighlighted. The full fix is to
+  # regenerate the pins from the fork's languages.toml (nixpkgs'
+  # pkgs/by-name/he/helix/generate_grammars.py) and pass them as `lockedGrammars`.
+  helix-steel = prev.helix.override {
+    helix-unwrapped = unwrapped // { inherit (prev.helix-unwrapped) src; };
+  };
 }
