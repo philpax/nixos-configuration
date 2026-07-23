@@ -2,7 +2,6 @@
 
 let
   folders = import ./folders.nix;
-  timebomb = import ../common-all/lib/timebomb.nix { inherit lib; };
 in {
   imports =
     [
@@ -89,16 +88,6 @@ in {
   nixpkgs.overlays = [
     (final: prev: {
       onnxruntime = prev.onnxruntime.override { cudaSupport = true; };
-      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-        (pyfinal: pyprev: {
-          albumentations = timebomb "2026-07-22"
-            "drop the albumentations test-disable overlay in redline/configuration.nix; the fix (nixpkgs#543357) should have reached the 26.05 channel"
-            (pyprev.albumentations.overridePythonAttrs (old: {
-              # upstream test broken by newer Pillow: ambiguous array truth value
-              disabledTests = (old.disabledTests or [ ]) ++ [ "test_gaussian_blur_matches_pil" ];
-            }));
-        })
-      ];
     })
   ];
   services.immich.machine-learning = {
