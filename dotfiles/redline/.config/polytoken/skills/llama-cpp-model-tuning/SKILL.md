@@ -42,7 +42,7 @@ They illustrate *shape*, not targets. A dense 27B that fits on one card behaves 
 - **estimator** — ananke's per-architecture VRAM model: weights, KV per token, compute buffer. Lives in `ananke/src/estimator/`. It's what rejects an unknown architecture.
 - **packer** (allocator) — decides placement given the estimate: which layers land on which GPU, which experts spill to CPU, and it synthesises the `-ot` rules. Lives in `ananke/src/allocator/`. The estimator predicts; the packer places.
 - **operator** — the human running the box. When something is a judgement call about use case, it's theirs.
-- **ik_llama.cpp** — ikawrakow's fork of llama.cpp, with CPU-optimised kernels for i-quants and its own feature set (DSA sparse attention, MTP, `--fit`). ananke serves it as a first-class runtime via `runtime = { kind = "ik-llama"; … }`. Reach for it when a hybrid i-quant is CPU-dequant-bound — see *Serving with ik_llama.cpp*.
+- **ik_llama.cpp** — ikawrakow's fork of llama.cpp, with CPU-optimised kernels for i-quants and its own feature set (DSA sparse attention, MTP). ananke serves it as a first-class runtime via `runtime = { kind = "ik-llama"; … }`. Reach for it when a hybrid i-quant is CPU-dequant-bound — see *Serving with ik_llama.cpp*.
 
 Config nouns, all set in your `ananke.nix` (path in *Parameters*):
 
@@ -120,7 +120,7 @@ ananke owns the llama-server command line. Set knobs as config keys; raw flags o
 | `--split-mode row\|tensor` | `devices.split = "row"\|"tensor"` |
 | `-ot` | `override_tensor` (list of rules) |
 | `--cpu-moe` / `--n-cpu-moe` | **`expert_offload`** — see below |
-| ik_llama.cpp + its `-mla`/`-dsa`/`--fit`/`-amb`/`-rtr` | `runtime = { kind = "ik-llama"; … }` — see *Serving with ik_llama.cpp* |
+| ik_llama.cpp + its `-mla`/`-dsa`/`-amb`/`-rtr` | `runtime = { kind = "ik-llama"; … }` — see *Serving with ik_llama.cpp* |
 | anything else | `extra_args = [ "--flag" "value" ]` |
 
 `expert_offload` is the coarse MoE fit knob: `"off"` (default), `"auto"` (the packer fills VRAM with expert layers from the estimate and offloads the rest), or an integer layer count. **There is no `n_cpu_moe` key** — writing one is a hard config error. `"auto"` depends on the estimator understanding the architecture; without that it under-reserves and OOMs at load.
@@ -142,13 +142,11 @@ Options 3 and 4 both interact with the runtime: a smaller *ik-native* quant serv
 
 Skip this entirely unless the weights can't all live on the GPUs.
 
-**Test placement before writing the ananke entry.** Drive `llama-server` / `ik-llama-server` directly with `--fit` (both forks ship it) to auto-discover the optimal per-tensor placement. This is faster and usually better than hand-tuning `-cmoe`/`-ncmoe`/`-ot` — on Laguna S 2.1, `--fit on` was 50% faster than the best manual `-cmoe` placement because it distributes individual expert tensors across cards rather than whole layers. Once you've found the config that works, translate it to ananke keys: `devices.placement = "hybrid"` + `expert_offload = "auto"` should reproduce the same placement once the estimator knows the architecture.
+**ananke plans the hybrid placement itself.** Set `devices = { placement = "hybrid"; }` and `expert_offload = "auto"` — the estimator + packer size the model and emit `-ngl 999 --n-cpu-moe N` (offload the trailing `N` expert layers to CPU as whole layers) plus a room-based `--tensor-split` that balances the cards. That's the whole config for the common case; the DeepSeek-V4-Flash and Laguna entries are exactly this plus `threads`, `numa`, and batch sizes. There is no need to hand-discover a placement first — the packer produces it once the arch is modelled (see *Adding an architecture*).
 
-ik_llama's `--fit` needs an explicit margin (`--fit-margin N`, in MiB) because it accounts only weights + KV, not compute buffers. Budget ~4 GiB/card for ub2048 prefill scratch. An unmargined `--fit` loads clean then OOMs on the first request — the same deferred failure as *The `--fit` margin trap* below.
+**Whole-layer offload is not optional — it is the fast path.** `--n-cpu-moe` (coarse, whole trailing layers to CPU) keeps ik_llama's fused multi-threaded CPU MoE kernel engaged. Scattering a layer's experts across CPU/GPU with per-tensor `-ot` instead defeats it — the CPU experts fall back to a ~2-core path (~24× slower generation, measured on Laguna: 1.35 vs 33 tok/s) and can exceed llama.cpp's `GGML_SCHED_MAX_SPLIT_INPUTS` graph-split limit, a hard abort at load (seen on mainline DeepSeek-V4-Flash). So when benchmarking a hybrid by hand, drive the server with `-ngl 999 --n-cpu-moe N` (+ `--tensor-split` to balance), never a pile of `-ot=CPU` rules.
 
-Start with `devices = { placement = "hybrid"; }` and `expert_offload = "auto"`. That's the whole config for the common case — the packer balances experts across both cards and synthesises the `-ot` rules. The DeepSeek-V4-Flash entry is exactly this plus `threads`, `numa`, and batch sizes.
-
-Reach for a hand-written `override_tensor` only when you need to pin an exact placement the packer won't produce. Two things that *used* to be required and no longer are: ananke comma-joins all `override_tensor` elements into a single `-ot` flag, so you don't need to pack them into one string; and the packer balances expert placement across cards itself, so you don't need to hand-alternate `blk\.N\.…=CUDA0,CUDA1`. The underlying llama.cpp facts still hold — repeated `-ot` flags are last-wins, and `--split-mode layer` assigns contiguous layer ranges — so keep them in mind when reading a raw command line or debugging a placement.
+Reach for a hand-written `override_tensor` only to pin an exact tensor the packer won't place — and keep it to whole-layer moves; per-tensor CPU splits break the fast kernel as above. The underlying llama.cpp facts still hold: repeated `-ot` flags are last-wins (ananke comma-joins them into one), and `--split-mode layer` assigns contiguous layer ranges.
 
 Useful knobs beyond the defaults: `threads` (physical cores, 24 on the *Machine* — SMT didn't help generation), `numa = "distribute"` (free prefill win on the 3960X's multi-CCD layout, 67 → 88 tok/s, no change to generation), and `ubatch_size`, which drives prefill speed *and* compute-buffer size and is therefore the knob that trades context against prefill.
 
@@ -158,7 +156,7 @@ Find the knee, then stop. Moving expert layers onto the GPU bought about +0.7 to
 
 When a hybrid MoE's generation ceiling is **CPU dequant compute, not RAM bandwidth**, ik_llama.cpp (ikawrakow's fork) is the biggest lever available — bigger than any placement tweak. i-quants (`IQ1_*`, `IQ2_XXS`, …) encode weights with per-group codebook lookups that mainline's CPU path handles slowly, and the fork exists to make exactly that fast.
 
-It also ships features mainline lacked at our pin: DSA sparse attention, MTP speculative decoding, `-sm graph`, and `--fit` auto-placement.
+It also ships features mainline lacked at our pin: DSA sparse attention, MTP speculative decoding, and `-sm graph`.
 
 **Is it your case?** Multiply expert bytes read per token by tok/s to get effective GB/s, and compare to the box's memory bandwidth. Far below it → dequant-bound, and ik helps a lot. Near it → bandwidth-bound, and ik won't. (GLM-5.2 at 1 tok/s on mainline was reading ~6 GB/s against ~70 available — squarely dequant-bound.)
 
@@ -176,28 +174,27 @@ It also ships features mainline lacked at our pin: DSA sparse attention, MTP spe
     ubatch_size = 2048;
     mmap = false;                         # 205 GiB resident; --no-mmap avoids fault stalls
     llama_server = "${config.ai.ikLlamaCppCuda}/bin/llama-server";
-    runtime = { kind = "ik-llama"; mla = 1; dsa = true; fit = true; attn_max_batch = 512; };
+    runtime = { kind = "ik-llama"; mla = 1; dsa = true; attn_max_batch = 512; };
+    expert_offload = "auto";
     devices = { placement = "hybrid"; };
   };
 }
 ```
 
-**The `--fit` margin trap — read this before benchmarking by hand.** ik's `--fit` auto-places layers, but accounts only weights + KV, *not* per-feature runtime buffers (prefill scratch, the DSA indexer, an MTP draft context). An unmargined `--fit` loads clean, passes the health check, then **OOMs on the first request** — a deferred failure that looks healthy until traffic arrives.
-
-ananke computes `--gpu-fit-margin` per device automatically from the runtime config. Driving `ik-llama-server` directly for a benchmark, you set it yourself: budget ~2 GiB/card for ub2048 prefill scratch, +3 GiB/card if `dsa`, and +~4 GiB on device 0 if MTP is on.
+**Benchmarking a hybrid by hand — use `--n-cpu-moe`, not `--fit`.** ananke plans the placement itself now (`expert_offload = "auto"` → `-ngl 999 --n-cpu-moe N --tensor-split …`), so to reproduce it on the raw server drive it with `-ngl 999 --n-cpu-moe N` and a balancing `--tensor-split`, not ik's `--fit`. Whole-layer `--n-cpu-moe` keeps the fused CPU MoE kernel engaged; scattered `-ot=CPU` is ~24× slower (see *Hybrid tuning*). For the DSA compute buffer, measure it from ik's own `CUDA0/1 compute buffer size` load-log line rather than guessing a margin.
 
 **Knobs that mattered** (GLM-5.2 smol-IQ2_KS; your model will differ, but the shape of the lessons holds):
 
 - `-mla` **1, not 3, when using DSA.** mla 3 buys ~8% shallow prefill but silently defeats DSA's deep-prefill advantage (measured 143 → 61 tok/s at 58k). Without DSA the tradeoff reverses; benchmark it.
 - `-dsa -fidx` — sparse attention. Flat generation and ~2× deep prefill vs dense MLA. Requires f16 KV: it rejects quantised cache types and `-sm graph`.
 - `-rtr` (runtime repack) — unnecessary for `KS` quants (already CPU-fast) and adds minutes to load. Worth a trial on other i-quants.
-- `-sm graph`, `-khad` — both rejected here: `-sm graph` gave noise-level gains while saturating one card and OOMing prefill; `-khad` + quantised KV broke `--fit`. Don't assume; they may suit another model.
+- `-sm graph`, `-khad` — both rejected here: `-sm graph` gave noise-level gains while saturating one card and OOMing prefill; `-khad` + quantised KV broke placement. Don't assume; they may suit another model.
 
 **MTP is a mirage on real text.** `--spec-type mtp:n_max=4` benched at 10.6 tok/s — but that was **1.00 draft acceptance on repetitive benchmark text**. On real prompts acceptance fell to 0.63 and MTP dropped *below* the no-MTP baseline, because rejected drafts cost more than they save.
 
 Always measure acceptance on realistic prompts. MTP only wins for highly predictable output — structured JSON, code edits. (The dialect differs too: ik takes `mtp:n_max=…`, mainline takes `draft-mtp`.)
 
-The reference config (`mla=1`, `dsa`, `fit`, f16 KV, ub2048, 128k) lands ~8 tok/s flat to 58k+ depth and ~195/143 tok/s prefill shallow/deep on the *Machine*. See the model dir's `bench/TRIALS.md` + `RECOMMENDED.md` for the full trail.
+The reference config (`mla=1`, `dsa`, `expert_offload = "auto"`, f16 KV, ub2048, 128k) lands ~8 tok/s flat to 58k+ depth and ~195/143 tok/s prefill shallow/deep on the *Machine*. See the model dir's `bench/TRIALS.md` + `RECOMMENDED.md` for the full trail.
 
 ## Benchmarking
 
@@ -234,7 +231,7 @@ Traps that produce wrong numbers:
 - **Measure generation and prefill separately.** Different knobs, and they trade against each other.
 - **Expect ±0.5 tok/s of noise.** Don't chase smaller differences.
 - **Spec-decode acceptance is workload-specific.** A draft-model / MTP config that looks great on repetitive bench text can lose on real text (0.63 vs 1.00 acceptance → below baseline). Measure acceptance on realistic prompts, not the synthetic loop. If acceptance is low, try `--spec-draft-p-min 0.8` (poolside) or the equivalent minimum-probability filter on the drafter — it prevents low-confidence drafts from wasting forward passes, and was the difference between 0.12 acceptance (net loss, 2.75 tok/s) and 0.84 acceptance (near break-even, 17.4 tok/s) on Laguna DFlash coding prompts. Without a p_min filter, the drafter submits everything it generates; with one, it only submits when it's confident enough to be worth verifying.
-- **Wait for CUDA teardown between trials.** Killing a multi-GiB server takes seconds to release VRAM; launching the next too fast makes `--fit` (and ananke placement) under-count free memory and fail on args that worked a moment earlier.
+- **Wait for CUDA teardown between trials.** Killing a multi-GiB server takes seconds to release VRAM; launching the next too fast makes ananke placement under-count free memory and fail on args that worked a moment earlier.
 - **Depth matters for sparse-attention models.** A shallow-context number hides how generation and prefill hold up as context fills — run the `depth` scenario, since that's where DSA-style architectures earn their keep or don't.
 
 Log trials to `bench/TRIALS.md` in the model's directory under the model dir. Worked examples exist for DeepSeek-V4-Flash and gemma-4-31B-it-qat, including the `RECOMMENDED.md` companion that `ananke.nix` comments cite by name — copy their format.

@@ -41,11 +41,11 @@ PROMPTS = [
 ]
 
 
-def complete(url, messages, n_predict, temperature=0.7, timeout=180):
+def complete(url, messages, n_predict, model="laguna", temperature=0.7, timeout=180):
     """POST /v1/chat/completions and return the server's timings."""
     body = json.dumps(
         {
-            "model": "laguna",
+            "model": model,
             "messages": messages,
             "max_tokens": n_predict,
             "temperature": temperature,
@@ -62,7 +62,7 @@ def complete(url, messages, n_predict, temperature=0.7, timeout=180):
         return None
 
 
-def run_single_prompts(url, timeout):
+def run_single_prompts(url, timeout, model):
     """Send individual coding prompts and measure generation speed."""
     print("realistic coding prompts (single-turn)\n")
     for i, prompt in enumerate(PROMPTS):
@@ -70,7 +70,7 @@ def run_single_prompts(url, timeout):
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": prompt},
         ]
-        result = complete(url, messages, 200, timeout=timeout)
+        result = complete(url, messages, 200, model=model, timeout=timeout)
         if result:
             t = result.get("timings", {})
             content = result["choices"][0]["message"]["content"][:80]
@@ -82,7 +82,7 @@ def run_single_prompts(url, timeout):
             )
 
 
-def run_agent_turns(url, turns, timeout):
+def run_agent_turns(url, turns, timeout, model):
     """Simulate a multi-turn coding agent loop with growing context."""
     print(f"agent loop: {len(SYSTEM)}-token system+tools, {turns} turns\n")
     messages = [
@@ -90,7 +90,7 @@ def run_agent_turns(url, turns, timeout):
     ]
     for i in range(turns):
         messages.append({"role": "user", "content": PROMPTS[i % len(PROMPTS)]})
-        result = complete(url, messages, 200, timeout=timeout)
+        result = complete(url, messages, 200, model=model, timeout=timeout)
         if result:
             t = result.get("timings", {})
             print(
@@ -114,15 +114,21 @@ def main():
         "--turns", type=int, default=0, help="run multi-turn agent loop instead of single prompts"
     )
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument(
+        "--model",
+        default="laguna",
+        help="model name sent in the request body — must match the service name when going "
+        "through the OpenAI multiplexer (port 7070); ignored by the raw per-service proxy",
+    )
     a = p.parse_args()
 
     print("warming up...")
-    complete(a.url, [{"role": "user", "content": "Hello"}], 8, timeout=a.timeout)
+    complete(a.url, [{"role": "user", "content": "Hello"}], 8, model=a.model, timeout=a.timeout)
 
     if a.turns > 0:
-        run_agent_turns(a.url, a.turns, a.timeout)
+        run_agent_turns(a.url, a.turns, a.timeout, a.model)
     else:
-        run_single_prompts(a.url, a.timeout)
+        run_single_prompts(a.url, a.timeout, a.model)
 
 
 if __name__ == "__main__":
