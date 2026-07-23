@@ -242,8 +242,7 @@ let
     # ~8 tok/s generation flat to 58k+ depth, ~195/143 tok/s prefill
     # shallow/deep at 128k. Config rationale (incl. why -mla 1 and no
     # MTP) in the model dir's RECOMMENDED.md; trials in
-    # unsloth/GLM-5.2-GGUF/bench/TRIALS.md. ananke computes the
-    # --gpu-fit-margin companions for `fit` from the same calibration.
+    # unsloth/GLM-5.2-GGUF/bench/TRIALS.md.
     # Sampling follows Unsloth's guide (temp 1.0, top_p 0.95, min_p 0.01).
     {
       name = "glm-5.2";
@@ -261,9 +260,9 @@ let
           kind = "ik-llama";
           mla = 1;
           dsa = true;
-          fit = true;
           attn_max_batch = 512;
         };
+        expert_offload = "auto";
         sampling = {
           temperature = 1.0;
           top_p = 0.95;
@@ -314,8 +313,8 @@ let
         llama_server = "${config.ai.ikLlamaCppCuda}/bin/llama-server";
         runtime = {
           kind = "ik-llama";
-          fit = true;
         };
+        expert_offload = "auto";
         devices = { placement = "hybrid"; };
         extra_args = [ "--log-disable" ];
       };
