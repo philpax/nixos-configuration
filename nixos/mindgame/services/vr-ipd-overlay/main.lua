@@ -2,21 +2,48 @@
 --
 -- The Index's IPD is a physical dial; Monado reports whatever it's set to but
 -- has no in-headset readout. This overlay watches the inter-eye distance (the
--- separation between the two view poses *is* the IPD) and, whenever it changes,
--- flashes the value centred in your view, then fades out.
+-- separation between the two view poses *is* the IPD) and, whenever it changes
+-- by more than a nudge, fades a small readout into the lower-right of your view.
 
-local SHOW_TIME = 2.5   -- seconds to keep the readout up after the last change
+local SHOW_TIME = 2.5    -- seconds to keep the readout up after the last change
 local FADE_IN   = 0.15
 local FADE_OUT  = 0.6
-local CHANGE_MM = 0.1   -- re-show once IPD drifts this far from the anchor
-local DISTANCE  = 2.0   -- metres in front of the head
+
+-- The reported view poses jitter by a couple of tenths of a millimetre even
+-- with the dial untouched, which is enough to trip a naive threshold. Smooth
+-- the reading first: noise averages out over this time constant, while a real
+-- turn of the dial is large enough to come through it near-instantly.
+local SMOOTH_S  = 0.3
+
+-- Deadzone: while the readout is asleep it takes a deliberate turn of the dial
+-- to wake it. Once awake, finer movement keeps it alive, so a coarse
+-- adjustment followed by fine-tuning stays on screen until the dial settles.
+local WAKE_MM   = 0.6
+local TRACK_MM  = 0.15
+
+local DISTANCE  = 1.6    -- metres in front of the head
+local OFFSET_X  = 0.42   -- metres right of centre at that distance (~15 degrees)
+local OFFSET_Y  = -0.32  -- metres below centre (~11 degrees)
 
 -- accent / palette
 local ACCENT = { 0.36, 0.78, 0.92 }
 local PANEL  = { 0.04, 0.05, 0.08 }
 local MUTED  = { 0.72, 0.77, 0.84 }
 
-local state = { ipd = nil, anchor = nil, timer = 0 }
+-- alpha ceilings, so the panel stays something you glance at rather than read
+local PANEL_ALPHA  = 0.5
+local BORDER_ALPHA = 0.35
+local TEXT_ALPHA   = 0.8
+
+-- `ipd` is the smoothed reading; `mark` is the value the readout was last
+-- reconciled with — the resting IPD while asleep, and the last motion we
+-- reacted to while awake.
+local state = { ipd = nil, mark = nil, timer = 0 }
+
+-- Set IPD_DEBUG=1 to print the smoothed reading and its wander once a second,
+-- which is how you find the real noise floor to size WAKE_MM against.
+local DEBUG = os.getenv('IPD_DEBUG') ~= nil
+local debugState = { t = 0, lo = nil, hi = nil }
 
 function lovr.load()
   lovr.graphics.setBackgroundColor(0, 0, 0, 0)
@@ -33,17 +60,45 @@ local function readIPD()
   return mm
 end
 
+local function logNoise(ipd, dt)
+  debugState.t = debugState.t + dt
+  debugState.lo = math.min(debugState.lo or ipd, ipd)
+  debugState.hi = math.max(debugState.hi or ipd, ipd)
+  if debugState.t >= 1 then
+    print(string.format('ipd %.3f mm  (1s spread %.3f mm)',
+      ipd, debugState.hi - debugState.lo))
+    debugState.t, debugState.lo, debugState.hi = 0, nil, nil
+  end
+end
+
 function lovr.update(dt)
-  local ipd = readIPD()
-  if ipd then
-    if not state.anchor or math.abs(ipd - state.anchor) >= CHANGE_MM then
-      state.anchor = ipd
-      state.timer = SHOW_TIME
+  local raw = readIPD()
+  if raw then
+    -- exponential low-pass; frame-rate independent
+    if not state.ipd then
+      state.ipd = raw
+    else
+      state.ipd = state.ipd + (raw - state.ipd) * (1 - math.exp(-dt / SMOOTH_S))
     end
-    state.ipd = ipd
+    local ipd = state.ipd
+
+    if not state.mark then
+      state.mark = ipd -- first reading is the resting point, don't flash for it
+    else
+      local awake = state.timer > 0
+      local threshold = awake and TRACK_MM or WAKE_MM
+      if math.abs(ipd - state.mark) >= threshold then
+        state.mark = ipd
+        state.timer = SHOW_TIME
+      end
+    end
+
+    if DEBUG then logNoise(ipd, dt) end
   end
   if state.timer > 0 then
     state.timer = math.max(0, state.timer - dt)
+    -- on settling, re-anchor the deadzone to wherever the dial ended up
+    if state.timer == 0 and state.ipd then state.mark = state.ipd end
   end
 end
 
@@ -61,29 +116,29 @@ function lovr.draw(pass)
 
   pass:setDepthTest()  -- overlay: always draw on top, ignore depth
 
-  -- head-locked anchor: centred, a couple of metres ahead, dropped slightly so
-  -- it sits just below the line of sight rather than dead-centre.
-  local base = mat4(lovr.headset.getPose('head')):translate(0, -0.03, -DISTANCE)
+  -- Head-locked, parked down and to the right, then aimed back at the head so
+  -- it isn't read edge-on from its off-axis position.
+  local base = mat4(lovr.headset.getPose('head'))
+    :translate(OFFSET_X, OFFSET_Y, -DISTANCE)
+    :rotate(-math.atan(OFFSET_X / DISTANCE), 0, 1, 0)
+    :rotate(math.atan(OFFSET_Y / DISTANCE), 1, 0, 0)
 
-  -- accent frame behind a darker panel
-  pass:setColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.9 * a)
-  pass:plane(mat4(base):scale(0.66, 0.36, 1))
-  pass:setColor(PANEL[1], PANEL[2], PANEL[3], 0.85 * a)
-  pass:plane(mat4(base):translate(0, 0, 0.001):scale(0.63, 0.33, 1))
+  -- faint accent frame behind a darker panel
+  pass:setColor(ACCENT[1], ACCENT[2], ACCENT[3], BORDER_ALPHA * a)
+  pass:plane(mat4(base):scale(0.30, 0.135, 1))
+  pass:setColor(PANEL[1], PANEL[2], PANEL[3], PANEL_ALPHA * a)
+  pass:plane(mat4(base):translate(0, 0, 0.001):scale(0.288, 0.123, 1))
 
   -- caption
-  pass:setColor(ACCENT[1], ACCENT[2], ACCENT[3], a)
-  pass:text('IPD', mat4(base):translate(0, 0.085, 0.003):scale(0.045))
+  pass:setColor(ACCENT[1], ACCENT[2], ACCENT[3], TEXT_ALPHA * a)
+  pass:text('IPD', mat4(base):translate(0, 0.037, 0.003):scale(0.022))
 
-  -- accent underline
-  pass:plane(mat4(base):translate(0, 0.045, 0.003):scale(0.30, 0.004, 1))
-
-  -- big value
-  pass:setColor(1, 1, 1, a)
+  -- value
+  pass:setColor(1, 1, 1, TEXT_ALPHA * a)
   pass:text(string.format('%.1f', state.ipd),
-    mat4(base):translate(0, -0.025, 0.003):scale(0.16))
+    mat4(base):translate(-0.017, -0.018, 0.003):scale(0.062))
 
   -- unit
-  pass:setColor(MUTED[1], MUTED[2], MUTED[3], a)
-  pass:text('mm', mat4(base):translate(0, -0.12, 0.003):scale(0.04))
+  pass:setColor(MUTED[1], MUTED[2], MUTED[3], TEXT_ALPHA * a)
+  pass:text('mm', mat4(base):translate(0.072, -0.028, 0.003):scale(0.026))
 end
