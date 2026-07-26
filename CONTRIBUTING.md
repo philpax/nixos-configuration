@@ -56,6 +56,7 @@ loads the same skills as Polytoken. These are common to all machines.
 - `ai/` — llama-cpp, large-model-proxy, ComfyUI (custom ONNX/CUDA overlay)
 - `folders.nix` — central mount point and directory definitions used across services
 - Services for Immich, Navidrome, Samba, Syncthing, DNS (dnsmasq)
+- Game servers: Minecraft, and FiveM (`services/fivem.nix` packages FXServer and builds its resource tree; `services/fivem/` holds the custom resources)
 
 ## Development
 
