@@ -171,7 +171,7 @@ let
         # restores anyway. Conversations at our sizes re-prefill faster than
         # the cache round-trips, without blocking other slots. Slot-local KV
         # reuse and SWA checkpoints are unaffected.
-        extra_args = [ "-n" "16384" "--cache-ram" "0" ];
+        extra_args = [ "-n" "16384" "--cache-ram" "0" "--slot-prompt-similarity" "0.5" ];
         sampling = {
           temperature = 1.0;
           top_k = 64;
