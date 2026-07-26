@@ -25,6 +25,12 @@
   # Push our main NixOS instance to the bottom, so that Windows is next to it.
   boot.loader.systemd-boot.sortKey = "z_nixos";
 
+  # Load the NVIDIA modules in the initrd so the GPU is fully up long before
+  # graphical.target. Otherwise SDDM's weston greeter can open the DRM node
+  # while nvidia-drm is still initialising, EGL fails, and the greeter dies
+  # without a retry — leaving a black screen at "Reached target Graphical Interface".
+  boot.initrd.kernelModules = [ "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ];
+
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia.open = true;
   hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.latest;
