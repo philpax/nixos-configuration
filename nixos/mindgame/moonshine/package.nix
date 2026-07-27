@@ -29,13 +29,13 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "moonshine";
-  version = "0.11.0";
+  version = "0.13.5";
 
   src = fetchFromGitHub {
     owner = "hgaiser";
     repo = "moonshine";
     rev = "v${version}";
-    hash = "sha256-wV34OVdlcs/63eOjSmvMdwiNSHY/NrZ43sPCFBLZ29A=";
+    hash = "sha256-DwRUVMAm4fSqZu6jECeasiRpnwBt7thWkXzztNRIjcs=";
   };
 
   # The inputtino-sys crate's build.rs compiles the inputtino C++ library via
@@ -55,8 +55,8 @@ rustPlatform.buildRustPackage rec {
       "ash-0.38.0+1.4.329" = "sha256-uUOCdSMoupbiK0QY64bmyMlq2EoL5Atc0HiczCqPhXM=";
       "inputtino-0.1.0" = "sha256-mAAXbIK7aNSLyN7OZX9YeesMvT6OZmT9uAx0md6pyRM=";
       "inputtino-sys-0.1.0" = "sha256-mAAXbIK7aNSLyN7OZX9YeesMvT6OZmT9uAx0md6pyRM=";
-      "pixelforge-0.3.0" = "sha256-zAGeR7K32ptCo3yo+TpOwLBTew37eZqav0yl/+ONggg=";
-      "smithay-0.7.0" = "sha256-MnPoJ97kOZS3y5BsYNZLCY1VfIKDC3PYrfn8ksn1v14=";
+      "pixelforge-0.6.0" = "sha256-M4u7rPGQPZS7KeKd/y3FVEw1mhRqtNE/Kg+X7xIbiiI=";
+      "smithay-0.7.0" = "sha256-AB24k+BMzuke8cPkwbmUBtF+tHCXTYNGfTQ8NSEIFCo=";
     };
   };
 
