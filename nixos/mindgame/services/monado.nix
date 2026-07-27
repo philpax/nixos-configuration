@@ -19,6 +19,13 @@
     # for floor height.
     STEAMVR_LH_ENABLE = "true";
 
+    # The Lighthouse driver only registers devices that announce themselves
+    # inside this window; anything later is dropped with "Cannot add device
+    # after setup". At the 3000ms default a base station regularly missed the
+    # cutoff, leaving Monado tracking off a single station. Widen it — the cost
+    # is a few extra seconds of startup, which vr-mode already waits out.
+    LH_DISCOVER_WAIT_MS = "6000";
+
     # Nvidia + Wayland: Monado otherwise picks its Nvidia/Xlib direct backend,
     # whose vkAcquireXlibDisplayEXT can't lease the HMD panel from niri (the DRM
     # master) and fails with VK_ERROR_UNKNOWN. Forcing the Wayland-direct backend
