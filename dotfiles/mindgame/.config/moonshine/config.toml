@@ -37,7 +37,8 @@ port = 47999
 # Each app runs in its own isolated compositor session.
 [[application]]
 title = "Steam"
-command = ["/run/current-system/sw/bin/steam", "-bigpicture"]
+# Restarts any running Steam into Big Picture; see steamBigPicture in moonshine.nix.
+command = ["/run/current-system/sw/bin/steam-big-picture"]
 
 [[application]]
 title = "Prism Launcher"

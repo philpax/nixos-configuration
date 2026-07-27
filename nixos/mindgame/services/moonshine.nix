@@ -26,6 +26,30 @@ let
       exec moonshine "$@"
     '';
   };
+
+  # Steam is single-instance per user: if a client is already running (e.g. a VR
+  # session launched Steam to play VRChat), `steam -bigpicture` just forwards the
+  # arg to it and the launched process exits immediately — which Moonshine reads
+  # as the app dying, collapsing the whole session. So shut any running instance
+  # down first, wait for it to release its lock, then start Big Picture fresh in
+  # this compositor. Mirrors the pre-Moonshine (Sunshine) Big Picture prep cmd.
+  steamBigPicture = pkgs.writeShellApplication {
+    name = "steam-big-picture";
+    runtimeInputs = [ pkgs.coreutils pkgs.procps ];
+    text = ''
+      steam=/run/current-system/sw/bin/steam
+      if pgrep -x steam >/dev/null 2>&1; then
+        echo "steam-big-picture: existing Steam instance found, shutting it down" >&2
+        "$steam" -shutdown || true
+        # Wait up to ~30s for it to fully exit and drop its lock.
+        for _ in $(seq 1 60); do
+          pgrep -x steam >/dev/null 2>&1 || break
+          sleep 0.5
+        done
+      fi
+      exec "$steam" -bigpicture
+    '';
+  };
 in
 {
   # Keep the user's systemd user instance running without an interactive login,
@@ -84,5 +108,5 @@ in
     allowedUDPPorts = [ 47998 47999 48000 ];
   };
 
-  environment.systemPackages = [ moonshine ];
+  environment.systemPackages = [ moonshine steamBigPicture ];
 }
