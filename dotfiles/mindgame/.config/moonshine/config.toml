@@ -26,7 +26,7 @@ port = 48010
 port = 47998
 fec_percentage = 20
 encrypt = false
-log_frame_spikes = false
+log_frame_spikes = true
 
 [stream.audio]
 port = 48000
