@@ -52,7 +52,7 @@ rustPlatform.buildRustPackage rec {
   cargoLock = {
     lockFile = "${src}/Cargo.lock";
     outputHashes = {
-      "ash-0.38.0+1.4.329" = "sha256-uUOCdSMoupbiK0QY64bmyMlq2EoL5Atc0HiczCqPhXM=";
+      "ash-0.38.0+1.4.329" = "sha256-apzc//AZqS3F4e4Epm3Dl20ZkkMKUvLjyxv7ZwJh1Jw=";
       "inputtino-0.1.0" = "sha256-mAAXbIK7aNSLyN7OZX9YeesMvT6OZmT9uAx0md6pyRM=";
       "inputtino-sys-0.1.0" = "sha256-mAAXbIK7aNSLyN7OZX9YeesMvT6OZmT9uAx0md6pyRM=";
       "pixelforge-0.6.0" = "sha256-M4u7rPGQPZS7KeKd/y3FVEw1mhRqtNE/Kg+X7xIbiiI=";
