@@ -5,6 +5,7 @@ Backlight 1.0 Backlight.qml
 Bar 1.0 Bar.qml
 Battery 1.0 Battery.qml
 BitmapText 1.0 BitmapText.qml
+Calendar 1.0 Calendar.qml
 ClaudeSession 1.0 ClaudeSession.qml
 ClaudeWeekly 1.0 ClaudeWeekly.qml
 Clock 1.0 Clock.qml
