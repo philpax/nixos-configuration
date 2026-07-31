@@ -290,7 +290,7 @@ let
     # GQA KV (8 heads × 128 dim), sliding window 512. Served by ik_llama.cpp
     # (`ai.ikLlamaCppCuda`) on the unsloth UD-IQ4_NL quant (55 GiB, i-quant):
     # ik's CPU kernels make the hybrid expert dequant ~2× faster than
-    # mainline/poolside at the same ~4-bit quality tier. Tuned overnight
+    # mainline at the same ~4-bit quality tier. Tuned overnight
     # 2026-07-22: ~30 tok/s gen at 2K, ~19 tok/s at 128K, ~35 tok/s on
     # coding prompts, ~1127 tok/s prefill at 8K. Config rationale and
     # DFlash findings in the model dir's RECOMMENDED.md; trials in

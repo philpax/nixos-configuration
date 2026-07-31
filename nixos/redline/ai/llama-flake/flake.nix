@@ -8,7 +8,7 @@
   # The `cuda` package is rebuilt here rather than re-exported, for two reasons:
   #   1. CUDA architectures pinned to SM 8.6 (RTX 3090); upstream builds every
   #      supported arch, which drastically inflates compile time.
-  #   2. fattn-graph-reuse-fix.patch: fixes tensor split crash in meta backend shard registration. Duplicated in ../poolside-llama-flake/ — keep in sync.
+  #   2. fattn-graph-reuse-fix.patch: fixes tensor split crash in meta backend shard registration.
   #
   # The rev below is pinned to an upstream master commit (2026-07-10,
   # c749cb04), not a release tag. The patch was rebased onto it after upstream
@@ -26,7 +26,7 @@
   # strings, so readFile-based interpolation is rejected by nix.)
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/571d0d540df04f25298d0e159e520d9fc62ed121";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/876a4321163249c43ca4e986818fab5ab081f282";
 
   outputs = { llama-cpp, ... }:
     let

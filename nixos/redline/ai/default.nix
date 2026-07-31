@@ -9,8 +9,6 @@ let
   llamaCppCuda = llamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
   ikLlamaCpp = (flake-compat { src = ./ik-llama-flake; }).defaultNix;
   ikLlamaCppCuda = ikLlamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
-  poolsideLlamaCpp = (flake-compat { src = ./poolside-llama-flake; }).defaultNix;
-  poolsideLlamaCppCuda = poolsideLlamaCpp.packages.${pkgs.stdenv.hostPlatform.system}.cuda;
 in
 {
   imports = [
@@ -30,17 +28,12 @@ in
         description = "CUDA-enabled ik_llama.cpp (ikawrakow fork) package";
         default = ikLlamaCppCuda;
       };
-      poolsideLlamaCppCuda = pkgs.lib.mkOption {
-        type = pkgs.lib.types.package;
-        description = "CUDA-enabled Poolside llama.cpp (laguna fork) package";
-        default = poolsideLlamaCppCuda;
-      };
     };
   };
 
   config = {
     ai = {
-      inherit llamaCppCuda ikLlamaCppCuda poolsideLlamaCppCuda;
+      inherit llamaCppCuda ikLlamaCppCuda;
     };
   };
 }
