@@ -1,6 +1,6 @@
 [submodule "steel-cogs/forest"]
 	path = steel-cogs/forest
-	url = https://github.com/Ra77a3l3-jar/forest.hx.git
+	url = https://github.com/philpax/forest.hx.git
 [submodule "steel-cogs/notify"]
 	path = steel-cogs/notify
 	url = https://github.com/chuwy/notify.hx.git
