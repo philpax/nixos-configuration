@@ -1,0 +1,66 @@
+# Global kill switch for /mnt/ssd0 and everything downstream of it.
+#
+# Set `redline.ssd0.enable = false;` and rebuild to bring the machine up with the
+# drive completely untouched: not mounted, no swap on it, no service holding it open.
+# That makes it safe to unmount, fsck, mkfs or physically pull.
+#
+# Why this exists: on 2026-08-01 the btrfs filesystem on nvme1n1p1 forced itself
+# read-only mid-session (silent lost writes from an NVMe controller fault). Tearing it
+# down by hand meant chasing fifteen services, a bind mount and a live swapfile, and
+# `swapoff` then failed with EROFS because the filesystem was already read-only — the
+# swapfile pins the mount, so the drive could not be released without a reboot.
+# Flipping a flag and rebooting avoids all of that.
+#
+# Deliberately blunt: it disables whole services rather than selectively removing
+# ssd0 paths from them. `samba` in particular also serves /storage shares, and those
+# go down too. That is the right trade for a maintenance switch — predictable beats
+# clever when you are about to erase a disk.
+{ config, lib, ... }:
+
+let
+  cfg = config.redline.ssd0;
+  off = lib.mkForce false;
+in
+{
+  options.redline.ssd0.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = ''
+      Whether /mnt/ssd0 is mounted and its dependent services run.
+
+      When false: the filesystem and the /var/lib/immich bind mount are not mounted,
+      no swapfile is activated on it, btrfs autoScrub skips it, and every service that
+      reads or writes it is disabled. Intended for maintenance on the drive itself.
+    '';
+  };
+
+  config = lib.mkIf (!cfg.enable) {
+    # --- services storing their data on ssd0 -----------------------------------
+    services.navidrome.enable = off; # MusicFolder = ssd0/music
+    services.syncthing.enable = off; # shares ssd0/notes
+    services.samba.enable = off; # shares ssd0/music_inbox (and /storage — see above)
+    services.immich.enable = off; # media root is the /var/lib/immich bind
+
+    # --- hand-rolled units ------------------------------------------------------
+    systemd.services.ananke.enable = off; # model dir + sqlite on ssd0
+    systemd.services.minecraft-server.enable = off;
+    systemd.services.fivem-server.enable = off;
+    systemd.services.paxboard.enable = off;
+    systemd.services.paxcord.enable = off;
+
+    # --- timers + their units ---------------------------------------------------
+    # backup-sync reads ssd0 as its source; running it against a missing source would
+    # do nothing useful, and its rsync has no --delete so it cannot damage the
+    # destination, but there is no reason to let it fire.
+    systemd.services.backup-sync.enable = off;
+    systemd.timers.backup-sync.enable = off;
+    systemd.services.icloud-sync.enable = off;
+    systemd.timers.icloud-sync.enable = off;
+    systemd.services.immich-stacker.enable = off;
+    systemd.timers.immich-stacker.enable = off;
+
+    # restic (services.restic.backups.external) is intentionally left alone: it backs
+    # up /storage/backup to the external drive and never touches ssd0. With the drive
+    # out of the picture that is exactly the backup you still want running.
+  };
+}

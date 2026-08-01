@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
     port = 2283;
     immichSecrets = import ../secrets/immich.nix;
@@ -55,7 +55,12 @@ in
     accelerationDevices = null;
   };
 
-  users.users.immich.extraGroups = [ "video" "render" "editabledata" ];
+  # Same shape as navidrome: mkIf must wrap the whole `users.users` attrset, since
+  # merely naming users.users.immich.* instantiates the submodule and it then fails
+  # evaluation with no group when the service is off (redline.ssd0.enable = false).
+  users.users = lib.mkIf config.services.immich.enable {
+    immich.extraGroups = [ "video" "render" "editabledata" ];
+  };
   networking.firewall.allowedTCPPorts = [ port ];
 
   # Create the systemd service for immich-stacker

@@ -6,12 +6,15 @@ in {
   imports =
     [
       ../common-all/configuration.nix
+      ./ssd0.nix
       (import ./ai { inherit config pkgs; })
       (import ./services { inherit config lib pkgs; })
       (import ./programs { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";
+
+  redline.ssd0.enable = true;
 
   boot.initrd.kernelModules = [
     "nvidia"
@@ -31,25 +34,31 @@ in {
   boot.zfs.forceImportRoot = true;
   boot.zfs.extraPools = [ "storage" ];
 
-  fileSystems = {
-    ${folders.mounts.ssd0} = {
-      device = "/dev/disk/by-uuid/68847514-728b-451c-8145-b2eaa1871e8d";
-      fsType = "btrfs";
-      options = [ "compress=zstd" "noatime" "discard=async" ];
-    };
+  # ssd0 and the immich bind that sits on it are gated by redline.ssd0.enable — see
+  # ssd0.nix. Both must be absent together: the bind's source lives inside ssd0, and a
+  # swapfile or bind mount left behind pins the filesystem and blocks unmounting it.
+  fileSystems = lib.mkMerge [
+    {
+      ${folders.backups.external} = {
+        device = "/dev/disk/by-uuid/9EB67FDDB67FB47D";
+        fsType = "ntfs";
+        options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
+      };
+    }
+    (lib.mkIf config.redline.ssd0.enable {
+      ${folders.mounts.ssd0} = {
+        device = "/dev/disk/by-uuid/68847514-728b-451c-8145-b2eaa1871e8d";
+        fsType = "btrfs";
+        options = [ "compress=zstd" "noatime" "discard=async" ];
+      };
 
-    ${folders.backups.external} = {
-      device = "/dev/disk/by-uuid/9EB67FDDB67FB47D";
-      fsType = "ntfs";
-      options = [ "defaults" "nofail" "x-systemd.automount" "noauto" ];
-    };
-
-    "/var/lib/immich" = {
-      device = folders.immich;
-      fsType = "none";
-      options = [ "bind" ];
-    };
-  };
+      "/var/lib/immich" = {
+        device = folders.immich;
+        fsType = "none";
+        options = [ "bind" ];
+      };
+    })
+  ];
 
   # Auto-scrub monthly
   services.zfs.autoScrub.enable = true;
@@ -64,11 +73,17 @@ in {
     monthly = 12;
   };
 
-  # Auto-scrub btrfs weekly
+  # Auto-scrub btrfs weekly.
+  #
+  # This works — it caught the 2026-08-01 corruption a full week early, on Jul 27
+  # (`Error summary: csum=9`, unit exited 3 and went to `failed`). Nobody was told,
+  # so the warning was lost. The detection was never the problem; the alerting was.
+  # That gap is now covered by services/unit-alerts.nix, which hooks OnFailure= on
+  # this unit and shows any failed unit at login.
   services.btrfs.autoScrub = {
-    enable = true;
+    enable = config.redline.ssd0.enable;
     interval = "weekly";
-    fileSystems = [ "/mnt/ssd0" ];
+    fileSystems = lib.optionals config.redline.ssd0.enable [ "/mnt/ssd0" ];
   };
 
   # Use powersave governor for quieter operation
@@ -115,7 +130,10 @@ in {
   # wait-online breaks rebuilds: https://github.com/NixOS/nixpkgs/issues/180175
   systemd.services.NetworkManager-wait-online.enable = false;
 
-  swapDevices = [{
+  # Swap lives on ssd0, so it goes away with it. This is not optional tidiness: an
+  # active swapfile pins the filesystem, and `swapoff` on an already-read-only btrfs
+  # fails with EROFS — which is exactly how the 2026-08-01 teardown got stuck.
+  swapDevices = lib.optionals config.redline.ssd0.enable [{
     device = "/mnt/ssd0/swapfile";
     size = 64 * 1024; # 64 GB
   }];
