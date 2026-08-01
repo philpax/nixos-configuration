@@ -36,6 +36,25 @@ let
         export IMMICH_MATCH="(?i)\.(JP[E]?G|RW2|RAF|NEF|DNG)$"
         export IMMICH_PARENT="(?i)\.JP[E]?G$"
 
+        # Wait for immich to actually accept requests. After= only orders against the
+        # unit reaching "started"; the server then spends a while on migrations and
+        # bootstrapping before it binds the port. Without this the stacker dies with
+        # `connection refused` whenever the two start together — which is exactly what
+        # happened on the 2026-08-01 rebuild, when the Persistent= catch-up run fired
+        # during the switch instead of at the usual 3 AM.
+        echo "Waiting for immich at $IMMICH_ENDPOINT ..."
+        i=0
+        until ${pkgs.curl}/bin/curl -fsS --max-time 5 \
+                "$IMMICH_ENDPOINT/server/version" >/dev/null 2>&1; do
+            i=$((i + 1))
+            if [ "$i" -ge 60 ]; then
+                echo "ERROR: immich did not become ready within 60s"
+                exit 1
+            fi
+            ${pkgs.coreutils}/bin/sleep 1
+        done
+        echo "immich is up (waited ''${i}s)"
+
         # Run immich-stacker
         echo "Running immich-stacker with endpoint: $IMMICH_ENDPOINT"
         if ! ${immichStackerBinary}/bin/immich-stacker; then
@@ -66,8 +85,13 @@ in
   # Create the systemd service for immich-stacker
   systemd.services.immich-stacker = {
     description = "Immich Stacker Service";
-    after = [ "immich.service" "multi-user.target" ];
-    wants = [ "immich.service" ];
+    # The NixOS immich module produces `immich-server.service` — there is no unit named
+    # `immich.service`. Systemd silently ignores ordering against a unit that does not
+    # exist, so the dependency this file carried until 2026-08-01 had never once taken
+    # effect. Ordering alone is still not sufficient; see the readiness poll in the
+    # script above.
+    after = [ "immich-server.service" "multi-user.target" ];
+    wants = [ "immich-server.service" ];
 
     serviceConfig = {
       Type = "oneshot";

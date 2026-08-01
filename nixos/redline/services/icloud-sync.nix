@@ -50,6 +50,15 @@ in {
     description = "iCloud Photo Sync Service";
     after = [ "multi-user.target" ];
 
+    # icloudDir lives on ssd0, and ProtectSystem=strict + ReadWritePaths makes systemd
+    # build the mount namespace BEFORE ExecStart — so if ssd0 is not mounted yet the
+    # unit dies with 226/NAMESPACE and the script's own `mkdir -p` never gets a chance
+    # to run. RequiresMountsFor makes systemd derive the right mount unit from the path
+    # and both order against it and pull it in. Without this the unit fails on every
+    # boot where the Persistent= catch-up run wins the race against mnt-ssd0.mount,
+    # which is how it failed during the 2026-08-01 ssd0 rebuild.
+    unitConfig.RequiresMountsFor = icloudDir;
+
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${icloudSyncScript}";
