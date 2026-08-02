@@ -65,11 +65,9 @@ let
     hash = "sha256-7bO8C1BLJb1FwmHxWK4AjhTvXACmJTQGT16bQngrKHA=";
   };
 
-  vmenu = pkgs.fetchzip {
-    url = "https://github.com/TomGrobbe/vMenu/releases/download/v3.8.50/vMenu-3.8.50.zip";
-    hash = "sha256-oLwxcjKX6E/lJXxvkxCPU4qK/8lBMhReD+v5LrOh1bQ=";
-    stripRoot = false;
-  };
+  # Built from source to set its client-side defaults and to let a saved ped
+  # be your default ped; see the file for why that needs a compile.
+  vmenu = pkgs.callPackage ./fivem/vmenu.nix { };
 
   # The complete set of resources the server runs, assembled at build time.
   # Copied into place on each start (see ExecStartPre) rather than symlinked,
@@ -108,6 +106,7 @@ let
 
     cp -r --no-preserve=mode ${vmenu} $out/vMenu
     cp -r --no-preserve=mode ${./fivem/sandbox} $out/sandbox
+    cp -r --no-preserve=mode ${./fivem/npc} $out/npc
     cp -r --no-preserve=mode ${./fivem/joinpassword} $out/joinpassword
   '';
 
@@ -117,13 +116,31 @@ let
 
     sv_hostname "redline sandbox"
     sets sv_projectName "redline sandbox"
-    sets sv_projectDesc "Freeroam sandbox: vMenu plus /car"
+    sets sv_projectDesc "Freeroam sandbox: vMenu, /car, PvP, all DLC"
     sv_maxclients 12
-    sets tags "sandbox, freeroam, vmenu"
+    sets tags "sandbox, freeroam, vmenu, pvp"
     sets locale "en-AU"
 
     set onesync on
     sv_scriptHookAllowed 0
+
+    # Unlocks DLC vehicle/ped/weapon models up to "A Safehouse in the Hills"
+    # (mp2025_02). Must be a build the FXServer artifact above knows about —
+    # bump the two together.
+    # https://docs.fivem.net/docs/server-manual/server-commands/#sv_enforcegamebuild
+    sv_enforceGameBuild 3751
+
+    # Culling drops distant off-screen entities from sync, and a player who
+    # isn't synced has no local ped for a map blip to attach to. Off, so
+    # everyone stays visible on the map at any range.
+    set onesync_distanceCulling false
+    set onesync_distanceCullVehicles false
+
+    # Reachable from the internet on the UDP endpoint above, and authenticates
+    # as system.console — every console command, including add_principal. The
+    # password is plaintext on the wire and sits in a world-readable
+    # /nix/store file that is also on FXServer's argv. Unset disables RCON.
+    rcon_password "${fivemSecrets.rconPassword}"
 
     # Keep the server out of the public browser: everyone who joins gets the
     # whole of vMenu (see the ace below), so the join password and not being
@@ -173,10 +190,27 @@ let
 
     setr vmenu_enable_time_sync true
     setr vmenu_enable_weather_sync true
+
+    # 1 = friendly fire on, 2 = forced off, 0 = leave the game's default.
+    # vMenu applies this once at startup; sandbox/pvp.lua reasserts the
+    # per-ped half of it after model changes and respawns.
+    setr vmenu_pvp_mode 1
+
+    # Adds animals to vMenu's ped spawner.
+    setr vmenu_enable_animals_spawn_menu true
+
+    # Overhead names belong to `playernames` above (250m, needs line of
+    # sight). vMenu's copy is a second CreateMpGamerTag on the same ped and
+    # the two recreate each other's tags forever, so leave vMenu's "Show
+    # Player Names" off.
+
+    # Everything else vMenu does is a per-client setting with no convar and no
+    # reachable ace. Those defaults live in fivem/vmenu.nix.
     add_ace builtin.everyone "vMenu.Everything" allow
 
     ensure vMenu
     ensure sandbox
+    ensure npc
   '';
 in
 {

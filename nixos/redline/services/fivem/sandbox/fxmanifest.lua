@@ -3,7 +3,11 @@ game 'gta5'
 
 name 'sandbox'
 author 'philpax'
-description 'Chat commands for a freeroam sandbox: /car, /dv, /fix, /tp, /wp, /heal.'
-version '1.0.0'
+description 'Freeroam sandbox: chat commands plus friendly fire upkeep.'
+version '1.1.0'
 
-client_script 'client.lua'
+client_scripts {
+    'client.lua',
+    'pvp.lua',
+    'welcome.lua',
+}

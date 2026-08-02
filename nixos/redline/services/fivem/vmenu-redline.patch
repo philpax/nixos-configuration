@@ -1,0 +1,188 @@
+--- a/vMenu/EventManager.cs
++++ b/vMenu/EventManager.cs
+@@ -73,10 +73,32 @@
+             if (firstSpawn)
+             {
+                 firstSpawn = false;
++
++                // Menus are built after the permissions round-trip with the
++                // server, which routinely lands after the first spawn. The
++                // null checks below would then all fail and, because
++                // firstSpawn has already been consumed, never run again.
++                var menuDeadline = GetGameTimer() + 15000;
++                while ((MainMenu.MiscSettingsMenu == null || MainMenu.MpPedCustomizationMenu == null || MainMenu.WeaponLoadoutsMenu == null) && GetGameTimer() < menuDeadline)
++                {
++                    await Delay(100);
++                }
++
+                 if (MainMenu.MiscSettingsMenu != null && MainMenu.MpPedCustomizationMenu != null && MainMenu.MiscSettingsMenu.MiscRespawnDefaultCharacter && !string.IsNullOrEmpty(GetResourceKvpString("vmenu_default_character")) && !GetSettingsBool(Setting.vmenu_disable_spawning_as_default_character))
+                 {
+                     await MainMenu.MpPedCustomizationMenu.SpawnThisCharacter(GetResourceKvpString("vmenu_default_character"), false);
+                 }
++                else if (!string.IsNullOrEmpty(GetResourceKvpString("vmenu_default_saved_ped")))
++                {
++                    // Saved peds are arbitrary models rather than MP freemode
++                    // characters, so they go through SetPlayerSkin directly.
++                    var defaultPedName = GetResourceKvpString("vmenu_default_saved_ped");
++                    var defaultPedInfo = StorageManager.GetSavedPedInfo("ped_" + defaultPedName);
++                    if (defaultPedInfo.model != 0)
++                    {
++                        await SetPlayerSkin(defaultPedInfo.model, defaultPedInfo, false);
++                    }
++                }
+                 while (!IsScreenFadedIn() || IsPlayerSwitchInProgress() || IsPauseMenuActive() || GetIsLoadingScreenActive())
+                 {
+                     await Delay(0);
+--- a/vMenu/UserDefaults.cs
++++ b/vMenu/UserDefaults.cs
+@@ -15,6 +15,54 @@
+         // Constants.
+         private const string SETTINGS_PREFIX = "settings_";
+ 
++        // Force this server's preferred settings, once per client.
++        //
++        // vMenu's own default list only applies when a key is absent, and it
++        // only persists a toggle when the player explicitly picks Misc
++        // Settings > Save Personal Settings. So neither route reaches anyone
++        // who has already run vMenu anywhere. This overwrites the stored
++        // values a single time and then leaves the player alone.
++        //
++        // An explicit static constructor suppresses beforefieldinit, so the
++        // CLR guarantees this runs before the first read of any static member
++        // of this class — which is how the menus initialise themselves.
++        // Nothing can observe a setting before this has written it.
++        //
++        // Bump the marker key to re-apply after changing this list.
++        static UserDefaults()
++        {
++            if (!string.IsNullOrEmpty(GetResourceKvpString("redline_forced_defaults_v2")))
++            {
++                return;
++            }
++
++            // "True"/"False" matches bool.ToString(), which is what
++            // SetSavedSettingsBool writes and GetSettingsBool parses.
++            var forced = new Dictionary<string, bool>
++            {
++                // Police, and the whole wanted system, actually exist.
++                { "neverWanted", false },
++                // See each other on the map at any range.
++                { "miscShowPlayerBlips", true },
++                // Saved default loadout is equipped on join, not just respawn.
++                { "weaponLoadoutsSetLoadoutOnRespawn", true },
++                { "miscSpeedoKmh", true },
++                { "vehicleDisablePlaneTurbulence", true },
++                { "vehicleDisableHelicopterTurbulence", true },
++                { "pvEnableVehicleBlip", true },
++                // Off, so spawning a car doesn't delete the last one and you
++                // can leave vehicles around for each other.
++                { "vehicleSpawnerReplacePrevious", false },
++            };
++
++            foreach (var setting in forced)
++            {
++                SetResourceKvp(SETTINGS_PREFIX + setting.Key, setting.Value.ToString());
++            }
++
++            SetResourceKvp("redline_forced_defaults_v2", "1");
++        }
++
+         #region Public variables.
+         #region PlayerOptions
+         public static bool PlayerGodMode
+--- a/vMenu/FunctionsController.cs
++++ b/vMenu/FunctionsController.cs
+@@ -1,4 +1,4 @@
+-using System;
++﻿using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading.Tasks;
+@@ -2042,18 +2042,23 @@
+             if (MainMenu.MiscSettingsMenu != null && Game.PlayerPed.IsDead)
+             {
+                 var restoreDefault = false;
++                var restoreDefaultSavedPed = false;
+                 if (MainMenu.MiscSettingsMenu.MiscRespawnDefaultCharacter)
+                 {
+                     if (!string.IsNullOrEmpty(GetResourceKvpString("vmenu_default_character")))
+                     {
+                         restoreDefault = true;
+                     }
++                    else if (!string.IsNullOrEmpty(GetResourceKvpString("vmenu_default_saved_ped")))
++                    {
++                        restoreDefaultSavedPed = true;
++                    }
+                     else
+                     {
+-                        Notify.Error("You did not set a saved character to restore to. Do so in the ~g~MP Ped Customization~s~ > ~g~Saved Characters~s~ menu.");
++                        Notify.Error("You did not set a default ped to restore to. Do so in the ~g~Player Appearance~s~ > ~g~Saved Peds~s~ or ~g~MP Ped Customization~s~ > ~g~Saved Characters~s~ menu.");
+                     }
+                 }
+-                if (!restoreDefault)
++                if (!restoreDefault && !restoreDefaultSavedPed)
+                 {
+                     if (MainMenu.MiscSettingsMenu.RestorePlayerAppearance && IsAllowed(Permission.MSRestoreAppearance))
+                     {
+@@ -2083,6 +2088,14 @@
+                 {
+                     await MainMenu.MpPedCustomizationMenu.SpawnThisCharacter(GetResourceKvpString("vmenu_default_character"), false);
+                 }
++                else if (restoreDefaultSavedPed)
++                {
++                    var defaultPedInfo = StorageManager.GetSavedPedInfo("ped_" + GetResourceKvpString("vmenu_default_saved_ped"));
++                    if (defaultPedInfo.model != 0)
++                    {
++                        await SetPlayerSkin(defaultPedInfo.model, defaultPedInfo, false);
++                    }
++                }
+                 else
+                 {
+                     if (IsTempPedSaved() && MainMenu.MiscSettingsMenu.RestorePlayerAppearance && IsAllowed(Permission.MSRestoreAppearance))
+--- a/vMenu/menus/PlayerAppearance.cs
++++ b/vMenu/menus/PlayerAppearance.cs
+@@ -1,4 +1,4 @@
+-using System;
++﻿using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ 
+@@ -120,6 +120,7 @@
+             var renameSavedPed = new MenuItem("Rename Saved Ped", "Rename this saved ped.") { LeftIcon = MenuItem.Icon.WARNING };
+             var replaceSavedPed = new MenuItem("~r~Replace Saved Ped", "Replace this saved ped with your current ped. Note this can not be undone!") { LeftIcon = MenuItem.Icon.WARNING };
+             var deleteSavedPed = new MenuItem("~r~Delete Saved Ped", "Delete this saved ped. Note this can not be undone!") { LeftIcon = MenuItem.Icon.WARNING };
++            var setDefaultSavedPed = new MenuItem("Set As Default Ped", "Spawn as this saved ped whenever you join the server.");
+ 
+             if (!IsAllowed(Permission.PASpawnSaved))
+             {
+@@ -129,6 +130,7 @@
+             }
+ 
+             selectedSavedPedMenu.AddMenuItem(spawnSavedPed);
++            selectedSavedPedMenu.AddMenuItem(setDefaultSavedPed);
+             selectedSavedPedMenu.AddMenuItem(cloneSavedPed);
+             selectedSavedPedMenu.AddMenuItem(renameSavedPed);
+             selectedSavedPedMenu.AddMenuItem(replaceSavedPed);
+@@ -142,6 +144,11 @@
+                 {
+                     await SetPlayerSkin(savedPed.Value.model, savedPed.Value, true);
+                 }
++                else if (item == setDefaultSavedPed)
++                {
++                    SetResourceKvp("vmenu_default_saved_ped", savedPed.Key.Substring(4));
++                    Notify.Success($"You will now spawn as <C>{savedPed.Key.Substring(4)}</C> whenever you join.");
++                }
+                 else if (item == cloneSavedPed)
+                 {
+                     var name = await GetUserInput($"Enter a clone name ({savedPed.Key.Substring(4)})", savedPed.Key.Substring(4), 30);
+@@ -221,6 +228,10 @@
+                     if (item.Label == "Are you sure?")
+                     {
+                         DeleteResourceKvp(savedPed.Key);
++                        if (GetResourceKvpString("vmenu_default_saved_ped") == savedPed.Key.Substring(4))
++                        {
++                            DeleteResourceKvp("vmenu_default_saved_ped");
++                        }
+                         Notify.Success("Your saved ped has been deleted.");
+                         selectedSavedPedMenu.GoBack();
+                     }
