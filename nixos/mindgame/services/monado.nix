@@ -1,6 +1,7 @@
 { config, pkgs, ... }:
 
-# Monado OpenXR runtime for the wired Valve Index (Lighthouse tracked).
+# Monado OpenXR runtime for the wired Lighthouse headsets — Valve Index and
+# Bigscreen Beyond 2e.
 # Lives alongside services.wivrn (which drives the wireless Quest). Only one
 # OpenXR runtime can be "active" at a time — use `vr-mode` to switch between
 # them (see vr-mode.nix). Neither service sets defaultRuntime, so nothing
@@ -32,7 +33,28 @@
     # makes Monado acquire the Index via niri's wp_drm_lease protocol instead,
     # which works. niri offers the Index as a non-desktop leasable connector.
     XRT_COMPOSITOR_FORCE_WAYLAND_DIRECT = "1";
+
+    # Defaults to false, in which case teardown only Deactivate()s the headset
+    # and leaves the panels lit and warm. EnterStandby is what powers them down.
+    LH_STANDBY_ON_EXIT = "1";
   };
+
+  # Per-run overrides written by `vr-mode` (connector, IPD, ...). systemd applies
+  # EnvironmentFile= after Environment=, so these beat the defaults above.
+  # Leading `-` so a missing file — the normal case — isn't an error.
+  systemd.user.services.monado.serviceConfig.EnvironmentFile = [ "-%t/vr-mode.env" ];
+
+  # Bigscreen Beyond device access, for SteamVR's lighthouse driver, the Beyond
+  # Utility under Proton, and Baballonia. Vendor-wide because the headset moves
+  # between product IDs: 0101 headset / 4004 firmware / 1001 error / 0202 Bigeye
+  # / 0282 Bigeye DFU / 0105 audio strap. The usb rule isn't redundant with the
+  # hidraw one — /dev/bus/usb/... is 0664 root:root with no uaccess ACL, so
+  # anything going through libusb rather than hidraw can read but not write.
+  # `wheel` because common-all lists plugdev but no such group exists here.
+  services.udev.extraRules = ''
+    KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="35bd", MODE="0660", GROUP="wheel"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="35bd", MODE="0660", GROUP="wheel"
+  '';
 
   # OpenVR -> OpenXR shim so SteamVR-only games (VRChat, Resonite, ...) run on
   # Monado. From nixpkgs-xr (see ../nixpkgs-xr.nix).

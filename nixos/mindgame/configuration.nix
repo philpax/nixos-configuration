@@ -9,6 +9,7 @@
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ./nixpkgs-xr.nix
+      ./nvidia-bsb-dsc.nix
       (import ./programs { inherit config pkgs; })
       (import ./services { inherit config pkgs; })
     ];
@@ -33,7 +34,9 @@
 
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia.open = true;
-  hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.latest;
+  # hardware.nvidia.package is set in ./nvidia-bsb-dsc.nix — it wraps
+  # nvidiaPackages.latest to patch the open kernel modules for the Bigscreen
+  # Beyond's DSC quirks.
   hardware.graphics.enable = true;
   hardware.nvidia.modesetting.enable = true;
 
