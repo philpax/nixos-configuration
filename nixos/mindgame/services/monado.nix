@@ -23,9 +23,12 @@
     # The Lighthouse driver only registers devices that announce themselves
     # inside this window; anything later is dropped with "Cannot add device
     # after setup". At the 3000ms default a base station regularly missed the
-    # cutoff, leaving Monado tracking off a single station. Widen it — the cost
-    # is a few extra seconds of startup, which vr-mode already waits out.
-    LH_DISCOVER_WAIT_MS = "6000";
+    # cutoff, leaving Monado tracking off a single station; at 6000ms the
+    # controllers missed it too, because LH_STANDBY_ON_EXIT powers them off on
+    # every Monado exit and they take tens of seconds to wake and re-link.
+    # Widen it — the cost is extra seconds of startup, which vr-mode already
+    # waits out.
+    LH_DISCOVER_WAIT_MS = "20000";
 
     # Nvidia + Wayland: Monado otherwise picks its Nvidia/Xlib direct backend,
     # whose vkAcquireXlibDisplayEXT can't lease the HMD panel from niri (the DRM

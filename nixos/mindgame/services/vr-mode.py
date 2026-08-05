@@ -156,9 +156,11 @@ def write_env(*lines):
             f.write(line + "\n")
 
 
-def monado_ready(tries=40):
-    """Monado needs several seconds to probe Lighthouse devices and lease the
-    headset panel before it accepts OpenXR clients, and it stays systemd-active
+def monado_ready(tries=90):
+    """Monado needs a while to probe Lighthouse devices and lease the headset
+    panel before it accepts OpenXR clients — at least LH_DISCOVER_WAIT_MS
+    (20s, see monado.nix), so this poll budget must comfortably exceed that or
+    we'll kill a healthy startup as "failed". It also stays systemd-active
     even when the compositor fails (IPC_EXIT_ON_DISCONNECT=off) — so is-active
     is not a readiness signal. Poll this run's journal for the compositor-up
     marker, bailing early on the failure markers."""
