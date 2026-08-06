@@ -131,13 +131,16 @@ let
     ${navidromeCli} plugin rescan
     ${navidromeCli} plugin enable audiomuseai
     ${navidromeCli} plugin edit audiomuseai --config ${lib.escapeShellArg pluginConfig}
-    cp ${pluginStamp} /var/lib/navidrome/.audiomuse-plugin-desired
+    # Stamp into the plugin unit's own StateDirectory, not navidrome's DB dir:
+    # the DB dir is shared with the hardened server, and a stale root-owned
+    # stamp there blocks this (unprivileged) overwrite with "Permission denied".
+    cp ${pluginStamp} /var/lib/navidrome-plugin/.audiomuse-plugin-desired
   '';
 
   restartNavidromeIfStale = pkgs.writeShellScript "navidrome-audiomuse-plugin-restart" ''
     set -euo pipefail
-    desired=/var/lib/navidrome/.audiomuse-plugin-desired
-    applied=/var/lib/navidrome/.audiomuse-plugin-applied
+    desired=/var/lib/navidrome-plugin/.audiomuse-plugin-desired
+    applied=/var/lib/navidrome-plugin/.audiomuse-plugin-applied
     if [ -f "$desired" ] && ! ${pkgs.diffutils}/bin/cmp -s "$desired" "$applied"; then
       echo "Plugin package or config changed; restarting navidrome to load it"
       ${pkgs.systemd}/bin/systemctl try-restart navidrome.service
@@ -207,6 +210,11 @@ in
       TimeoutStartSec = "5m";
       User = "navidrome";
       Group = "navidrome";
+      # Created on unit start, owned by navidrome, so the stamp writes by the
+      # unprivileged script below can never be blocked by root-owned leftovers
+      # in navidrome's DB dir. WorkingDirectory stays /var/lib/navidrome: the
+      # CLI subcommands locate the DB relative to it.
+      StateDirectory = "navidrome-plugin";
       WorkingDirectory = "/var/lib/navidrome";
       ExecStart = configureAudiomusePlugin;
       # "+" = run as root: the restart decision is made by comparing the stamp
