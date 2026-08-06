@@ -134,7 +134,9 @@ let
     # Stamp into the plugin unit's own StateDirectory, not navidrome's DB dir:
     # the DB dir is shared with the hardened server, and a stale root-owned
     # stamp there blocks this (unprivileged) overwrite with "Permission denied".
-    cp ${pluginStamp} /var/lib/navidrome-plugin/.audiomuse-plugin-desired
+    # install, not cp: store files are mode 444, and cp would carry that mode
+    # onto the stamp, making every subsequent run fail to overwrite its own file.
+    install -m 0644 ${pluginStamp} /var/lib/navidrome-plugin/.audiomuse-plugin-desired
   '';
 
   restartNavidromeIfStale = pkgs.writeShellScript "navidrome-audiomuse-plugin-restart" ''
@@ -144,7 +146,7 @@ let
     if [ -f "$desired" ] && ! ${pkgs.diffutils}/bin/cmp -s "$desired" "$applied"; then
       echo "Plugin package or config changed; restarting navidrome to load it"
       ${pkgs.systemd}/bin/systemctl try-restart navidrome.service
-      cp "$desired" "$applied"
+      install -m 0644 "$desired" "$applied"
     fi
   '';
 in
