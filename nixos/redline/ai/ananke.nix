@@ -88,12 +88,8 @@ let
   # askchorus rotation.
   discordVisible = { metadata.discord_visible = true; };
 
-  # Only one service carries `metadata.resident = true` today (Qwen
-  # 3.6); it's inlined at the use-site rather than pulled from a helper
-  # because Nix's `//` operator shallow-merges — combining two
-  # `{ metadata.foo = ...; }` attrsets would drop one of the metadata
-  # keys. If a second flag ever needs stacking on top of
-  # `discordVisible`, write the full metadata table inline too.
+  # Only one service carries `metadata.resident = true` (the default
+  # model — see defaultModel below), with its metadata written inline.
 
   models = [
     # Qwen family.
@@ -108,13 +104,7 @@ let
       mmproj = "unsloth/Qwen3.6-35B-A3B-GGUF/mmproj-F16.gguf";
       # Double the context so both parallel slots keep the full 262144;
       # the A3B's lighter KV leaves room for this where the 27B can't.
-      extras = qwen36Extras // {
-        context = 524288;
-        metadata = {
-          discord_visible = true;
-          resident = true;
-        };
-      };
+      extras = qwen36Extras // { context = 524288; } // discordVisible;
     }
     {
       name = "qwen3.6-27b";
@@ -179,7 +169,11 @@ let
           min_p = 0.05;
           repeat_penalty = 1.0;
         };
-      } // discordVisible;
+        metadata = {
+          discord_visible = true;
+          resident = true;
+        };
+      };
     }
     {
       name = "gemma-4-26b-a4b-it";
@@ -605,6 +599,14 @@ let
   firewallPorts =
     [ openaiPort managementPort comfyuiPort ]
     ++ (lib.imap0 (i: _: llmBasePort + i) models);
+
+  # The single resident model is the default LLM for everything else;
+  # findSingle enforces exactly-one at eval time (paxcord checks at runtime).
+  defaultModel =
+    (lib.findSingle (m: m.extras.metadata.resident or false)
+      (throw "ananke: no model carries metadata.resident = true")
+      (throw "ananke: multiple models carry metadata.resident = true")
+      models).name;
 in
 {
   # Expose ananke's port constants as read-only options so other modules
@@ -633,6 +635,12 @@ in
       default = llmBasePort;
       readOnly = true;
       description = "Base port for ananke's per-model LLM services (port = base + index).";
+    };
+    defaultModel = lib.mkOption {
+      type = lib.types.str;
+      default = defaultModel;
+      readOnly = true;
+      description = "Name of the model carrying metadata.resident = true — the default LLM for services that don't pick one explicitly.";
     };
   };
 

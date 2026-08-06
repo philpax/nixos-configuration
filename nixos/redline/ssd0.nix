@@ -43,6 +43,25 @@ in
 
     # --- hand-rolled units ------------------------------------------------------
     systemd.services.ananke.enable = off; # model dir + sqlite on ssd0
+    # audiomuse containers keep postgres/redis/temp data on ssd0; the navidrome
+    # oneshots (Wants=) and pgdump (Requires=) reference disabled units and
+    # would pull them back in if left enabled themselves.
+    systemd.services.docker-audiomuse.enable = off;
+    # Keep in sync with redline.audiomuse.workerCount.
+    systemd.services.docker-audiomuse-worker-1.enable = off;
+    systemd.services.docker-audiomuse-worker-2.enable = off;
+    systemd.services.docker-audiomuse-worker-3.enable = off;
+    systemd.services.docker-audiomuse-worker-4.enable = off;
+    systemd.services.docker-audiomuse-worker-5.enable = off;
+    systemd.services.docker-audiomuse-worker-6.enable = off;
+    systemd.services.docker-audiomuse-worker-7.enable = off;
+    systemd.services.docker-audiomuse-worker-8.enable = off;
+    systemd.services.docker-audiomuse-postgres.enable = off;
+    systemd.services.docker-audiomuse-redis.enable = off;
+    systemd.services.navidrome-audiomuse-user.enable = off;
+    systemd.services.navidrome-audiomuse-plugin.enable = off;
+    systemd.services.audiomuse-pgdump.enable = off;
+    systemd.timers.audiomuse-pgdump.enable = off;
     systemd.services.minecraft-server.enable = off;
     systemd.services.fivem-server.enable = off;
     systemd.services.paxboard.enable = off;

@@ -12,6 +12,7 @@ rec {
   };
 
   # User data directories (on primary SSD)
+  audiomuse = "${mounts.ssd0}/audiomuse";
   immich = "${mounts.ssd0}/immich";
   music = "${mounts.ssd0}/music";
   music_inbox = "${mounts.ssd0}/music_inbox";

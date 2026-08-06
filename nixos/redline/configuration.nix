@@ -108,6 +108,8 @@ in {
   hardware.nvidia.modesetting.enable = false;
   hardware.nvidia-container-toolkit.enable = true;
   services.xserver.videoDrivers = [ "nvidia" ];
+  # Both GPUs are RTX 3090s (sm_86).
+  nixpkgs.config.cudaCapabilities = [ "8.6" ];
   services.immich.machine-learning = {
     environment.LD_LIBRARY_PATH = "${pkgs.python312Packages.onnxruntime}/lib/python3.12/site-packages/onnxruntime/capi";
   };
