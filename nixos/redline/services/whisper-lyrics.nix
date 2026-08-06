@@ -2,8 +2,11 @@
 # external-lyrics-API slot so its internal CPU-bound Whisper decoder never
 # runs. See services/whisper-lyrics/server.py for the protocol.
 #
-# The model (~1.6GB) is downloaded from HuggingFace into the state dir on
-# first start, so the first activation needs network and a few minutes.
+# The GPU work runs in a worker subprocess that is spawned on demand and
+# reaped when idle, so the unit sits at zero VRAM between transcriptions.
+#
+# The model (~1.6GB) is downloaded from HuggingFace into the state dir on the
+# first request, which therefore needs network and a few minutes.
 { config, lib, pkgs, ... }:
 
 let
@@ -33,6 +36,9 @@ in
       API_KEY = secrets.lyricsApiKey;
       WHISPER_MODEL = "large-v3-turbo";
       PORT = toString port;
+      # Kill the GPU worker after five idle minutes, so the service holds no
+      # VRAM between bursts; the next request respawns it (~2s model load).
+      IDLE_TIMEOUT = "300";
       # GPU 1: audiomuse's own containers pin GPU 0 (flask) and alternate
       # workers; transcription is bursty and coexists fine with ComfyUI.
       CUDA_VISIBLE_DEVICES = "1";
@@ -46,8 +52,9 @@ in
       StateDirectory = "whisper-lyrics";
       Restart = "on-failure";
       RestartSec = 10;
-      # Model load (and first-start download) happens before the port binds.
-      TimeoutStartSec = "15m";
+      # The worker is a child process; stopping the unit takes the whole
+      # cgroup, and a transcription in flight can hold it briefly.
+      TimeoutStopSec = "2m";
     };
   };
 
