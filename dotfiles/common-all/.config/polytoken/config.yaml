@@ -1,8 +1,9 @@
 version: 2
 config_command_substitution: true
 defaults:
-  full: umans/umans-glm-5.2
-  mini: umans/umans-glm-5.2
+  full: umans/umans-deepseek-v4-flash-0731(max)
+  mini: umans/umans-deepseek-v4-flash-0731(high)
+  nano: umans/umans-deepseek-v4-flash-0731(low)
 providers:
   umans:
     kind:
