@@ -23,12 +23,21 @@ let
     { src = folders.music; dst = "${folders.backups.external}/Music"; }
     { src = folders.written; dst = "${folders.backups.external}/Written"; }
     # ZFS pool -> external drive (offsite backup)
+    # `excludes` are rsync --exclude patterns, relative to the source root.
     { src = folders.downloads; dst = "${folders.backups.external}/Downloads"; }
     { src = folders.documents; dst = "${folders.backups.external}/Documents"; }
-    { src = folders.games; dst = "${folders.backups.external}/Games"; }
-    { src = folders.videos; dst = "${folders.backups.external}/Videos"; }
+    { src = folders.games; dst = "${folders.backups.external}/Games";
+      # Re-downloadable from Steam / the MSFS store
+      excludes = [ "/Steam/" "/Flight Simulator/" ]; }
+    { src = folders.videos; dst = "${folders.backups.external}/Videos";
+      # Re-obtainable media; the external drive is for irreplaceable data
+      excludes = [ "/Movies/" "/TV Shows/" ]; }
     # TODO: consider backing up: others (immich, datasets, installers)
   ];
+
+  # Serialise each mapping as src|dst|exclude,exclude,... for the shell loop
+  serialiseMapping = m:
+    "${m.src}|${m.dst}|${builtins.concatStringsSep "," (m.excludes or [])}";
 
   # Create the backup script
   backupScript = pkgs.writeShellScript "backup-sync" ''
@@ -79,7 +88,7 @@ let
 
     # Backup mappings
     declare -a mappings=(
-      ${builtins.concatStringsSep "\n      " (map (m: ''"${m.src}:${m.dst}"'') backupMappings)}
+      ${builtins.concatStringsSep "\n      " (map (m: ''"${serialiseMapping m}"'') backupMappings)}
     )
 
     total_mappings=''${#mappings[@]}
@@ -88,9 +97,18 @@ let
 
     for mapping in "''${mappings[@]}"; do
         current_mapping=$((current_mapping + 1))
-        IFS=':' read -r src dst <<< "$mapping"
+        IFS='|' read -r src dst excludes <<< "$mapping"
 
-        echo "[$current_mapping/$total_mappings] Syncing: $src -> $dst"
+        # Turn the comma-separated exclude list into rsync arguments
+        declare -a exclude_args=()
+        if [ -n "$excludes" ]; then
+            IFS=',' read -r -a exclude_patterns <<< "$excludes"
+            for pattern in "''${exclude_patterns[@]}"; do
+                exclude_args+=(--exclude "$pattern")
+            done
+        fi
+
+        echo "[$current_mapping/$total_mappings] Syncing: $src -> $dst''${excludes:+ (excluding: $excludes)}"
 
         # Check if source exists
         if [ ! -d "$src" ]; then
@@ -124,6 +142,7 @@ let
             --partial-dir=.rsync-partial \
             --stats \
             --out-format="PROGRESS: %i %n" \
+            "''${exclude_args[@]}" \
             "$src/" "$dst/" | \
             ${pkgs.gawk}/bin/awk -v interval="$progress_interval" '
             BEGIN { count = 0; last_report = 0 }
