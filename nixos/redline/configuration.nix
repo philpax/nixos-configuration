@@ -19,6 +19,10 @@ in {
   boot.initrd.kernelModules = [
     "nvidia"
   ];
+  # btrfs is normally autoloaded via /dev/btrfs-control when udev probes ssd0; on
+  # 2026-08-05 a cold boot came up with the module never loaded and the ssd0 device
+  # unit never appeared. Loading it unconditionally removes that variable.
+  boot.kernelModules = [ "btrfs" ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
   # acpi_enforce_resources=lax: the Aorus TRX40 DSDT declares an ACPI OperationRegion
   # over the FCH SMBus I/O range (0xB00-0xB0F), so i2c-piix4's probe hits
@@ -46,16 +50,20 @@ in {
       };
     }
     (lib.mkIf config.redline.ssd0.enable {
+      # nofail on both mounts (the bind fails whenever ssd0 does): if the device
+      # doesn't probe — as on the 2026-08-05 cold boot — the box must come up with
+      # ssd0's services down rather than drop to an emergency shell, which on a
+      # headless machine means walking to it.
       ${folders.mounts.ssd0} = {
         device = "/dev/disk/by-uuid/68847514-728b-451c-8145-b2eaa1871e8d";
         fsType = "btrfs";
-        options = [ "compress=zstd" "noatime" "discard=async" ];
+        options = [ "compress=zstd" "noatime" "discard=async" "nofail" "x-systemd.device-timeout=30s" ];
       };
 
       "/var/lib/immich" = {
         device = folders.immich;
         fsType = "none";
-        options = [ "bind" ];
+        options = [ "bind" "nofail" ];
       };
     })
   ];
