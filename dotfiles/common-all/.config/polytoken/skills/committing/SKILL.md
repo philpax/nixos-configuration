@@ -88,6 +88,8 @@ Use `git add -p` to stage hunks selectively; `git restore --staged <path>` to un
 
 Follow the repo's existing convention (check `git log --oneline`). Default to a concise imperative summary line (`Add …`, `Fix …`, `Refactor …`) under ~72 chars, optionally followed by a blank line and a body explaining *why*, not *what*. Reference issues with `#NN` only when genuinely related.
 
+Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, no bold or emphasis constructions. A commit message states what changed and why it changed, without selling the change.
+
 **Closing issues:** When a commit resolves an issue, put `Closes #N` in the commit **body** (the description), never in the summary heading. The heading should describe the change itself, not the issue-closure bookkeeping. For example:
 
 ```

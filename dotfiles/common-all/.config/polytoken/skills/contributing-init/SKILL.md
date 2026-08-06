@@ -36,6 +36,7 @@ The templates are a starting point, not a standard. Projects amend their copies 
    - Project-specific sections from your investigation and the user's constraints: Deployment, Architecture, Development, CI, whatever the project actually has. Port anything useful from an existing CONTRIBUTING.md or README instead of dropping it.
    - The template content, appended verbatim as the baseline: `general.md` first, then language files (`rust.md`, `typescript.md`), then library files (`react.md`, `tailwind.md`).
    - Fold the user's additional constraints into the relevant sections rather than dumping them at the end.
+   - Write the sections you author yourself — the opening and the project-specific ones — in the register the `plain-technical-prose` skill defines. Template content is appended verbatim and is not restyled: rewriting it would break `contributing-update`'s ability to diff the local copy against upstream.
    - A sync marker near the top, right after the opening, so `contributing-update` can find you later: `<!-- contributing-templates: files=general.md,rust.md @ <upstream-commit-or-date> -->`. Record the upstream commit SHA if you can get it, otherwise the date.
 
 5. **Write the file.** Only after the user confirmed the plan in step 2. Handle an existing file exactly as answered in step 2: overwrite, merge, or move it to `CONTRIBUTING.md.bak` first. Project root by default, unless the repo keeps docs elsewhere or the user says otherwise.

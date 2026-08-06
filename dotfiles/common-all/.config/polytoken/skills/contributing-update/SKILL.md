@@ -40,4 +40,5 @@ The templates explicitly aren't a source of truth to sync back to, but the rever
 - Don't overwrite the local copy with raw template output — the project-specific sections and local amendments are the point of the local copy.
 - Don't apply without consent, and don't apply before the execution parameters are verified when there's any doubt.
 - Don't silently drop a local amendment inside a template section when adopting upstream changes.
+- Don't restyle template-derived content, including into the `plain-technical-prose` register. Upstream text stays verbatim so it remains diffable against the templates. That register applies only to prose authored locally: project-specific sections and local amendments, and then only when they are being written or revised for other reasons.
 - Don't commit the result without explicit permission; if asked, follow the `committing` skill.

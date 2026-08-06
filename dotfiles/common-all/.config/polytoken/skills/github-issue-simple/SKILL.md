@@ -33,7 +33,10 @@ filing.
    don't add a separate "other" option.
 
 3. **Write the issue** — draft a title and body from the user's description
-   plus any clarification they provided.
+   plus any clarification they provided. Write it in the register the
+   `plain-technical-prose` skill defines: short declarative sentences, third
+   person, no emphasis constructions. Speed is the point here, and the plain
+   register is the faster one to write.
 
 4. **Show the draft** — present the title and body to the user for a quick
    review.

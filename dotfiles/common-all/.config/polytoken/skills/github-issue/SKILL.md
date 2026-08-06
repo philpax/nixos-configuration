@@ -80,6 +80,7 @@ for tracking the problem, not designing the fix.
 
 ## Guidelines
 
+- Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, consistent terminology, no metaphor or emphasis constructions. The section headings and the `**Expected:**` / `**Actual:**` labels in the structure above are structural and stay; other bold is emphasis and does not belong.
 - Search the codebase for the root cause before writing — issues with concrete code references are far more useful than vague descriptions.
 - Use GitHub permalinks (`https://github.com/<owner>/<repo>/blob/<full-40-char-sha>/<path>#L<start>-L<end>`) for file references. Pin to the commit that represents the state being described, not HEAD. GitHub renders these as inline code previews, but only with the full 40-character SHA — short hashes render as plain links.
 - Reference commits by their full short hash with a one-line description of what the commit did, not just the bare hash. A reader should understand the reference without looking it up.

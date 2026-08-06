@@ -24,6 +24,7 @@ This repo keeps agent skills in two kinds of places, and a new skill needs to la
    - YAML frontmatter with a single `description:` line that says when to use the skill and includes likely trigger phrases.
    - A markdown body that starts with a `# Title`, then the workflow as numbered steps. If the skill creates external artifacts (issues, commits, files), spell out the consent requirements the way the `github-issue` and `committing` skills do.
    - Keep it to a single SKILL.md unless the skill genuinely needs companion files (see `dotfiles/redline/.config/polytoken/skills/llama-cpp-model-tuning/` for a multi-file example).
+   - Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, consistent terminology, no metaphor or catchy emphasis statements. Bolded lead-in labels on numbered workflow steps are the documented exception and are kept; the prose after each label follows the register.
 
 5. **Write, then verify.** Write the file, re-read it, and confirm the frontmatter parses and the description reads like the other skills'. Say how it goes live: Polytoken picks up the description on reload; Claude Code reads `~/.claude/skills` on machines after `./sync.sh`, and `.claude/skills` in this repo through the symlink.
 
