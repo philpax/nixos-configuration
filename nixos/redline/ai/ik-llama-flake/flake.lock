@@ -24,17 +24,17 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1785491966,
-        "narHash": "sha256-a0uxUC+OirLIiLH+ESNLmBJ954y9vJooX94hCnKDZ6U=",
+        "lastModified": 1785738181,
+        "narHash": "sha256-slrOWCBAAFoYHtliAu3E53m00nbBlq7AMj5biKotgi0=",
         "owner": "ikawrakow",
         "repo": "ik_llama.cpp",
-        "rev": "3f53a059024039358e9fef75b5dc0c99dbcb40f9",
+        "rev": "87eeec9f74d501672a6813f3582cbea8770bb77c",
         "type": "github"
       },
       "original": {
         "owner": "ikawrakow",
         "repo": "ik_llama.cpp",
-        "rev": "3f53a059024039358e9fef75b5dc0c99dbcb40f9",
+        "rev": "87eeec9f74d501672a6813f3582cbea8770bb77c",
         "type": "github"
       }
     },

@@ -28,7 +28,7 @@
   # be literal strings, so readFile-based interpolation is rejected by nix.)
   description = "Pinned ik_llama.cpp flake for redline's AI services";
 
-  inputs.ik-llama-cpp.url = "github:ikawrakow/ik_llama.cpp/3f53a059024039358e9fef75b5dc0c99dbcb40f9";
+  inputs.ik-llama-cpp.url = "github:ikawrakow/ik_llama.cpp/87eeec9f74d501672a6813f3582cbea8770bb77c";
 
   outputs = { ik-llama-cpp, ... }:
     let

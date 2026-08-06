@@ -26,7 +26,7 @@
   # strings, so readFile-based interpolation is rejected by nix.)
   description = "Pinned upstream llama.cpp flake for redline's AI services";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/876a4321163249c43ca4e986818fab5ab081f282";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/2b63e0610bbc2be990ae1360d5256efcdc3f9efb";
 
   outputs = { llama-cpp, ... }:
     let
