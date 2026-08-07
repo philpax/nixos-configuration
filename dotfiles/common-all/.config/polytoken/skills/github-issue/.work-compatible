@@ -1,0 +1,2 @@
+Synced into ~/.claude-work/skills/ by sync.py when this marker is present, so
+the work-account Claude Code install loads the same skills as the personal one.

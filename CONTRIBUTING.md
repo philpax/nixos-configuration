@@ -46,9 +46,13 @@ no longer needed are detected via `.sync-state.json` and offered for removal.
 
 ### Claude Code skills
 
-`sync.sh` also symlinks Polytoken skills (`dotfiles/common-all/.config/polytoken/skills/<name>/`)
-into Claude Code's personal skills directory (`~/.claude/skills/<name>`), so CC
-loads the same skills as Polytoken. These are common to all machines.
+`sync.sh` symlinks Polytoken skills (`dotfiles/common-all/.config/polytoken/skills/<name>/`)
+into Claude Code's skills directories for both the personal account
+(`~/.claude/skills/<name>`) and — for skills marked with a `.work-compatible`
+marker file — the work account (`~/.claude-work/skills/<name>`), so Claude Code
+loads the same skills as Polytoken on both accounts. These are common to all
+machines. Add the marker file to a skill's directory to opt it into the work
+account.
 
 ### Redline Server
 

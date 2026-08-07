@@ -793,6 +793,72 @@ class TestBuildSkillSymlinks:
 
 
 # ---------------------------------------------------------------------------
+# build_work_skill_symlinks — filesystem-reading, testable with tmp_path
+# ---------------------------------------------------------------------------
+
+
+class TestBuildWorkSkillSymlinks:
+    def _make_skill(self, source, name, work_compatible=False):
+        skill = source / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(f"# {name}")
+        if work_compatible:
+            (skill / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
+
+    def test_builds_symlinks_only_for_marked_skills(self, tmp_path):
+        source = tmp_path / "skills"
+        self._make_skill(source, "alpha", work_compatible=True)
+        self._make_skill(source, "beta")
+        self._make_skill(source, "gamma", work_compatible=True)
+
+        target = tmp_path / "target"
+        symlinks = sync.build_work_skill_symlinks(source, target)
+
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"alpha", "gamma"}
+        for t, s in symlinks:
+            assert t.parent == target
+            assert s == source / t.name
+
+    def test_skips_dirs_without_skill_md(self, tmp_path):
+        source = tmp_path / "skills"
+        self._make_skill(source, "alpha", work_compatible=True)
+        (source / "no-skill").mkdir()
+        (source / "no-skill" / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
+
+        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
+        targets = {t.name for t, s in symlinks}
+        assert targets == {"alpha"}
+
+    def test_skips_files_in_source_dir(self, tmp_path):
+        source = tmp_path / "skills"
+        source.mkdir(parents=True)
+        (source / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
+
+        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
+        assert symlinks == []
+
+    def test_missing_source_returns_empty(self, tmp_path):
+        symlinks = sync.build_work_skill_symlinks(tmp_path / "nonexistent", tmp_path / "target")
+        assert symlinks == []
+
+    def test_empty_source_returns_empty(self, tmp_path):
+        source = tmp_path / "skills"
+        source.mkdir()
+        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
+        assert symlinks == []
+
+    def test_results_sorted(self, tmp_path):
+        source = tmp_path / "skills"
+        for name in ["zebra", "alpha", "mango"]:
+            self._make_skill(source, name, work_compatible=True)
+
+        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
+        names = [t.name for t, s in symlinks]
+        assert names == ["alpha", "mango", "zebra"]
+
+
+# ---------------------------------------------------------------------------
 # build_layered_skill_symlinks — filesystem-reading, testable with tmp_path
 # ---------------------------------------------------------------------------
 
@@ -869,6 +935,50 @@ class TestSkillSymlinksRepoIntegration:
         for _, source in symlinks:
             assert source.parent == sync.POLYTOKEN_SKILLS_SOURCE
             assert (source / "SKILL.md").is_file()
+
+
+# ---------------------------------------------------------------------------
+# build_work_skill_symlinks — integration with real repo
+# ---------------------------------------------------------------------------
+
+
+class TestWorkSkillSymlinksRepoIntegration:
+    """Smoke tests for the work-account Claude Code sync — skills present in
+    the real repo that carry the .work-compatible marker, synced into
+    ~/.claude-work/skills/."""
+
+    def test_finds_marked_skills(self):
+        symlinks = sync.build_work_skill_symlinks(
+            sync.POLYTOKEN_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
+        )
+        marked = {t.name for t, s in symlinks}
+        # The mechanism is opt-in per skill via .work-compatible; no skill
+        # names are pinned here so the set can evolve without test churn.
+        assert marked
+
+    def test_targets_under_claude_work_dir(self):
+        symlinks = sync.build_work_skill_symlinks(
+            sync.POLYTOKEN_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
+        )
+        for target, _ in symlinks:
+            assert target.parent == sync.CLAUDE_WORK_SKILLS_TARGET
+
+    def test_sources_have_marker_and_skill_md(self):
+        symlinks = sync.build_work_skill_symlinks(
+            sync.POLYTOKEN_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
+        )
+        for _, source in symlinks:
+            assert (source / "SKILL.md").is_file()
+            assert (source / sync.WORK_COMPATIBLE_MARKER).is_file()
+
+    def test_marked_skills_are_subset_of_cc_skills(self):
+        cc_symlinks = sync.build_skill_symlinks(sync.POLYTOKEN_SKILLS_SOURCE, sync.CC_SKILLS_TARGET)
+        cc_names = {t.name for t, s in cc_symlinks}
+        work_symlinks = sync.build_work_skill_symlinks(
+            sync.POLYTOKEN_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
+        )
+        work_names = {t.name for t, s in work_symlinks}
+        assert work_names <= cc_names
 
 
 # ---------------------------------------------------------------------------

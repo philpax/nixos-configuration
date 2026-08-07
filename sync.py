@@ -3,6 +3,9 @@
 
 Creates symlinks for NixOS (common-* + <machine>) and dotfiles (common-* + <machine>),
 then symlinks /etc/nixos/configuration.nix to the machine's configuration.nix.
+Polytoken skills are also symlinked into Claude Code's personal and
+work-account skills directories (~/.claude/skills and ~/.claude-work/skills).
+The work-account set is the skills marked .work-compatible.
 
 Only the common-* layers that the machine's configuration.nix actually imports
 are synced — mirrors the NixOS import hierarchy so e.g. a headless machine
@@ -43,6 +46,14 @@ STATE_FILE = REPO_DIR / ".sync-state.json"
 POLYTOKEN_SKILLS_SUBPATH = Path(".config") / "polytoken" / "skills"
 POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / POLYTOKEN_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
+
+# Skills usable from Claude Code's work-account install get synced into
+# ~/.claude-work/skills/ as well, so the personal and work accounts load the
+# same skills. A skill opts in by containing a .work-compatible marker file
+# (see build_work_skill_symlinks).
+CLAUDE_WORK_SKILLS_DIR = Path.home() / ".claude-work"
+CLAUDE_WORK_SKILLS_TARGET = CLAUDE_WORK_SKILLS_DIR / "skills"
+WORK_COMPATIBLE_MARKER = ".work-compatible"
 
 # Steel plugins ("cogs") for the plugin-enabled Helix fork are git submodules under
 # steel-cogs/. Each is directory-symlinked into steel's cog root ($STEEL_HOME/cogs; STEEL_HOME
@@ -251,6 +262,34 @@ def build_skill_symlinks(
         if not entry.is_dir():
             continue
         if not (entry / "SKILL.md").is_file():
+            continue
+        target = target_dir / entry.name
+        symlinks.append((target, entry))
+    return symlinks
+
+
+def build_work_skill_symlinks(
+    source_dir: Path,
+    target_dir: Path,
+) -> list[tuple[Path, Path]]:
+    """Build (target, source) pairs for work-account skill directories.
+
+    Like :func:`build_skill_symlinks`, but only for skills that opted in by
+    containing a ``.work-compatible`` marker file. Each such skill becomes a
+    directory-level symlink at ``target_dir/<skill_name>``, so Claude Code's
+    work-account install (~/.claude-work/skills/) loads the same skills as the
+    personal one (~/.claude/skills/).
+    """
+    if not source_dir.is_dir():
+        return []
+
+    symlinks: list[tuple[Path, Path]] = []
+    for entry in sorted(source_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        if not (entry / "SKILL.md").is_file():
+            continue
+        if not (entry / WORK_COMPATIBLE_MARKER).is_file():
             continue
         target = target_dir / entry.name
         symlinks.append((target, entry))
@@ -537,9 +576,14 @@ def _init_state(folder_name: str) -> None:
         nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
     skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
+    work_skill_symlinks = build_work_skill_symlinks(
+        POLYTOKEN_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET
+    )
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
-    all_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks + cog_symlinks
+    all_symlinks = (
+        nixos_symlinks + dotfiles_symlinks + skill_symlinks + work_skill_symlinks + cog_symlinks
+    )
     total = len(all_symlinks)
     write_manifest(folder_name, all_symlinks)
     print(
@@ -626,11 +670,22 @@ def main():
         DOTFILES_SOURCE, CC_SKILLS_TARGET, folder_name, imported_layers
     )
 
+    # Symlink Polytoken skills that opted in (via a .work-compatible marker)
+    # into the work-account skills directory too, so the personal and work
+    # Claude Code installs load the same skills. Only common-all skills are
+    # considered — the same set every machine gets, regardless of layer
+    # composition.
+    work_skill_symlinks = build_work_skill_symlinks(
+        POLYTOKEN_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET
+    )
+
     # Symlink Steel cogs into $STEEL_HOME/cogs for the plugin-enabled Helix.
     # These are common to all machines (helix-steel lives in common-all).
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
-    all_new_symlinks = nixos_symlinks + dotfiles_symlinks + skill_symlinks + cog_symlinks
+    all_new_symlinks = (
+        nixos_symlinks + dotfiles_symlinks + skill_symlinks + work_skill_symlinks + cog_symlinks
+    )
 
     # Read previous manifest and compute stale symlinks
     previous = read_manifest(STATE_FILE)
@@ -649,6 +704,12 @@ def main():
         for target, _ in skill_symlinks:
             print(f"    {dim(shorten_path(target))}")
         print()
+    if work_skill_symlinks:
+        print(f"{bold('Claude Code skills (work)')} {green(f'({len(work_skill_symlinks)})')}:")
+        print(f"  {yellow('polytoken-skills')} {dim(f'({len(work_skill_symlinks)})')}:")
+        for target, _ in work_skill_symlinks:
+            print(f"    {dim(shorten_path(target))}")
+        print()
     if cog_symlinks:
         print(f"{bold('Steel cogs')} {green(f'({len(cog_symlinks)})')}:")
         print(f"  {yellow('steel-cogs')} {dim(f'({len(cog_symlinks)})')}:")
@@ -659,6 +720,13 @@ def main():
     # Display stale symlinks
     if stale:
         nixos_stale, dotfile_stale = split_by_target(stale, NIXOS_TARGET, DOTFILES_TARGET)
+        cc_skills_stale = [p for p in dotfile_stale if Path(p).is_relative_to(CC_SKILLS_TARGET)]
+        work_skills_stale = [
+            p for p in dotfile_stale if Path(p).is_relative_to(CLAUDE_WORK_SKILLS_TARGET)
+        ]
+        remaining_stale = [
+            p for p in dotfile_stale if p not in cc_skills_stale and p not in work_skills_stale
+        ]
         total = len(stale)
         print(f"{bold('Stale symlinks to remove')} {red(f'({total})')}:")
         if nixos_stale:
@@ -666,9 +734,17 @@ def main():
             for path in sorted(nixos_stale):
                 rel = str(Path(path).relative_to(NIXOS_TARGET))
                 print(f"    {dim(rel)}")
-        if dotfile_stale:
-            print(f"  {dim('Dotfiles')} ({len(dotfile_stale)}):")
-            for path in sorted(dotfile_stale):
+        if cc_skills_stale:
+            print(f"  {dim('Claude Code skills')} ({len(cc_skills_stale)}):")
+            for path in sorted(cc_skills_stale):
+                print(f"    {dim(shorten_path(path))}")
+        if work_skills_stale:
+            print(f"  {dim('Claude Code skills (work)')} ({len(work_skills_stale)}):")
+            for path in sorted(work_skills_stale):
+                print(f"    {dim(shorten_path(path))}")
+        if remaining_stale:
+            print(f"  {dim('Dotfiles')} ({len(remaining_stale)}):")
+            for path in sorted(remaining_stale):
                 print(f"    {dim(shorten_path(path))}")
         print()
 
@@ -677,6 +753,7 @@ def main():
         find_conflicts(nixos_symlinks)
         + find_conflicts(dotfiles_symlinks)
         + find_conflicts(skill_symlinks)
+        + find_conflicts(work_skill_symlinks)
         + find_conflicts(cog_symlinks)
     )
     if all_conflicts:
@@ -698,6 +775,7 @@ def main():
     created_nixos: list[tuple[Path, Path]] = []
     created_dotfiles: list[tuple[Path, Path]] = []
     created_skills: list[tuple[Path, Path]] = []
+    created_work_skills: list[tuple[Path, Path]] = []
     created_cogs: list[tuple[Path, Path]] = []
 
     try:
@@ -713,6 +791,12 @@ def main():
             print(bold("Claude Code skills"))
             created_skills = create_or_update_symlinks(
                 skill_symlinks, use_sudo=False, force=args.force
+            )
+
+        if work_skill_symlinks:
+            print(bold("Claude Code skills (work)"))
+            created_work_skills = create_or_update_symlinks(
+                work_skill_symlinks, use_sudo=False, force=args.force
             )
 
         if cog_symlinks:
@@ -737,7 +821,9 @@ def main():
         print(f"\n{green('✓')} Sync complete!")
 
     finally:
-        all_created = created_nixos + created_dotfiles + created_skills + created_cogs
+        all_created = (
+            created_nixos + created_dotfiles + created_skills + created_work_skills + created_cogs
+        )
         if all_created:
             write_manifest(folder_name, all_created)
 
