@@ -20,7 +20,7 @@ Figures of speech. No metaphor, idiom, rhetorical question, or aside. No sentenc
 
 Punctuation. No em-dash asides. Split the aside into its own sentence, or replace the dash with a colon when the second clause expands the first. Parentheses are acceptable for short references and qualifications.
 
-Markdown. Keep headings, tables, code blocks, inline code, links, and lists that enumerate a real set. Remove bold, italics, and bolded lead-in labels. A bolded lead-in becomes an ordinary sentence opener: "**Import is zero-copy and per-buffer.** Wayland clients cycle..." becomes "Import is zero-copy and per-buffer. Wayland clients cycle...". Remove any formatting whose purpose is emphasis rather than structure. Do not hard-wrap lines.
+Markdown. Keep headings, tables, code blocks, inline code, links, and lists that enumerate a real set. Remove bold, italics, and bolded lead-in labels. A bolded lead-in becomes an ordinary sentence opener: "**Import is zero-copy and per-buffer.** Wayland clients cycle..." becomes "Import is zero-copy and per-buffer. Wayland clients cycle...". Remove any formatting whose purpose is emphasis rather than structure. The result is never line-wrapped. Each paragraph occupies a single source line, and a newline ends a paragraph, a list item, or a block. Hard-wrapped prose renders as fragmented paragraphs in Markdown viewers, so wrapping corrupts the output as well as the source.
 
 One exception applies to agent instruction files, meaning `SKILL.md` and similar. Those keep bolded lead-in labels on numbered workflow steps, where the label names the step and acts as structure. The register rules still apply to the prose that follows each label.
 
@@ -54,4 +54,4 @@ Two carve-outs apply to code comments. Comments stay short, and a comment that i
 
 ## Verification
 
-Before presenting a rewrite, check the result for: remaining bold or italic markers used for emphasis; occurrences of "you", "your", "we", "our"; em-dashes; and headings that describe the reader's experience rather than the subject. Each of these is a fast grep and each catches the common failure.
+Before presenting a rewrite, check the result for: remaining bold or italic markers used for emphasis; occurrences of "you", "your", "we", "our"; em-dashes; headings that describe the reader's experience rather than the subject; and line breaks inside a paragraph. Each of these is a fast grep and each catches the common failure.
