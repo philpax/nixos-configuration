@@ -21,7 +21,7 @@ Machines compose from shared layers via NixOS imports:
 ```
 common-all          → Base: users, SSH, packages, locale
 common-desktop      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
-common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep
+common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
 common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 ```
 
@@ -29,7 +29,7 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 - **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
 - **paprika**: all four layers + ThinkPad T480s hardware
 - **mindgame**: all four layers + NVIDIA/Docker/ML
-- **redline**: common-all only (headless server with ZFS, AI services, Immich, Navidrome)
+- **redline**: common-all + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
 
 ### Auto-importing Modules
 
@@ -44,14 +44,22 @@ mirrors the NixOS import hierarchy — e.g. redline (headless, imports only
 When re-syncing a different machine, symlinks from the previous sync that are
 no longer needed are detected via `.sync-state.json` and offered for removal.
 
-### Claude Code skills
+### Agent skills
 
-`sync.sh` symlinks Polytoken skills (`dotfiles/common-all/.config/polytoken/skills/<name>/`)
-into Claude Code's skills directories for both the personal account
-(`~/.claude/skills/<name>`) and — for skills marked with a `.work-compatible`
-marker file — the work account (`~/.claude-work/skills/<name>`), so Claude Code
-loads the same skills as Polytoken on both accounts. These are common to all
-machines. Add the marker file to a skill's directory to opt it into the work
+`sync.sh` symlinks skills into the canonical `~/.agents/skills` tree, which
+Polytoken discovers, then wires Claude Code personal to the same tree via a
+single `~/.claude/skills → ~/.agents/skills` directory symlink — the same
+pattern as the repo's own project-local `.claude/skills → .agents/skills`.
+Skills are stored per-layer at `dotfiles/<layer>/.agents/skills/<name>/`, so a
+machine gets a skill only if it includes that layer; the shared dev-workflow
+skills (committing, GitHub issues, contributing docs, prose) live in
+`dotfiles/common-dev/.agents/skills/` and reach the dev machines (paprika,
+mindgame, redline), not jinroh.
+
+Skills marked with a `.work-compatible` marker file are additionally symlinked
+into the work-account directory `~/.claude-work/skills/<name>` (sourced from
+`common-dev/.agents/skills`), so the personal and work accounts load the same
+skills. Add the marker file to a skill's directory to opt it into the work
 account.
 
 ### Redline Server

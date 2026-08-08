@@ -3,9 +3,11 @@
 
 Creates symlinks for NixOS (common-* + <machine>) and dotfiles (common-* + <machine>),
 then symlinks /etc/nixos/configuration.nix to the machine's configuration.nix.
-Polytoken skills are also symlinked into Claude Code's personal and
-work-account skills directories (~/.claude/skills and ~/.claude-work/skills).
-The work-account set is the skills marked .work-compatible.
+Skills are symlinked into the canonical ~/.agents/skills tree (which
+Polytoken discovers), with Claude Code personal wired to the same tree via
+~/.claude/skills -> ~/.agents/skills. Work-account skills additionally go to
+~/.claude-work/skills; the work-account set is the skills marked
+.work-compatible.
 
 Only the common-* layers that the machine's configuration.nix actually imports
 are synced — mirrors the NixOS import hierarchy so e.g. a headless machine
@@ -36,16 +38,18 @@ NIXOS_TARGET = Path("/etc/nixos")
 DOTFILES_TARGET = Path.home()
 STATE_FILE = REPO_DIR / ".sync-state.json"
 
-# Polytoken skills are the source of truth; these are symlinked into
-# Claude Code's personal skills directory (~/.claude/skills/<name>) so CC
-# loads the same skills. CC follows directory-level symlinks to read SKILL.md.
-# Skills live per-layer at <layer>/.config/polytoken/skills/<name>, so which
-# skills a machine gets follows the same layer hierarchy as the dotfiles —
-# e.g. redline's llama-cpp-model-tuning skill only syncs to machines that
-# include the redline layer.
-POLYTOKEN_SKILLS_SUBPATH = Path(".config") / "polytoken" / "skills"
-POLYTOKEN_SKILLS_SOURCE = DOTFILES_SOURCE / "common-all" / POLYTOKEN_SKILLS_SUBPATH
+# Skills are the shared source of truth. Per-skill directory symlinks are
+# created under ~/.agents/skills (which Polytoken discovers natively), and
+# Claude Code personal reads the same tree through a single directory symlink
+# ~/.claude/skills -> ~/.agents/skills — matching the repo's own project-local
+# .claude/skills -> .agents/skills pattern. Skills live per-layer at
+# <layer>/.agents/skills/<name>, so which skills a machine gets follows the
+# same layer hierarchy as the dotfiles — e.g. redline's llama-cpp-model-tuning
+# skill only syncs to machines that include the redline layer.
+AGENTS_SKILLS_SUBPATH = Path(".agents") / "skills"
+SHARED_SKILLS_SOURCE = DOTFILES_SOURCE / "common-dev" / AGENTS_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
+AGENTS_SKILLS_TARGET = Path.home() / ".agents" / "skills"
 
 # Skills usable from Claude Code's work-account install get synced into
 # ~/.claude-work/skills/ as well, so the personal and work accounts load the
@@ -238,6 +242,15 @@ def build_symlink_list(
             else:
                 relative = relative.relative_to(first_part)
 
+        # The per-layer skill sources (<layer>/.agents/skills/<name>) must not
+        # be re-added as per-file dotfile links: build_layered_skill_symlinks
+        # creates whole-directory symlinks at ~/.agents/skills/<name>, and a
+        # file link at ~/.agents/skills/<name>/SKILL.md would collide with that
+        # directory symlink on every sync. (.claude stays walked — e.g.
+        # dotfiles/common-all/.claude/CLAUDE.md is a desired dotfile link.)
+        if relative.parts[0].startswith(".agents"):
+            continue
+
         target_path = target_dir / relative
         symlinks.append((target_path, source_path))
 
@@ -251,8 +264,9 @@ def build_skill_symlinks(
     """Build (target, source) pairs for Polytoken skill directories.
 
     Each immediate subdirectory of ``source_dir`` that contains a ``SKILL.md``
-    becomes a directory-level symlink at ``target_dir/<skill_name>``.
-    This lets Claude Code load the same skills Polytoken uses.
+    becomes a directory-level symlink at ``target_dir/<skill_name>``. Both
+    Polytoken (which discovers ~/.agents/skills) and Claude Code follow
+    directory-level symlinks to read SKILL.md.
     """
     if not source_dir.is_dir():
         return []
@@ -278,7 +292,7 @@ def build_work_skill_symlinks(
     containing a ``.work-compatible`` marker file. Each such skill becomes a
     directory-level symlink at ``target_dir/<skill_name>``, so Claude Code's
     work-account install (~/.claude-work/skills/) loads the same skills as the
-    personal one (~/.claude/skills/).
+    personal one (~/.agents/skills).
     """
     if not source_dir.is_dir():
         return []
@@ -302,10 +316,10 @@ def build_layered_skill_symlinks(
     folder_name: str,
     allowed_layers: list[str],
 ) -> list[tuple[Path, Path]]:
-    """Collect Polytoken skill symlinks across every layer the machine syncs.
+    """Collect skill symlinks across every layer the machine syncs.
 
-    Skills are stored per-layer at ``<layer>/.config/polytoken/skills/<name>``,
-    so a machine only gets a skill if it includes that layer — mirroring the
+    Skills are stored per-layer at ``<layer>/.agents/skills/<name>``, so a
+    machine only gets a skill if it includes that layer — mirroring the
     dotfiles hierarchy. When two layers define a skill of the same name, the
     machine-specific layer wins over the shared common-* layers.
     """
@@ -313,10 +327,58 @@ def build_layered_skill_symlinks(
     layers = [*allowed_layers, folder_name]
     by_target: dict[Path, Path] = {}
     for layer in layers:
-        skills_dir = dotfiles_source / layer / POLYTOKEN_SKILLS_SUBPATH
+        skills_dir = dotfiles_source / layer / AGENTS_SKILLS_SUBPATH
         for target, source in build_skill_symlinks(skills_dir, target_dir):
             by_target[target] = source
     return sorted(by_target.items())
+
+
+def build_cc_personal_wiring(agents_skills_target: Path) -> list[tuple[Path, Path]]:
+    """One directory symlink: ~/.claude/skills -> ~/.agents/skills.
+
+    Claude Code personal reads skills from ~/.claude/skills; pointing it at
+    the canonical ~/.agents/skills tree means CC and Polytoken load the same
+    per-skill symlinks with a single source of truth, mirroring the repo's own
+    project-local .claude/skills -> .agents/skills symlink. The link created
+    here is absolute (agents_skills_target stems from Path.home()); the repo's
+    project-local one is relative (../.agents/skills). CC dereferences both
+    forms fine.
+    """
+    return [(CC_SKILLS_TARGET, agents_skills_target)]
+
+
+def classify_stale(
+    stale: list[str],
+    cc_targets: list[Path],
+    work_targets: list[Path],
+) -> tuple[list[str], list[str], list[str]]:
+    """Split stale manifest entries into (cc_stale, work_stale, remaining).
+
+    Entries at or under the Claude Code personal skill targets (~/.claude/skills
+    itself, old ~/.claude/skills/<name> leaves, and the ~/.agents/skills tree)
+    go to ``cc_stale``; entries under the work-account targets go to
+    ``work_stale``; everything else — including old per-file skill links from
+    the previous layout, which the dotfiles removal pass unlinks harmlessly —
+    stays in ``remaining``. The dir-level targets are kept in the skill buckets
+    so cleanup of stale leaves never walks through the ~/.claude/skills dir
+    symlink into the fresh ~/.agents/skills tree.
+    """
+    cc_stale: list[str] = []
+    work_stale: list[str] = []
+    remaining: list[str] = []
+
+    def under(path: str, prefixes: list[Path]) -> bool:
+        p = Path(path)
+        return any(p == prefix or p.is_relative_to(prefix) for prefix in prefixes)
+
+    for path in stale:
+        if under(path, cc_targets):
+            cc_stale.append(path)
+        elif under(path, work_targets):
+            work_stale.append(path)
+        else:
+            remaining.append(path)
+    return cc_stale, work_stale, remaining
 
 
 def build_cog_symlinks(
@@ -575,14 +637,20 @@ def _init_state(folder_name: str) -> None:
     if config_source.is_file():
         nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
-    skill_symlinks = build_skill_symlinks(POLYTOKEN_SKILLS_SOURCE, CC_SKILLS_TARGET)
-    work_skill_symlinks = build_work_skill_symlinks(
-        POLYTOKEN_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET
+    skill_symlinks = build_layered_skill_symlinks(
+        DOTFILES_SOURCE, AGENTS_SKILLS_TARGET, folder_name, all_common
     )
+    cc_personal_symlink = build_cc_personal_wiring(AGENTS_SKILLS_TARGET)
+    work_skill_symlinks = build_work_skill_symlinks(SHARED_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET)
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
     all_symlinks = (
-        nixos_symlinks + dotfiles_symlinks + skill_symlinks + work_skill_symlinks + cog_symlinks
+        nixos_symlinks
+        + dotfiles_symlinks
+        + skill_symlinks
+        + cc_personal_symlink
+        + work_skill_symlinks
+        + cog_symlinks
     )
     total = len(all_symlinks)
     write_manifest(folder_name, all_symlinks)
@@ -663,28 +731,34 @@ def main():
         sys.exit(1)
     nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
-    # Symlink Polytoken skills into Claude Code's skills directory so CC
-    # loads the same skills. Skills follow the same layer hierarchy as the
-    # dotfiles, so a machine only gets the skills for the layers it includes.
+    # Symlink skills into the canonical ~/.agents/skills tree so Polytoken
+    # discovers them, then wire Claude Code personal to that same tree with a
+    # single ~/.claude/skills -> ~/.agents/skills directory symlink. Skills
+    # follow the same layer hierarchy as the dotfiles, so a machine only gets
+    # the skills for the layers it includes.
     skill_symlinks = build_layered_skill_symlinks(
-        DOTFILES_SOURCE, CC_SKILLS_TARGET, folder_name, imported_layers
+        DOTFILES_SOURCE, AGENTS_SKILLS_TARGET, folder_name, imported_layers
     )
+    cc_personal_symlink = build_cc_personal_wiring(AGENTS_SKILLS_TARGET)
 
-    # Symlink Polytoken skills that opted in (via a .work-compatible marker)
-    # into the work-account skills directory too, so the personal and work
-    # Claude Code installs load the same skills. Only common-all skills are
-    # considered — the same set every machine gets, regardless of layer
+    # Symlink skills that opted in (via a .work-compatible marker) into the
+    # work-account skills directory too, so the personal and work Claude Code
+    # installs load the same skills. Only the shared common-dev skills are
+    # considered — the same set every dev machine gets, regardless of layer
     # composition.
-    work_skill_symlinks = build_work_skill_symlinks(
-        POLYTOKEN_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET
-    )
+    work_skill_symlinks = build_work_skill_symlinks(SHARED_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET)
 
     # Symlink Steel cogs into $STEEL_HOME/cogs for the plugin-enabled Helix.
     # These are common to all machines (helix-steel lives in common-all).
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
     all_new_symlinks = (
-        nixos_symlinks + dotfiles_symlinks + skill_symlinks + work_skill_symlinks + cog_symlinks
+        nixos_symlinks
+        + dotfiles_symlinks
+        + skill_symlinks
+        + cc_personal_symlink
+        + work_skill_symlinks
+        + cog_symlinks
     )
 
     # Read previous manifest and compute stale symlinks
@@ -699,14 +773,16 @@ def main():
         "Dotfiles", dotfiles_symlinks, DOTFILES_SOURCE, DOTFILES_TARGET, use_home_prefix=True
     )
     if skill_symlinks:
-        print(f"{bold('Claude Code skills')} {green(f'({len(skill_symlinks)})')}:")
-        print(f"  {yellow('polytoken-skills')} {dim(f'({len(skill_symlinks)})')}:")
+        print(f"{bold('Agent skills (personal)')} {green(f'({len(skill_symlinks)})')}:")
+        print(f"  {yellow('agents-skills')} {dim(f'({len(skill_symlinks)})')}:")
         for target, _ in skill_symlinks:
+            print(f"    {dim(shorten_path(target))}")
+        for target, _ in cc_personal_symlink:
             print(f"    {dim(shorten_path(target))}")
         print()
     if work_skill_symlinks:
         print(f"{bold('Claude Code skills (work)')} {green(f'({len(work_skill_symlinks)})')}:")
-        print(f"  {yellow('polytoken-skills')} {dim(f'({len(work_skill_symlinks)})')}:")
+        print(f"  {yellow('agents-skills')} {dim(f'({len(work_skill_symlinks)})')}:")
         for target, _ in work_skill_symlinks:
             print(f"    {dim(shorten_path(target))}")
         print()
@@ -720,13 +796,11 @@ def main():
     # Display stale symlinks
     if stale:
         nixos_stale, dotfile_stale = split_by_target(stale, NIXOS_TARGET, DOTFILES_TARGET)
-        cc_skills_stale = [p for p in dotfile_stale if Path(p).is_relative_to(CC_SKILLS_TARGET)]
-        work_skills_stale = [
-            p for p in dotfile_stale if Path(p).is_relative_to(CLAUDE_WORK_SKILLS_TARGET)
-        ]
-        remaining_stale = [
-            p for p in dotfile_stale if p not in cc_skills_stale and p not in work_skills_stale
-        ]
+        cc_skills_stale, work_skills_stale, remaining_stale = classify_stale(
+            dotfile_stale,
+            cc_targets=[CC_SKILLS_TARGET, AGENTS_SKILLS_TARGET],
+            work_targets=[CLAUDE_WORK_SKILLS_TARGET],
+        )
         total = len(stale)
         print(f"{bold('Stale symlinks to remove')} {red(f'({total})')}:")
         if nixos_stale:
@@ -771,61 +845,126 @@ def main():
         print("Operation cancelled.")
         sys.exit(0)
 
-    # Create/Update symlinks — collect what was created even on partial failure
+    apply_sync_changes(
+        nixos_symlinks,
+        dotfiles_symlinks,
+        skill_symlinks,
+        cc_personal_symlink,
+        work_skill_symlinks,
+        cog_symlinks,
+        stale,
+        args.force,
+        machine=folder_name,
+    )
+    print(f"\n{green('✓')} Sync complete!")
+
+
+def apply_sync_changes(
+    nixos_symlinks: list[tuple[Path, Path]],
+    dotfiles_symlinks: list[tuple[Path, Path]],
+    skill_symlinks: list[tuple[Path, Path]],
+    cc_personal_symlink: list[tuple[Path, Path]],
+    work_skill_symlinks: list[tuple[Path, Path]],
+    cog_symlinks: list[tuple[Path, Path]],
+    stale: list[str] | None,
+    force: bool,
+    nixos_target: Path = NIXOS_TARGET,
+    dotfiles_target: Path = DOTFILES_TARGET,
+    cc_skills_target: Path = CC_SKILLS_TARGET,
+    agents_skills_target: Path = AGENTS_SKILLS_TARGET,
+    work_skills_target: Path = CLAUDE_WORK_SKILLS_TARGET,
+    machine: str | None = None,
+) -> list[tuple[Path, Path]]:
+    """Create/update symlinks and remove stale ones, in the required order.
+
+    Stale symlinks are removed FIRST, before any new skill symlinks are
+    created: on the first sync after the skills-layout change ~/.claude/skills
+    is a real directory holding old per-skill leaf symlinks. Those leaves must
+    be unlinked (and the now-empty dir removed) before ~/.claude/skills can
+    become the ~/.claude/skills -> ~/.agents/skills directory symlink;
+    otherwise remove_symlinks would resolve *through* the new dir symlink and
+    delete freshly-created ~/.agents/skills/<name> targets, and the force-path
+    unlink on the real dir would raise IsADirectoryError.
+
+    When ``machine`` is given, the combined created set is written to the sync
+    manifest (in a finally, so a partial failure still records what ran).
+    Returns the combined list of created symlinks.
+    """
     created_nixos: list[tuple[Path, Path]] = []
     created_dotfiles: list[tuple[Path, Path]] = []
     created_skills: list[tuple[Path, Path]] = []
+    created_cc_personal: list[tuple[Path, Path]] = []
     created_work_skills: list[tuple[Path, Path]] = []
     created_cogs: list[tuple[Path, Path]] = []
 
     try:
+        if stale:
+            print(bold("Stale symlinks"))
+            nixos_stale, dotfile_stale = split_by_target(stale, nixos_target, dotfiles_target)
+            cc_skills_stale, work_skills_stale, remaining_stale = classify_stale(
+                dotfile_stale,
+                cc_targets=[cc_skills_target, agents_skills_target],
+                work_targets=[work_skills_target],
+            )
+            if nixos_stale:
+                print(f"  {dim('NixOS:')}")
+                remove_symlinks(nixos_stale, use_sudo=True)
+                for path in nixos_stale:
+                    cleanup_empty_dirs(Path(path), nixos_target, use_sudo=True)
+            if remaining_stale:
+                print(f"  {dim('Dotfiles:')}")
+                remove_symlinks(remaining_stale, use_sudo=False)
+                for path in remaining_stale:
+                    cleanup_empty_dirs(Path(path), dotfiles_target, use_sudo=False)
+            if cc_skills_stale:
+                print(f"  {dim('Claude Code skills:')}")
+                remove_symlinks(cc_skills_stale, use_sudo=False)
+                for path in cc_skills_stale:
+                    cleanup_empty_dirs(Path(path), dotfiles_target, use_sudo=False)
+            if work_skills_stale:
+                print(f"  {dim('Claude Code skills (work):')}")
+                remove_symlinks(work_skills_stale, use_sudo=False)
+                for path in work_skills_stale:
+                    cleanup_empty_dirs(Path(path), dotfiles_target, use_sudo=False)
+
         print(bold("NixOS configuration"))
-        created_nixos = create_or_update_symlinks(nixos_symlinks, use_sudo=True, force=args.force)
+        created_nixos = create_or_update_symlinks(nixos_symlinks, use_sudo=True, force=force)
 
         print(bold("Dotfiles"))
-        created_dotfiles = create_or_update_symlinks(
-            dotfiles_symlinks, use_sudo=False, force=args.force
-        )
+        created_dotfiles = create_or_update_symlinks(dotfiles_symlinks, use_sudo=False, force=force)
 
         if skill_symlinks:
-            print(bold("Claude Code skills"))
-            created_skills = create_or_update_symlinks(
-                skill_symlinks, use_sudo=False, force=args.force
+            print(bold("Agent skills (personal)"))
+            created_skills = create_or_update_symlinks(skill_symlinks, use_sudo=False, force=force)
+
+        if cc_personal_symlink:
+            print(bold("Claude Code personal wiring"))
+            created_cc_personal = create_or_update_symlinks(
+                cc_personal_symlink, use_sudo=False, force=force
             )
 
         if work_skill_symlinks:
             print(bold("Claude Code skills (work)"))
             created_work_skills = create_or_update_symlinks(
-                work_skill_symlinks, use_sudo=False, force=args.force
+                work_skill_symlinks, use_sudo=False, force=force
             )
 
         if cog_symlinks:
             print(bold("Steel cogs"))
-            created_cogs = create_or_update_symlinks(cog_symlinks, use_sudo=False, force=args.force)
-
-        # Remove stale symlinks
-        if stale:
-            print(bold("Stale symlinks"))
-            nixos_stale, dotfile_stale = split_by_target(stale, NIXOS_TARGET, DOTFILES_TARGET)
-            if nixos_stale:
-                print(f"  {dim('NixOS:')}")
-                remove_symlinks(nixos_stale, use_sudo=True)
-                for path in nixos_stale:
-                    cleanup_empty_dirs(Path(path), NIXOS_TARGET, use_sudo=True)
-            if dotfile_stale:
-                print(f"  {dim('Dotfiles:')}")
-                remove_symlinks(dotfile_stale, use_sudo=False)
-                for path in dotfile_stale:
-                    cleanup_empty_dirs(Path(path), DOTFILES_TARGET, use_sudo=False)
-
-        print(f"\n{green('✓')} Sync complete!")
+            created_cogs = create_or_update_symlinks(cog_symlinks, use_sudo=False, force=force)
 
     finally:
         all_created = (
-            created_nixos + created_dotfiles + created_skills + created_work_skills + created_cogs
+            created_nixos
+            + created_dotfiles
+            + created_skills
+            + created_cc_personal
+            + created_work_skills
+            + created_cogs
         )
-        if all_created:
-            write_manifest(folder_name, all_created)
+        if machine is not None and all_created:
+            write_manifest(machine, all_created)
+    return all_created
 
 
 if __name__ == "__main__":
