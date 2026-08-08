@@ -112,7 +112,17 @@ let
     cp -r --no-preserve=mode ${./fivem/race} $out/race
   '';
 
-  serverCfg = pkgs.writeText "fivem-server.cfg" ''
+  # A quote, semicolon or newline in a secret would end its cfg value early and
+  # leave the remainder to be executed as a console command.
+  secretsAreCfgSafe = lib.all
+    (s: !(lib.hasInfix "\"" s) && !(lib.hasInfix ";" s) && !(lib.hasInfix "\n" s))
+    [
+      fivemSecrets.rconPassword
+      fivemSecrets.joinPassword
+      fivemSecrets.licenseKey
+    ];
+
+  serverCfgText = ''
     endpoint_add_tcp "0.0.0.0:${toString port}"
     endpoint_add_udp "0.0.0.0:${toString port}"
 
@@ -142,7 +152,15 @@ let
     # as system.console — every console command, including add_principal. The
     # password is plaintext on the wire and sits in a world-readable
     # /nix/store file that is also on FXServer's argv. Unset disables RCON.
-    rcon_password "${fivemSecrets.rconPassword}"
+    #
+    # `set`, not the bare `rcon_password "..."` the stock server.cfg ships:
+    # libcitizen-server-impl registers the convar ConVar_ReadOnly (flag 0x10),
+    # so the bare form is silently refused and RCON keeps answering "must set
+    # rcon_password". `set` goes through the variable manager and lands.
+    #
+    # Not `setr` either: that replicates the password to every client, and RCON
+    # authenticates as system.console.
+    set rcon_password "${fivemSecrets.rconPassword}"
 
     # Keep the server out of the public browser: everyone who joins gets the
     # whole of vMenu (see the ace below), so the join password and not being
@@ -194,7 +212,7 @@ let
     setr vmenu_enable_weather_sync true
 
     # 1 = friendly fire on, 2 = forced off, 0 = leave the game's default.
-    # vMenu applies this once at startup; sandbox/pvp.lua reasserts the
+    # vMenu applies this once at startup, and sandbox/pvp.lua reasserts the
     # per-ped half of it after model changes and respawns.
     setr vmenu_pvp_mode 1
 
@@ -216,6 +234,16 @@ let
     ensure scoreboard
     ensure race
   '';
+
+  # The cfg parser treats `;` as a command separator inside `#` comments too, so
+  # a comment's tail gets executed at boot — `...defaults off; set it anyway`
+  # silently created a convar named `it`. Nothing here needs one.
+  serverCfg =
+    assert lib.assertMsg (!(lib.hasInfix ";" serverCfgText))
+      "fivem: server.cfg contains a semicolon, which the cfg parser treats as a command separator even inside a comment.";
+    assert lib.assertMsg secretsAreCfgSafe
+      "fivem: a secret in secrets/fivem.nix contains a quote, semicolon or newline.";
+    pkgs.writeText "fivem-server.cfg" serverCfgText;
 in
 {
   users.users.${fivemUser} = {
@@ -267,10 +295,20 @@ in
       # read-only. The copy is wholly derived from `resources`, so it is wiped
       # and re-made on every start: edits made in place here do not survive a
       # restart, which is the point. Change the Nix, not the copy.
+      #
+      # Staged then swapped: a copy that fails part-way must not leave a
+      # half-populated tree behind, because the restart limit then burns out in
+      # under a minute and the unit stays dead.
       ExecStartPre = pkgs.writeShellScript "fivem-pre-start" ''
+        set -euo pipefail
+
+        staging=${fivemDir}/.resources-staging
+        rm -rf "$staging"
+        mkdir -p "$staging"
+        cp -r --no-preserve=mode ${resources}/. "$staging"/
+
         rm -rf ${fivemDir}/resources
-        mkdir -p ${fivemDir}/resources
-        cp -r --no-preserve=mode ${resources}/. ${fivemDir}/resources/
+        mv "$staging" ${fivemDir}/resources
       '';
       # StandardInput=null hands FXServer's console an immediate EOF, which it
       # otherwise reads as Ctrl-C and shuts down a few seconds after boot.
