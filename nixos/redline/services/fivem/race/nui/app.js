@@ -7,7 +7,7 @@ const leaderEl = document.getElementById('rleader');
 
 const titleEl = document.getElementById('rtitle');
 
-const state = { list: [], leader: null, status: 'idle', car: null };
+const state = { list: [], leader: null, status: 'idle', car: null, turtleCar: null };
 
 function fmtTime(ms) {
   if (typeof ms !== 'number' || ms < 0) return '—';
@@ -56,8 +56,15 @@ function render() {
     rows.appendChild(tr);
   });
 
-  // One car for the whole field, so it goes in the title, not down a column.
-  titleEl.textContent = state.car ? `Race — ${state.car}` : 'Race';
+  // At most two cars for the whole field, so they go in the title, not down a
+  // column. The second one only exists in turtle mode.
+  if (!state.car) {
+    titleEl.textContent = 'Race';
+  } else if (state.turtleCar) {
+    titleEl.textContent = `Race — ${state.car} vs 🐢 ${state.turtleCar}`;
+  } else {
+    titleEl.textContent = `Race — ${state.car}`;
+  }
 
   statusEl.textContent = state.status === 'running'
     ? 'Race in progress'
@@ -75,5 +82,6 @@ window.addEventListener('message', (event) => {
   state.leader = d.leader;
   state.status = d.status || 'idle';
   state.car = d.car || null;
+  state.turtleCar = d.turtleCar || null;
   render();
 });

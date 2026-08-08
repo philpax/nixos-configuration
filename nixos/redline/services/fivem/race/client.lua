@@ -1,9 +1,10 @@
 -- Race client.
 --
 -- The invoker maps a waypoint and types /race; the server owns state. This
--- client: requests the race, spawns the car the server drew for this race
--- (the same one for the whole field), sets its map waypoint to the finish,
--- counts down, detects arrival, and reports live position for the leaderboard.
+-- client: requests the race, spawns the car the server drew for this player
+-- (the same one for the whole field, except the handicapped host of a
+-- `/race turtle`), sets its map waypoint to the finish, counts down, detects
+-- arrival, and reports live position for the leaderboard.
 
 local spawnedVeh = 0
 local raceFinish = nil
@@ -77,7 +78,7 @@ RegisterCommand('race', function(_, args)
         y = coords.y,
         z = coords.z,
         name = 'your waypoint',
-    })
+    }, args[1] == 'turtle' and 'turtle' or nil)
 end, false)
 
 -- Server: the race is starting; set everyone's waypoint to the finish, spawn
@@ -98,8 +99,9 @@ RegisterNetEvent('race:begin', function(finish, finishName, countdownMs, car)
 
     local model = loadModel(car)
     if not model then
-        -- Everyone races the same model, so this isn't a personal problem —
-        -- tell the server to abort rather than leave a countdown nobody joins.
+        -- A model is drawn once for the whole race, so this isn't a personal
+        -- problem — tell the server to abort rather than leave a countdown
+        -- nobody joins.
         notify(('^1could not load race car (%s)'):format(tostring(car)))
         TriggerServerEvent('race:loadfailed', car)
         return
@@ -229,5 +231,7 @@ AddEventHandler('onClientResourceStart', function(resource)
     if resource ~= GetCurrentResourceName() then
         return
     end
-    TriggerEvent('chat:addSuggestion', '/race', 'Race to your map waypoint. Everyone spawns the same randomly drawn vehicle and the server ranks finishers.')
+    TriggerEvent('chat:addSuggestion', '/race', 'Race to your map waypoint. Everyone spawns the same randomly drawn vehicle and the server ranks finishers.', {
+        { name = 'turtle|cancel', help = 'turtle: you get a slow vehicle and everyone else gets a fast one. cancel: stop the current race.' },
+    })
 end)

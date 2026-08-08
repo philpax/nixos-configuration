@@ -3,6 +3,9 @@
 -- Lifecycle:
 --   /race            -> the invoker's map waypoint becomes the finish; a
 --                       countdown runs and everyone spawns the same car.
+--   /race turtle     -> same, but the invoker is handicapped: the field draws
+--                       from the fast end of the pool and they draw from the
+--                       slow end.
 --   /race cancel     -> abort.
 --
 -- The server owns race state (finish coords, car, participants, standings,
@@ -11,41 +14,80 @@
 -- (race:position) for the leaderboard, and report crossing the finish
 -- (race:finish).
 
--- Spawn names. Everyone races the same draw, so the pool needs no balancing —
--- but a model missing from the enforced game build kills the race for the whole
--- field, not just one player.
-local CAR_POOL = {
-    -- Sports.
+-- Spawn names, grouped by pace. A normal race draws one model from all of them
+-- at once; turtle mode draws the field from FAST and the host from SLOW. A
+-- model missing from the enforced game build kills the race for everyone who
+-- drew it, not just one player.
+local SPORTS = {
     'elegy2', 'futo', 'comet2', 'ninef', 'jester', 'massacro', 'seven70',
     'pariah', 'sultan', 'kuruma', 'feltzer2', 'buffalo2', 'banshee',
     'carbonizzare', 'rapidgt', 'alpha', 'penumbra', 'schafter3', 'sentinel3',
     'italigto', 'jugular', 'komoda', 'neo', 'paragon', 'sugoi', 'vstr',
     'coquette', 'furoregt', 'lynx', 'omnis', 'tropos', 'verlierer2',
+}
 
-    -- Small and undignified.
+local SMALL = {
     'panto', 'issi2', 'blista', 'brioso', 'weevil', 'veto', 'veto2', 'dilettante',
+}
 
-    -- Off-road.
+local OFFROAD = {
     'dune', 'bifta', 'bfinjection', 'blazer', 'rebel2', 'sandking', 'monster',
     'nightshark', 'insurgent', 'rallytruck', 'brawler',
+}
 
-    -- Two wheels.
-    'sanchez', 'bati', 'faggio2', 'bmx', 'tribike', 'cruiser', 'scorcher',
+local MOTORBIKES = { 'sanchez', 'bati' }
 
-    -- Working vehicles.
+-- Working vehicles, pedal power and one moped: the slow end. Every one of
+-- these loses to anything in SPORTS over any distance, which is what turtle
+-- mode is buying.
+local SLOW = {
     'caddy', 'caddy2', 'airtug', 'forklift', 'mower', 'tractor2', 'towtruck',
     'ripley', 'docktug', 'utillitruck', 'flatbed', 'trash', 'rubble',
     'bulldozer', 'dumper', 'phantom', 'packer',
+    'faggio2', 'bmx', 'tribike', 'cruiser', 'scorcher',
+}
 
-    -- Public transport and other bad ideas.
+-- Public transport and other bad ideas.
+local TRANSPORT = {
     'bus', 'coach', 'taxi', 'stretch', 'romero', 'journey', 'surfer',
     'ambulance', 'firetruk', 'police', 'boxville5', 'brickade', 'rhino',
 }
+
+local function joinPools(...)
+    local out = {}
+    for _, group in ipairs({ ... }) do
+        for _, model in ipairs(group) do
+            out[#out + 1] = model
+        end
+    end
+    return out
+end
+
+local CAR_POOL = joinPools(SPORTS, SMALL, OFFROAD, MOTORBIKES, SLOW, TRANSPORT)
+
+-- Disjoint by construction, which is what keeps the host's car strictly slower
+-- than the field's without having to compare the two draws.
+local FAST_POOL = SPORTS
+local TURTLE_POOL = SLOW
+
+local function drawCar(pool)
+    return pool[math.random(#pool)]
+end
 
 local race = nil
 
 -- Forward declaration: race:finish calls this before its definition below.
 local finishRace
+
+-- Everyone races race.car except the host of a turtle race, who races the one
+-- slow draw. Only ever called with a real player id — the console can't reach
+-- race:request, so startedBy is always someone's server id.
+local function carFor(playerId)
+    if race and race.turtleCar and playerId == race.startedBy then
+        return race.turtleCar
+    end
+    return race and race.car or nil
+end
 
 local function ordinal(n)
     local mod10 = n % 10
@@ -126,6 +168,7 @@ local function broadcastStandings()
     TriggerClientEvent('race:standings', -1, {
         status = race.status,
         car = race.car,
+        turtleCar = race.turtleCar,
         leader = leader,
         list = list,
     })
@@ -143,7 +186,7 @@ CreateThread(function()
 end)
 
 -- Client -> server: "start a race to my waypoint."
-RegisterNetEvent('race:request', function(wp)
+RegisterNetEvent('race:request', function(wp, mode)
     local source = source
     if race then
         TriggerClientEvent('chat:addMessage', source, {
@@ -164,10 +207,15 @@ RegisterNetEvent('race:request', function(wp)
         return
     end
 
+    -- The field's draw is narrowed to FAST_POOL in turtle mode, so the handicap
+    -- doesn't get undone by the field drawing a bulldozer.
+    local turtle = mode == 'turtle'
+
     race = {
         finish = { x = wp.x, y = wp.y, z = wp.z or 0.0 },
         finishName = wp.name or 'the waypoint',
-        car = CAR_POOL[math.random(#CAR_POOL)],
+        car = drawCar(turtle and FAST_POOL or CAR_POOL),
+        turtleCar = turtle and drawCar(TURTLE_POOL) or nil,
         startedBy = source,
         startedByName = GetPlayerName(source) or 'console',
         status = 'countdown',
@@ -175,9 +223,21 @@ RegisterNetEvent('race:request', function(wp)
         participants = {},
     }
 
-    broadcast(('%s is running a race to %s in the %s — GO in 5s!'):format(
-        race.startedByName, race.finishName, race.car))
-    TriggerClientEvent('race:begin', -1, race.finish, race.finishName, 5000, race.car)
+    if race.turtleCar then
+        broadcast(('%s is running a turtle race to %s — the field gets the %s, they get the %s — GO in 5s!'):format(
+            race.startedByName, race.finishName, race.car, race.turtleCar))
+    else
+        broadcast(('%s is running a race to %s in the %s — GO in 5s!'):format(
+            race.startedByName, race.finishName, race.car))
+    end
+
+    -- Sent per player rather than broadcast: in turtle mode the host's model
+    -- differs from everyone else's, and a second race:begin to the same client
+    -- would delete the car the first one just spawned.
+    for _, id in ipairs(GetPlayers()) do
+        local playerId = tonumber(id)
+        TriggerClientEvent('race:begin', playerId, race.finish, race.finishName, 5000, carFor(playerId))
+    end
     -- Re-activate the leaderboard NUI immediately for a new race (so a second
     -- race after a previous one gets live standings from the start).
     broadcastStandings()
@@ -198,17 +258,21 @@ RegisterNetEvent('race:ready', function()
     end
     race.participants[source] = {
         name = GetPlayerName(source) or 'Unknown',
-        vehicleModel = race.car,
+        vehicleModel = carFor(source),
         finishedAt = nil,
         order = 0,
         distance = nil,
     }
 end)
 
--- Everyone races the same model, so one that won't load means nobody can race.
--- Named in chat and the log because removing it from CAR_POOL is the only fix.
+-- At most two models are in play and both are drawn once for the whole race, so
+-- one that won't load means that race can't run. Named in chat and the log
+-- because removing it from the pools is the only fix.
 RegisterNetEvent('race:loadfailed', function(car)
-    if not race or race.status ~= 'countdown' or car ~= race.car then
+    if not race or race.status ~= 'countdown' then
+        return
+    end
+    if car ~= race.car and car ~= race.turtleCar then
         return
     end
     broadcast(('^1"%s" failed to load — race cancelled'):format(tostring(car)))
