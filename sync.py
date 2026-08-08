@@ -23,12 +23,13 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import termios
 import tty
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
@@ -46,10 +47,26 @@ STATE_FILE = REPO_DIR / ".sync-state.json"
 # <layer>/.agents/skills/<name>, so which skills a machine gets follows the
 # same layer hierarchy as the dotfiles — e.g. redline's llama-cpp-model-tuning
 # skill only syncs to machines that include the redline layer.
+#
+# Polytoken 0.6.4 does not discover skill directories that are symlinks
+# (reported upstream). Until a fixed release lands, copy mode copies the
+# skill trees into ~/.agents/skills as real directories instead of symlinking
+# them, so Polytoken picks them up. Flip AGENT_SKILLS_COPY_MODE to False once
+# the fix is out to return to directory symlinks. The copy mode expires on
+# AGENT_SKILLS_COPY_MODE_EXPIRY: after that date a sync fails until the
+# constant is flipped, so the workaround cannot silently outlive its reason
+# for existing.
 AGENTS_SKILLS_SUBPATH = Path(".agents") / "skills"
 SHARED_SKILLS_SOURCE = DOTFILES_SOURCE / "common-dev" / AGENTS_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
 AGENTS_SKILLS_TARGET = Path.home() / ".agents" / "skills"
+AGENT_SKILLS_COPY_MODE = True
+AGENT_SKILLS_COPY_MODE_EXPIRY = date(2026, 8, 10)
+AGENT_SKILLS_COPY_MODE_EXPIRY_MSG = (
+    "Agent skills copy mode has expired (Polytoken should now follow skill "
+    "directory symlinks). Set AGENT_SKILLS_COPY_MODE = False in sync.py to "
+    "return to symlinking skills into ~/.agents/skills."
+)
 
 # Skills usable from Claude Code's work-account install get synced into
 # ~/.claude-work/skills/ as well, so the personal and work accounts load the
@@ -257,6 +274,30 @@ def build_symlink_list(
     return symlinks
 
 
+def copy_skill_tree(source: Path, target: Path) -> None:
+    """Copy a skill directory tree into target as real files.
+
+    Used in copy mode (AGENT_SKILLS_COPY_MODE) so Polytoken discovers the
+    skill at ``target``: Polytoken 0.6.4 skips skill directories that are
+    symlinks. ``target`` is replaced by a copy of ``source`` on every sync, so
+    re-syncs converge to the source tree. Any existing target directory is
+    removed first.
+    """
+    if target.is_symlink() or target.exists():
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        else:
+            shutil.rmtree(target)
+    target.mkdir(parents=True)
+    for entry in sorted(source.rglob("*")):
+        if entry.is_dir():
+            continue
+        rel = entry.relative_to(source)
+        dest = target / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(entry, dest)
+
+
 def build_skill_symlinks(
     source_dir: Path,
     target_dir: Path,
@@ -315,13 +356,18 @@ def build_layered_skill_symlinks(
     target_dir: Path,
     folder_name: str,
     allowed_layers: list[str],
+    copy_mode: bool = AGENT_SKILLS_COPY_MODE,
 ) -> list[tuple[Path, Path]]:
-    """Collect skill symlinks across every layer the machine syncs.
+    """Collect skill links across every layer the machine syncs.
 
     Skills are stored per-layer at ``<layer>/.agents/skills/<name>``, so a
     machine only gets a skill if it includes that layer — mirroring the
     dotfiles hierarchy. When two layers define a skill of the same name, the
     machine-specific layer wins over the shared common-* layers.
+
+    The returned pairs are ``(target_dir/<name>, source_skill_dir)`` in both
+    modes; ``copy_mode`` only changes how the target is materialised on disk
+    (real directory copy vs directory symlink).
     """
     # common-* layers first so a machine-specific layer of the same name wins.
     layers = [*allowed_layers, folder_name]
@@ -406,11 +452,23 @@ def build_cog_symlinks(
     return symlinks
 
 
-def find_conflicts(symlinks: list[tuple[Path, Path]]) -> list[Path]:
-    """Find existing non-symlink files that would be overwritten."""
+def find_conflicts(
+    symlinks: list[tuple[Path, Path]],
+    exempt_targets: list[Path] | None = None,
+) -> list[Path]:
+    """Find existing non-symlink files that would be overwritten.
+
+    ``exempt_targets`` are subtree roots whose existing real directories are
+    expected and must not be reported as conflicts. Copy mode passes the
+    ~/.agents/skills root so the copied skill directories are not flagged.
+    """
     conflicts: list[Path] = []
     for target, _ in symlinks:
         if target.exists() and not target.is_symlink():
+            if exempt_targets and any(
+                target == root or target.is_relative_to(root) for root in exempt_targets
+            ):
+                continue
             conflicts.append(target)
     return conflicts
 
@@ -536,6 +594,36 @@ def remove_symlinks(targets: list[str], use_sudo: bool) -> list[str]:
         else:
             path.unlink()
         removed.append(target)
+    if removed:
+        print(f"  {red(str(len(removed)))} removed")
+    return removed
+
+
+def remove_paths(
+    targets: list[str],
+    use_sudo: bool,
+    remove_dirs: bool = False,
+) -> list[str]:
+    """Remove symlinks, and (when ``remove_dirs``) real files or directories.
+
+    Used for the personal skills bucket in copy mode, where stale
+    ~/.agents/skills/<name> entries are real directories rather than symlinks.
+    """
+    removed: list[str] = []
+    for target in targets:
+        path = Path(target)
+        if path.is_symlink() or path.is_file():
+            if use_sudo:
+                _run_sudo(["rm", "-f", str(path)])
+            else:
+                path.unlink()
+            removed.append(target)
+        elif remove_dirs and path.is_dir():
+            if use_sudo:
+                _run_sudo(["rm", "-rf", str(path)])
+            else:
+                shutil.rmtree(path)
+            removed.append(target)
     if removed:
         print(f"  {red(str(len(removed)))} removed")
     return removed
@@ -731,11 +819,12 @@ def main():
         sys.exit(1)
     nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
-    # Symlink skills into the canonical ~/.agents/skills tree so Polytoken
+    # Materialise skills into the canonical ~/.agents/skills tree so Polytoken
     # discovers them, then wire Claude Code personal to that same tree with a
     # single ~/.claude/skills -> ~/.agents/skills directory symlink. Skills
     # follow the same layer hierarchy as the dotfiles, so a machine only gets
-    # the skills for the layers it includes.
+    # the skills for the layers it includes. In copy mode the skill dirs are
+    # copied as real directories (Polytoken 0.6.4 skips skill dir symlinks).
     skill_symlinks = build_layered_skill_symlinks(
         DOTFILES_SOURCE, AGENTS_SKILLS_TARGET, folder_name, imported_layers
     )
@@ -773,13 +862,21 @@ def main():
         "Dotfiles", dotfiles_symlinks, DOTFILES_SOURCE, DOTFILES_TARGET, use_home_prefix=True
     )
     if skill_symlinks:
-        print(f"{bold('Agent skills (personal)')} {green(f'({len(skill_symlinks)})')}:")
+        label = "Agent skills (personal)"
+        if AGENT_SKILLS_COPY_MODE:
+            label += " [copied]"
+        print(f"{bold(label)} {green(f'({len(skill_symlinks)})')}:")
         print(f"  {yellow('agents-skills')} {dim(f'({len(skill_symlinks)})')}:")
         for target, _ in skill_symlinks:
             print(f"    {dim(shorten_path(target))}")
-        for target, _ in cc_personal_symlink:
-            print(f"    {dim(shorten_path(target))}")
         print()
+        if cc_personal_symlink:
+            n = len(cc_personal_symlink)
+            print(f"{bold('Claude Code personal wiring')} {green(f'({n})')}:")
+            print(f"  {yellow('claude-skills')} {dim(f'({n})')}:")
+            for target, _ in cc_personal_symlink:
+                print(f"    {dim(shorten_path(target))}")
+            print()
     if work_skill_symlinks:
         print(f"{bold('Claude Code skills (work)')} {green(f'({len(work_skill_symlinks)})')}:")
         print(f"  {yellow('agents-skills')} {dim(f'({len(work_skill_symlinks)})')}:")
@@ -823,10 +920,11 @@ def main():
         print()
 
     # Show conflicts
+    skill_conflict_exempt = [AGENTS_SKILLS_TARGET] if AGENT_SKILLS_COPY_MODE else None
     all_conflicts = (
         find_conflicts(nixos_symlinks)
         + find_conflicts(dotfiles_symlinks)
-        + find_conflicts(skill_symlinks)
+        + find_conflicts(skill_symlinks, exempt_targets=skill_conflict_exempt)
         + find_conflicts(work_skill_symlinks)
         + find_conflicts(cog_symlinks)
     )
@@ -846,20 +944,21 @@ def main():
         sys.exit(0)
 
     apply_sync_changes(
-        nixos_symlinks,
-        dotfiles_symlinks,
-        skill_symlinks,
-        cc_personal_symlink,
-        work_skill_symlinks,
-        cog_symlinks,
-        stale,
-        args.force,
+        nixos_symlinks=nixos_symlinks,
+        dotfiles_symlinks=dotfiles_symlinks,
+        skill_symlinks=skill_symlinks,
+        cc_personal_symlink=cc_personal_symlink,
+        work_skill_symlinks=work_skill_symlinks,
+        cog_symlinks=cog_symlinks,
+        stale=stale,
+        force=args.force,
         machine=folder_name,
     )
     print(f"\n{green('✓')} Sync complete!")
 
 
 def apply_sync_changes(
+    *,
     nixos_symlinks: list[tuple[Path, Path]],
     dotfiles_symlinks: list[tuple[Path, Path]],
     skill_symlinks: list[tuple[Path, Path]],
@@ -873,6 +972,7 @@ def apply_sync_changes(
     cc_skills_target: Path = CC_SKILLS_TARGET,
     agents_skills_target: Path = AGENTS_SKILLS_TARGET,
     work_skills_target: Path = CLAUDE_WORK_SKILLS_TARGET,
+    copy_mode: bool = AGENT_SKILLS_COPY_MODE,
     machine: str | None = None,
 ) -> list[tuple[Path, Path]]:
     """Create/update symlinks and remove stale ones, in the required order.
@@ -885,6 +985,11 @@ def apply_sync_changes(
     otherwise remove_symlinks would resolve *through* the new dir symlink and
     delete freshly-created ~/.agents/skills/<name> targets, and the force-path
     unlink on the real dir would raise IsADirectoryError.
+
+    When ``copy_mode`` is true, the personal skills are copied into
+    ~/.agents/skills as real directories instead of symlinked (Polytoken 0.6.4
+    skips skill directory symlinks). The ~/.claude/skills -> ~/.agents/skills
+    wiring and the stale-removal order are unchanged.
 
     When ``machine`` is given, the combined created set is written to the sync
     manifest (in a finally, so a partial failure still records what ran).
@@ -918,7 +1023,7 @@ def apply_sync_changes(
                     cleanup_empty_dirs(Path(path), dotfiles_target, use_sudo=False)
             if cc_skills_stale:
                 print(f"  {dim('Claude Code skills:')}")
-                remove_symlinks(cc_skills_stale, use_sudo=False)
+                remove_paths(cc_skills_stale, use_sudo=False, remove_dirs=copy_mode)
                 for path in cc_skills_stale:
                     cleanup_empty_dirs(Path(path), dotfiles_target, use_sudo=False)
             if work_skills_stale:
@@ -934,8 +1039,20 @@ def apply_sync_changes(
         created_dotfiles = create_or_update_symlinks(dotfiles_symlinks, use_sudo=False, force=force)
 
         if skill_symlinks:
-            print(bold("Agent skills (personal)"))
-            created_skills = create_or_update_symlinks(skill_symlinks, use_sudo=False, force=force)
+            label = "Agent skills (personal)"
+            if copy_mode:
+                label += " [copied]"
+            print(bold(label))
+            if copy_mode:
+                if date.today() >= AGENT_SKILLS_COPY_MODE_EXPIRY:
+                    raise SystemExit(f"Error: {AGENT_SKILLS_COPY_MODE_EXPIRY_MSG}")
+                for target, source in skill_symlinks:
+                    copy_skill_tree(source, target)
+                    created_skills.append((target, source))
+            else:
+                created_skills = create_or_update_symlinks(
+                    skill_symlinks, use_sudo=False, force=force
+                )
 
         if cc_personal_symlink:
             print(bold("Claude Code personal wiring"))
