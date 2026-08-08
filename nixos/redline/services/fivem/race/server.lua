@@ -173,8 +173,6 @@ RegisterNetEvent('race:request', function(wp)
         status = 'countdown',
         countdownEndsAt = GetGameTimer() + 5000,
         participants = {},
-        order = 0,
-        endedAt = nil,
     }
 
     broadcast(('%s is running a race to %s in the %s — GO in 5s!'):format(
@@ -267,7 +265,6 @@ local function recomputeOrder()
     for i, entry in ipairs(finishers) do
         race.participants[entry.id].order = i
     end
-    race.order = #finishers
 end
 
 -- "I crossed the finish", with the elapsed time the client measured against its
