@@ -44,7 +44,13 @@ let
 
   # Units worth an explicit hook: silent failure of either loses data or hides
   # data loss. Everything else is still covered by the login banner.
-  watched = [ "backup-sync" ] ++ lib.optional config.redline.ssd0.enable "btrfs-scrub-mnt-ssd0";
+  # hermes-backup-check is the counterpart to the in-guest backup timer. The VM
+  # writes hourly dumps to a virtiofs drop directory, and nothing on the host
+  # would otherwise detect that stopping. A stale drop is indistinguishable from
+  # a healthy one from rsync's perspective, because rsync copies the same files
+  # indefinitely. This has the same shape as the Jul 27 miss, one layer out.
+  watched = [ "backup-sync" "hermes-backup-check" ]
+    ++ lib.optional config.redline.ssd0.enable "btrfs-scrub-mnt-ssd0";
 
 in
 {

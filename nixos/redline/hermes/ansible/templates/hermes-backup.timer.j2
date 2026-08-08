@@ -1,0 +1,14 @@
+# Managed by ansible. Edit ../hermes.yml, not this file.
+#
+# The host's freshness check allows 3 hours of silence, so one missed run is
+# tolerated and two are not.
+[Unit]
+Description=Hourly Hermes backup
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

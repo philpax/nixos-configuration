@@ -48,6 +48,18 @@ rec {
     vllm = "${mounts.ssd0}/ai/vllm";
   };
 
+  # Sandboxed Hermes Agent VM (see hermes/).
+  #
+  # `images` and `drop` are siblings rather than nested, because `images` is set
+  # nodatacow for the qcow2 files and nodatacow also disables btrfs checksums.
+  # The backups must keep their checksums, on a filesystem that silently
+  # corrupted in August 2026.
+  hermes = {
+    base = "${mounts.ssd0}/hermes";
+    images = "${mounts.ssd0}/hermes/images";
+    drop = "${mounts.ssd0}/hermes/drop";
+  };
+
   # Service directories
   paxboard = "${mounts.ssd0}/paxboard";
   minecraft = "${mounts.ssd0}/minecraft";

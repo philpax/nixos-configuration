@@ -18,6 +18,15 @@ let
     { src = folders.notes; dst = folders.storageBackup.notes; }
     # Primary SSD -> ZFS backup pool (also picked up by restic -> external)
     { src = folders.minecraft; dst = "${folders.backup}/Minecraft Servers/2026-05-create"; }
+    # Hermes VM backups. The guest writes hourly pg_dumps and HERMES_HOME
+    # tarballs into this directory over virtiofs. The VM's disk images are not
+    # backed up: the OS disk is rebuildable from ../hermes/ansible, and the
+    # state disk's contents are what these dumps already contain.
+    #
+    # rsync here is additive, and the dumps are timestamped and never
+    # overwritten, so /storage accumulates history that the guest cannot reach
+    # or rewrite. The ZFS auto-snapshots on this pool reinforce that.
+    { src = folders.hermes.drop; dst = "${folders.backup}/hermes"; }
     # Primary SSD -> external drive (offsite backup)
     { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
     { src = folders.music; dst = "${folders.backups.external}/Music"; }

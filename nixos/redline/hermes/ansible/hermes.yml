@@ -1,0 +1,350 @@
+---
+# Provisioning for the Hermes VM. Idempotent; re-run to converge.
+#
+#   ansible-playbook -i inventory.ini hermes.yml
+#   ansible-playbook -i inventory.ini hermes.yml --tags honcho
+#
+# Does not enrol the agent. See ../README.md.
+
+- name: Provision the Hermes agent VM
+  hosts: hermes
+  become: true
+
+  # Rendered by ../default.nix: ananke_base_url, deriver_model, host_addr,
+  # guest_addr, dashboard_port, honcho_port.
+  vars_files:
+    - /etc/hermes/ansible-vars.yml
+
+  vars:
+    state_root: /srv/hermes
+    drop_dir: /srv/drop
+    hermes_home: /srv/hermes/hermes
+    honcho_dir: /srv/hermes/honcho
+    workspace: /srv/hermes/workspace
+    agent_user: philpax
+
+    hermes_ref: "3671c9f188e1563fd7acb6021f430e4607e17900"
+    honcho_ref: "d191c107e5250cc2ca4c6058d9ebfe26b7cfc6f8"
+
+    # lfm2.5's trained maximum is 512 tokens; Honcho embeds whole messages.
+    embedding_model: "jina-embeddings-v5-text-small-retrieval-vllm"
+    embedding_dimensions: 1024
+
+  tasks:
+    # ── Base ──────────────────────────────────────────────────────────────
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - curl
+          - zstd
+          - jq
+          - ripgrep
+          - ffmpeg
+          - python3-venv
+          - python3-pip
+          - docker.io
+          - docker-compose-v2
+          - ca-certificates
+          - gnupg
+        state: present
+        update_cache: true
+      tags: [base]
+
+    - name: Add the agent user to the docker group
+      ansible.builtin.user:
+        name: "{{ agent_user }}"
+        groups: docker
+        append: true
+      tags: [base]
+
+    - name: Ensure the state layout exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ agent_user }}"
+        group: "{{ agent_user }}"
+        mode: "0755"
+      loop:
+        - "{{ state_root }}"
+        - "{{ hermes_home }}"
+        - "{{ honcho_dir }}"
+        - "{{ workspace }}"
+      tags: [base]
+
+    - name: Enable docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+      tags: [base]
+
+    # cloud-init cannot mount this: cc_mounts silently discards any device that
+    # is neither a block device nor a host:/export spec.
+    - name: Mount the host backup drop over virtiofs
+      ansible.posix.mount:
+        src: hermes-drop
+        path: "{{ drop_dir }}"
+        fstype: virtiofs
+        opts: defaults,nofail
+        state: mounted
+      tags: [base]
+
+    - name: Verify the drop is actually mounted
+      ansible.builtin.command:
+        cmd: mountpoint -q {{ drop_dir }}
+      changed_when: false
+      tags: [base]
+
+    # ── Honcho ────────────────────────────────────────────────────────────
+    # hex rather than base64: the value is interpolated into a postgresql://
+    # URI, where `/` terminates the authority and `+` may decode as a space.
+    - name: Generate the Honcho database password once
+      ansible.builtin.shell:
+        cmd: "umask 077 && openssl rand -hex 24 | tr -d '\\n' > {{ honcho_dir }}/.pgpass"
+        creates: "{{ honcho_dir }}/.pgpass"
+      tags: [honcho]
+
+    - name: Read the database password
+      ansible.builtin.slurp:
+        src: "{{ honcho_dir }}/.pgpass"
+      register: pgpass_file
+      tags: [honcho]
+
+    - name: Expose the database password to the templates
+      ansible.builtin.set_fact:
+        pg_password: "{{ pgpass_file.content | b64decode | trim }}"
+      no_log: true
+      tags: [honcho]
+
+    - name: Clone Honcho
+      ansible.builtin.git:
+        repo: https://github.com/plastic-labs/honcho
+        dest: "{{ honcho_dir }}/src"
+        version: "{{ honcho_ref }}"
+      become_user: "{{ agent_user }}"
+      tags: [honcho]
+
+    # When honcho_ref is bumped, diff upstream's docker-compose.yml.example
+    # against this template.
+    - name: Template the Honcho compose file
+      ansible.builtin.template:
+        src: honcho-compose.yml.j2
+        dest: "{{ honcho_dir }}/src/docker-compose.yml"
+        owner: "{{ agent_user }}"
+        mode: "0640"
+      notify: restart honcho
+      tags: [honcho]
+
+    - name: Template the Honcho environment
+      ansible.builtin.template:
+        src: honcho.env.j2
+        dest: "{{ honcho_dir }}/src/.env"
+        owner: "{{ agent_user }}"
+        mode: "0600"
+      notify: restart honcho
+      tags: [honcho]
+
+    - name: Template the Honcho config
+      ansible.builtin.template:
+        src: honcho-config.toml.j2
+        dest: "{{ honcho_dir }}/src/config.toml"
+        owner: "{{ agent_user }}"
+        mode: "0640"
+      notify: restart honcho
+      tags: [honcho]
+
+    - name: Bring Honcho up
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: "{{ honcho_dir }}/src"
+      register: honcho_up
+      changed_when: "'Started' in honcho_up.stderr or 'Created' in honcho_up.stderr"
+      tags: [honcho]
+
+    # ── Hermes ────────────────────────────────────────────────────────────
+    # force: the dashboard's frontend build runs `npm install` at the workspace
+    # root, which rewrites the tracked package-lock.json. Without this the task
+    # fails on every run after the first with "Local modifications exist".
+    # Nothing that matters is tracked: venv and web_dist are gitignored, and
+    # HERMES_HOME is outside the checkout.
+    - name: Clone Hermes Agent
+      ansible.builtin.git:
+        repo: https://github.com/NousResearch/hermes-agent
+        dest: "{{ state_root }}/hermes-agent"
+        version: "{{ hermes_ref }}"
+        force: true
+      become_user: "{{ agent_user }}"
+      tags: [hermes]
+
+    # scripts/install.sh is upstream's supported installer, and is what
+    # hermes-agent.nousresearch.com/install.sh serves. It is run from the pinned
+    # checkout rather than curled, so the version stays pinned.
+    #
+    # --skip-setup suppresses the interactive enrolment wizard, which is done by
+    # hand later. Without it the run blocks on a `read` indefinitely.
+    #
+    # --dir and --hermes-home are both required. The defaults are ~/.hermes and
+    # ~/.hermes/hermes-agent, which are on the OS disk — the disk this design
+    # treats as disposable. Both must land on the state disk instead.
+    # `creates:` on the venv directory is not sufficient. install.sh builds the
+    # venv with uv, whose managed interpreter defaults under ~/.local/share/uv
+    # on the OS disk. An OS-disk rebuild removes the interpreter and leaves the
+    # venv directory behind, so a directory test reports "installed" while every
+    # entry point fails with 203/EXEC. Testing the interpreter instead detects
+    # that and reinstalls.
+    - name: Check whether the existing venv is usable
+      ansible.builtin.command:
+        cmd: "{{ state_root }}/hermes-agent/venv/bin/python -c 'import sys'"
+      register: venv_probe
+      changed_when: false
+      failed_when: false
+      tags: [hermes]
+
+    # UV_PYTHON_INSTALL_DIR keeps the interpreter on the state disk alongside
+    # the venv that references it. Without it the two live on different disks
+    # with different lifetimes.
+    - name: Install Hermes
+      ansible.builtin.command:
+        cmd: >-
+          ./scripts/install.sh --skip-setup
+          --dir {{ state_root }}/hermes-agent
+          --hermes-home {{ hermes_home }}
+        chdir: "{{ state_root }}/hermes-agent"
+      environment:
+        UV_PYTHON_INSTALL_DIR: "{{ state_root }}/uv-python"
+      when: venv_probe.rc != 0
+      become_user: "{{ agent_user }}"
+      notify: restart hermes
+      tags: [hermes]
+
+    # The dashboard's auth gate engages on any non-loopback bind and start_server
+    # fails closed without a registered provider, so this is required rather than
+    # optional hardening.
+    - name: Generate the dashboard password once
+      ansible.builtin.shell:
+        cmd: "umask 077 && openssl rand -hex 24 | tr -d '\\n' > {{ state_root }}/.dashboard-pass"
+        creates: "{{ state_root }}/.dashboard-pass"
+      tags: [hermes]
+
+    - name: Read the dashboard password
+      ansible.builtin.slurp:
+        src: "{{ state_root }}/.dashboard-pass"
+      register: dashboard_pass_file
+      tags: [hermes]
+
+    - name: Expose the dashboard password to the templates
+      ansible.builtin.set_fact:
+        dashboard_password: "{{ dashboard_pass_file.content | b64decode | trim }}"
+      no_log: true
+      tags: [hermes]
+
+    # config.yaml, memory and skills live under HERMES_HOME, on the state disk.
+    - name: Set HERMES_HOME globally
+      ansible.builtin.copy:
+        dest: /etc/profile.d/hermes.sh
+        content: |
+          export HERMES_HOME={{ hermes_home }}
+        mode: "0644"
+      tags: [hermes]
+
+    # The dashboard builds its own frontend on first start, but only when npm
+    # is present; otherwise it exits with "Web UI frontend not built". Ubuntu
+    # 24.04 ships Node 18.19 and the build needs Vite 8, which requires Node 20
+    # or newer. install.sh manages a Node of its own for the browser tool, but
+    # that one is prefix-local and not necessarily on the service user's PATH.
+    - name: Add the NodeSource signing key
+      ansible.builtin.get_url:
+        url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+        dest: /etc/apt/keyrings/nodesource.asc
+        mode: "0644"
+      tags: [hermes]
+
+    - name: Add the NodeSource repository
+      ansible.builtin.deb822_repository:
+        name: nodesource
+        types: [deb]
+        uris: https://deb.nodesource.com/node_22.x
+        suites: [nodistro]
+        components: [main]
+        signed_by: /etc/apt/keyrings/nodesource.asc
+        state: present
+      tags: [hermes]
+
+    - name: Install Node.js
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: true
+      tags: [hermes]
+
+    - name: Install the Hermes service units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - hermes-gateway.service
+        - hermes-dashboard.service
+      notify: restart hermes
+      tags: [hermes]
+
+    - name: Enable and start the Hermes units
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - hermes-gateway.service
+        - hermes-dashboard.service
+      tags: [hermes]
+
+    # ── Backup ────────────────────────────────────────────────────────────
+
+    - name: Install the backup script
+      ansible.builtin.template:
+        src: hermes-backup.sh.j2
+        dest: /usr/local/bin/hermes-backup
+        mode: "0755"
+      tags: [backup]
+
+    - name: Install the backup units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - hermes-backup.service
+        - hermes-backup.timer
+      notify: reload systemd
+      tags: [backup]
+
+    - name: Enable the backup timer
+      ansible.builtin.systemd:
+        name: hermes-backup.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: [backup]
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    # config.toml is a bind-mounted file, so its contents are not part of the
+    # container spec and `up -d` alone sees nothing to change.
+    - name: restart honcho
+      ansible.builtin.command:
+        cmd: docker compose up -d --force-recreate api deriver
+        chdir: "{{ honcho_dir }}/src"
+
+    - name: restart hermes
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+        daemon_reload: true
+      loop:
+        - hermes-gateway.service
+        - hermes-dashboard.service

@@ -8,6 +8,7 @@ in {
       ../common-all/configuration.nix
       ./ssd0.nix
       (import ./ai { inherit config pkgs; })
+      ./hermes
       (import ./services { inherit config lib pkgs; })
       (import ./programs { inherit config pkgs; })
     ];

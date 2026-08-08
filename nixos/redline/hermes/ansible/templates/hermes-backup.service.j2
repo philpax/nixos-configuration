@@ -1,0 +1,11 @@
+# Managed by ansible. Edit ../hermes.yml, not this file.
+[Unit]
+Description=Back up Honcho's database and HERMES_HOME to the host drop directory
+After=docker.service srv-drop.mount
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hermes-backup
+# Root: requires docker and reads HERMES_HOME regardless of ownership.
+User=root

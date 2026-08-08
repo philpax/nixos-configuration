@@ -1,0 +1,21 @@
+# Managed by ansible. Edit ../hermes.yml, not this file.
+#
+# Approval mode lives in Hermes' own config.yaml, not here.
+[Unit]
+Description=Hermes Agent messaging gateway
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User={{ agent_user }}
+Group={{ agent_user }}
+WorkingDirectory={{ workspace }}
+Environment=HERMES_HOME={{ hermes_home }}
+ExecStart={{ state_root }}/hermes-agent/venv/bin/hermes gateway
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

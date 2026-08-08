@@ -1,0 +1,75 @@
+# Managed by ansible. Edit ../hermes.yml, not this file.
+#
+# Honcho sets base URLs per module through `model_config.overrides.base_url`,
+# so every module that calls a model needs its own override.
+#
+# One inbound message can trigger embedding, deriver and dialectic work, all of
+# which reach ananke.
+
+[llm]
+# ananke does not check bearer tokens; the OpenAI transport requires the
+# variable to be set.
+OPENAI_API_KEY = "sk-ananke-local"
+
+[embedding]
+# Must match the embedder, or pgvector rejects every insert.
+VECTOR_DIMENSIONS = {{ embedding_dimensions }}
+MAX_INPUT_TOKENS = 8192
+MAX_TOKENS_PER_REQUEST = 300000
+
+[embedding.model_config]
+transport = "openai"
+model = "{{ embedding_model }}"
+
+[embedding.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[deriver]
+ENABLED = true
+WORKERS = 1
+POLLING_BACKOFF_ENABLED = true
+POLLING_SLEEP_INTERVAL_SECONDS = 1.0
+POLLING_SLEEP_MAX_INTERVAL_SECONDS = 30.0
+POLLING_BACKOFF_MULTIPLIER = 2.0
+
+[deriver.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[deriver.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[dialectic.levels.minimal.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[dialectic.levels.minimal.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[dialectic.levels.low.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[dialectic.levels.low.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[dialectic.levels.medium.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[dialectic.levels.medium.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[dialectic.levels.high.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[dialectic.levels.high.model_config.overrides]
+base_url = "{{ ananke_base_url }}"
+
+[dialectic.levels.max.model_config]
+transport = "openai"
+model = "{{ deriver_model }}"
+
+[dialectic.levels.max.model_config.overrides]
+base_url = "{{ ananke_base_url }}"

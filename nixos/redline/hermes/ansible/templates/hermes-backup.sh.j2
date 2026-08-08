@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Managed by ansible. Edit ../hermes.yml, not this file.
+#
+# Staging happens outside the drop directory. The shell creates a redirect
+# target before the command runs, so staging inside the drop would deposit a
+# fresh zero-byte file there on every failure and keep the host's freshness
+# check satisfied while producing no usable backup.
+#
+# pg_dump runs inside the database container so that client and server versions
+# always match.
+#
+# HERMES_HOME is a live tree: sqlite WALs, heartbeats and logs are written
+# continuously. GNU tar exits 1 on a file that changes while being read, so
+# tarring the live tree directly would make every run fail (2026-08-07). The
+# snapshot stage below gives tar a tree nothing mutates, by:
+#   * rsync without --delete: an overlay that matches the live tree at one
+#     point in time. Files removed mid-copy are fine, and a dropped lock file
+#     that predates the copy is tidied after.
+#   * sqlite online backup via the python3 dbapi, so a DB that changes during
+#     the copy never lands as a torn WAL. The backup file is a consistent
+#     point-in-time image even though the source tree carries on.
+# Only after the snapshot is written do we pack it, so the tar itself observes
+# no concurrent writers.
+set -euo pipefail
+
+DROP={{ drop_dir }}
+STAGE={{ state_root }}/.backup-stage
+HERMES_HOME={{ hermes_home }}
+COMPOSE="{{ honcho_dir }}/src/docker-compose.yml"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+KEEP_DAYS=14
+
+if ! mountpoint -q "$DROP"; then
+  echo "drop directory $DROP is not mounted; refusing to write to the OS disk" >&2
+  exit 1
+fi
+
+mkdir -p "$STAGE"
+trap 'rm -rf "$STAGE"/snapshot' EXIT
+
+# Consistent snapshot of HERMES_HOME. --exclude keeps the live WAL/SHM files
+# out of the copy; with a proper sqlite backup below, excluding them loses
+# nothing (a WAL that has not been checkpointed is not part of the committed
+# database image the backup captures).
+rsync -a --exclude='*.db-wal' --exclude='*.db-shm' \
+  "$HERMES_HOME"/ "$STAGE/snapshot/"
+
+# Dropped files that predate the copy survive the rsync above.
+find "$STAGE/snapshot" -name '*.db-wal' -o -name '*.db-shm' | xargs -r rm -f
+
+# .backup gives a consistent image of each sqlite DB so a DB written during
+# the copy still restores coherently. sqlite3(1) is not installed in the
+# guest, so this uses the Python DB-API module instead.
+python3 - "$HERMES_HOME" "$STAGE/snapshot" <<'PY'
+import sqlite3, sys, pathlib
+src_root, dst_root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+for db in src_root.rglob("*.db"):
+    rel = db.relative_to(src_root)
+    rel_dst = dst_root / rel
+    try:
+        src = sqlite3.connect(str(db))
+        try:
+            dst = sqlite3.connect(str(rel_dst))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+    except Exception as e:
+        # `.db` files that are not sqlite databases (e.g. a Kanban state file
+        # that has never been opened with the WAL format) must not abort the
+        # backup; they are already present in the rsync snapshot.
+        print(f"note: {rel} is not a sqlite database ({e}); keeping rsync copy", file=sys.stderr)
+PY
+
+tar --zstd -cf "$STAGE/snapshot.tar.zst" -C "$STAGE" snapshot
+
+# --format=custom so that pg_restore can be selective, and so that a truncated
+# dump fails to parse rather than restoring silently incomplete.
+docker compose -f "$COMPOSE" exec -T database \
+  pg_dump -U honcho -d honcho --format=custom \
+  > "$STAGE/honcho.tmp"
+
+# A dump that completes is not proof of a dump that restores.
+#
+# pg_restore reads stdin when given no file argument. Naming /dev/stdin instead
+# fails inside the container with "did not find magic string in file header".
+docker compose -f "$COMPOSE" exec -T database \
+  pg_restore --list < "$STAGE/honcho.tmp" > /dev/null
+
+# Verify the tar before publishing the pair, matching the pg_dump verification.
+# `-d` on a streaming archive is destructive, so copy to a temp file first.
+zstd -d -c "$STAGE/snapshot.tar.zst" > "$STAGE/snapshot-noverify.tar"
+tar -tf "$STAGE/snapshot-noverify.tar" > /dev/null
+rm -f "$STAGE/snapshot-noverify.tar"
+
+# Both artefacts are verified before either is published, so the drop never
+# holds a matched pair where only one side is good.
+mv "$STAGE/honcho.tmp" "$DROP/honcho-$STAMP.dump"
+mv "$STAGE/snapshot.tar.zst" "$DROP/hermes-home-$STAMP.tar.zst"
+
+# Local retention is short because /storage holds the long tail under ZFS
+# snapshots.
+find "$DROP" -type f -name '*.dump' -mtime +$KEEP_DAYS -delete
+find "$DROP" -type f -name '*.tar.zst' -mtime +$KEEP_DAYS -delete
+
+echo "backup complete: honcho-$STAMP.dump, hermes-home-$STAMP.tar.zst"
