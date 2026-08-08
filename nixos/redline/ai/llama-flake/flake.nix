@@ -56,7 +56,16 @@
         llamaVersion = "0.0.0";
       };
 
-      cuda = llamaPackagesCuda.llama-cpp.overrideAttrs (old: {
+      # Upstream's package.nix still asks for cudaPackages.cuda_cccl, which the
+      # pinned nixpkgs has renamed to cccl and kept only as a warning alias.
+      # Resolving it here keeps the eval quiet without touching the pin; the
+      # alias returns the same package, so the derivation is unchanged. Drop
+      # this once a bumped llama.cpp rev uses the new name.
+      cudaPackages = pkgsCuda.cudaPackages // {
+        cuda_cccl = pkgsCuda.cudaPackages.cccl;
+      };
+
+      cuda = (llamaPackagesCuda.llama-cpp.override { inherit cudaPackages; }).overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [ ./fattn-graph-reuse-fix.patch ];
       });
     in
