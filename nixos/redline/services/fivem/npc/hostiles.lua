@@ -60,6 +60,79 @@ local function loadModel(model)
     return HasModelLoaded(model)
 end
 
+-- Tell the scoreboard resource about a hostile ped we spawned, so its server
+-- can classify kills against it (squad/survival) and show a live count.
+local function announceSpawned(entry, kind)
+    if not entry.netId or entry.netId == 0 then
+        return
+    end
+    TriggerServerEvent('scoreboard:npc:spawned', entry.netId, kind)
+    -- Cross-client hostility: everyone needs to apply the hostile relationship
+    -- to this ped themselves (relationship groups don't replicate). The server
+    -- relays this as `npc:hostile:apply` to all clients; each applies the group
+    -- locally and tasks the ped to fight their ped too.
+    TriggerServerEvent('npc:hostile:spawned', entry.netId)
+end
+
+-- And when one dies or disappears (without a kill event landing), tell the
+-- scoreboard to drop it from the registry so the live-hostile count stays
+-- honest. Guarded so a ped is only ever announced dead once.
+local function announceDead(entry)
+    if not entry.deadReported then
+        entry.deadReported = true
+        if entry.netId and entry.netId ~= 0 then
+            TriggerServerEvent('scoreboard:npc:dead', entry.netId)
+            TriggerServerEvent('npc:hostile:dead', entry.netId)
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Cross-client hostility
+--
+-- Relationship groups / SetPedAsEnemy are per-client game state; they do NOT
+-- replicate. So when ANY player spawns hostiles, we broadcast the netId and
+-- every client applies the hostile relationship to that ped themselves. Shared
+-- by squad/survival (hostiles.lua) and the bounty target (bounty_client.lua).
+-- ---------------------------------------------------------------------------
+
+-- netId -> true, for peds we've marked hostile on this client. Used to avoid
+-- re-applying and to clean up when they die.
+local markedHostile = {}
+
+local function markHostileByNetId(netId)
+    if not netId or netId == 0 or markedHostile[netId] then
+        return
+    end
+    if not NetworkDoesNetworkIdExist(netId) then
+        return
+    end
+
+    local ped = NetworkGetEntityFromNetworkId(netId)
+    if not DoesEntityExist(ped) or not IsEntityAPed(ped) then
+        return
+    end
+
+    markedHostile[netId] = true
+    SetPedRelationshipGroupHash(ped, hostileGroupHash)
+    SetPedAsEnemy(ped, true)
+    SetPedCombatAttributes(ped, 46, true)
+    -- No TaskCombatPed here: the SANDBOX_HOSTILE <-> PLAYER relationship (set
+    -- on every client in onClientResourceStart) makes the ped aggro the nearest
+    -- player automatically. Per-client TaskCombatPed would fight over the same
+    -- ped's task and just thrash between targets.
+end
+
+-- Server relay: apply hostility to a spawned ped (from hostiles or bounty).
+RegisterNetEvent('npc:hostile:apply', function(netId)
+    markHostileByNetId(netId)
+end)
+
+-- Server relay: a hostile ped is gone; clean up our local marker.
+RegisterNetEvent('npc:hostile:clear', function(netId)
+    markedHostile[netId] = nil
+end)
+
 local function addBlip(ped)
     local blip = AddBlipForEntity(ped)
     SetBlipSprite(blip, 1)
@@ -81,6 +154,7 @@ end
 
 local function forget(entry)
     dropBlip(entry)
+    announceDead(entry)
     if entry.ped and DoesEntityExist(entry.ped) then
         SetEntityAsMissionEntity(entry.ped, true, true)
         DeleteEntity(entry.ped)
@@ -90,16 +164,23 @@ end
 -- Also does the blip upkeep: a corpse keeps its entity around for a while,
 -- and leaving a "Hostile" marker on the map for it makes the survival counter
 -- look wrong.
-local function livingCount()
+-- Optional `kind` filter: count only entries of that kind (used by the co-op
+-- survival alive-report so /squad spawns don't pollute the wave counter).
+local function livingCount(kind)
     local alive = 0
     for i = #spawned, 1, -1 do
         local entry = spawned[i]
         if not DoesEntityExist(entry.ped) then
             dropBlip(entry)
+            announceDead(entry)
             table.remove(spawned, i)
         elseif IsPedDeadOrDying(entry.ped, true) then
             dropBlip(entry)
-        else
+            announceDead(entry)
+            -- The corpse leaves the list too, not just its blip: `spawned` is
+            -- what spawnGroup checks against MAX_ALIVE, and bodies linger.
+            table.remove(spawned, i)
+        elseif not kind or entry.kind == kind then
             alive = alive + 1
         end
     end
@@ -129,7 +210,7 @@ local function spawnPointNear(coords, radius)
     return vector3(x, y, hasGround and groundZ or coords.z)
 end
 
-local function spawnHostile(point, tier)
+local function spawnHostile(point, tier, kind)
     local model = GetHashKey(pick(PED_MODELS))
     if not loadModel(model) then
         return nil
@@ -163,11 +244,13 @@ local function spawnHostile(point, tier)
 
     TaskCombatPed(ped, PlayerPedId(), 0, 16)
 
-    spawned[#spawned + 1] = { ped = ped, blip = addBlip(ped) }
+    local entry = { ped = ped, blip = addBlip(ped), netId = NetworkGetNetworkIdFromEntity(ped), kind = kind or 'squad' }
+    spawned[#spawned + 1] = entry
+    announceSpawned(entry, kind or 'squad')
     return ped
 end
 
-local function spawnGroup(count, tier, radius)
+local function spawnGroup(count, tier, radius, kind)
     local coords = GetEntityCoords(PlayerPedId())
     local made = 0
 
@@ -175,13 +258,39 @@ local function spawnGroup(count, tier, radius)
         if #spawned >= MAX_ALIVE then
             break
         end
-        if spawnHostile(spawnPointNear(coords, radius), tier) then
+        if spawnHostile(spawnPointNear(coords, radius), tier, kind or 'squad') then
             made = made + 1
         end
     end
 
     return made
 end
+
+-- Co-op survival: the server drives waves and asks each participant to spawn
+-- hostiles around THEMSELVES, so hostiles appear around every player. This
+-- spawns `count` hostiles around the caller's own position.
+local function spawnSurvivalAroundSelf(count, tier)
+    return spawnGroup(count, tier, 45.0, 'survival')
+end
+
+-- Server relays for co-op survival. The server owns wave state; each client
+-- just spawns/clears and reports how many hostiles it still has alive.
+RegisterNetEvent('npc:survival:wave', function(wave, count, tier)
+    notify(('wave %d — %d hostile(s), tier %d'):format(wave, count, tier))
+    spawnSurvivalAroundSelf(count, tier)
+end)
+
+RegisterNetEvent('npc:survival:stop', function()
+    survivalActive = false
+    clearAll()
+end)
+
+-- The server asks us how many of OUR spawned hostiles are still alive, so it
+-- can tell when a wave is cleared across all participants. Counts only
+-- survival-kind peds so /squad spawns during a run don't hold waves open.
+RegisterNetEvent('npc:survival:reportalive', function()
+    TriggerServerEvent('npc:survival:alive', livingCount('survival'))
+end)
 
 RegisterCommand('squad', function(_, args)
     if args[1] == 'clear' then
@@ -190,8 +299,10 @@ RegisterCommand('squad', function(_, args)
         return
     end
 
-    local count = math.min(tonumber(args[1]) or 4, MAX_ALIVE)
-    local tier = math.min(math.max(tonumber(args[2]) or 1, 1), #WEAPON_TIERS)
+    -- Floored: tonumber keeps fractions, and a fractional tier indexes
+    -- WEAPON_TIERS to nil and then throws in the "%d" format below.
+    local count = math.min(math.floor(tonumber(args[1]) or 4), MAX_ALIVE)
+    local tier = math.min(math.max(math.floor(tonumber(args[2]) or 1), 1), #WEAPON_TIERS)
 
     local made = spawnGroup(count, tier, 30.0)
     if made == 0 then
@@ -201,53 +312,40 @@ RegisterCommand('squad', function(_, args)
     end
 end, false)
 
-RegisterCommand('survival', function(_, args)
-    if args[1] == 'stop' or survivalActive then
-        survivalActive = false
-        clearAll()
-        notify('survival over')
-        return
-    end
-
+-- /survival is now TRUE cooperative: the server owns waves and spawns hostiles
+-- around every alive participant. The server's RegisterCommand('survival')
+-- handles start/stop; this client only reacts to the npc:survival:* events
+-- (wave/stop/reportalive) defined above, plus it tells the server when this
+-- player dies so the event can end when everyone is down.
+RegisterNetEvent('npc:survival:started', function()
     survivalActive = true
-    notify('survival started — /survival again to stop')
+    clearAll()
+end)
 
-    CreateThread(function()
-        local wave = 0
+-- Report our own death to the server once per death while a co-op run is
+-- active (the server ends the event when all participants are down). Clearing
+-- our own spawns on death stops them leaking into the next wave (and avoids
+-- spamming npc:survival:dead twice a second). We re-arm when we're alive
+-- again so a death in a later wave is reported too.
+local reportedThisDeath = false
 
-        while survivalActive do
-            wave = wave + 1
-
-            local tier = math.min(math.ceil(wave / 2), #WEAPON_TIERS)
-            local count = math.min(2 + wave, 10)
-            local made = spawnGroup(count, tier, 45.0)
-
-            if made == 0 then
-                notify('^1nowhere to spawn — survival stopped')
-                survivalActive = false
-                break
+CreateThread(function()
+    while true do
+        Wait(500)
+        local dead = IsPedDeadOrDying(PlayerPedId(), true)
+        if dead then
+            if survivalActive and not reportedThisDeath then
+                reportedThisDeath = true
+                TriggerServerEvent('npc:survival:dead')
+                -- Don't clear spawns here: the scoreboard's kill attribution
+                -- still needs the netIds. The server's wave poll stops counting
+                -- dead participants anyway; their peds get cleared on respawn.
             end
-
-            notify(('wave %d — %d hostile(s), tier %d'):format(wave, made, tier))
-
-            -- Wave ends when they're all down, or when you are.
-            while survivalActive and livingCount() > 0 do
-                Wait(500)
-                if IsPedDeadOrDying(PlayerPedId(), true) then
-                    notify(('^1you died on wave %d'):format(wave))
-                    survivalActive = false
-                end
-            end
-
-            if survivalActive then
-                notify(('wave %d cleared'):format(wave))
-                Wait(5000)
-            end
+        else
+            reportedThisDeath = false
         end
-
-        clearAll()
-    end)
-end, false)
+    end
+end)
 
 -- /survival drives livingCount itself between waves, but /squad has no loop,
 -- so blips for its casualties would sit on the map forever. Idles at nothing

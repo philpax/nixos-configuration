@@ -117,8 +117,14 @@ RegisterNetEvent('npc:bounty:track', function(id, netId)
 
                     -- Follow the target with the blip once it's real, so it
                     -- stays honest if the ped wanders.
+                    --
+                    -- Components, never table.unpack(coords): in CfxLua
+                    -- `#vector3` is the magnitude (that's what makes the
+                    -- `#(a - b) < 2.0` idiom work), so unpack sees a
+                    -- fractional length and throws.
                     if current.blip and DoesBlipExist(current.blip) then
-                        SetBlipCoords(current.blip, table.unpack(GetEntityCoords(ped)))
+                        local at = GetEntityCoords(ped)
+                        SetBlipCoords(current.blip, at.x, at.y, at.z)
                     end
 
                     if IsPedDeadOrDying(ped, true) then
@@ -139,6 +145,118 @@ RegisterCommand('bounty', function()
     TriggerServerEvent('npc:bounty:request')
 end, false)
 
+-- ---------------------------------------------------------------------------
+-- Player bounties (/mark): client half.
+--
+-- The server tells everyone who's marked (server id). We draw a red blip on
+-- that player's CURRENT ped (players change peds on respawn, so we re-attach
+-- each tick), and when we witness the marked player die AND we dealt the kill,
+-- claim it. The kill detection reuses the scoreboard's CEventNetworkEntityDamage
+-- pattern but only for the marked target.
+-- ---------------------------------------------------------------------------
+
+local pbTarget = nil -- server id of the marked player
+local pbBlip = nil
+local pbLastClaim = 0
+
+local function clearPBBlip()
+    if pbBlip and DoesBlipExist(pbBlip) then
+        RemoveBlip(pbBlip)
+    end
+    pbBlip = nil
+end
+
+RegisterNetEvent('npc:pbounty:set', function(targetId)
+    clearPBBlip()
+    pbTarget = targetId
+end)
+
+RegisterNetEvent('npc:pbounty:clear', function()
+    clearPBBlip()
+    pbTarget = nil
+end)
+
+-- Track: find the marked player's current ped, keep the blip attached. Runs
+-- while a target is set.
+CreateThread(function()
+    while true do
+        Wait(250)
+        if not pbTarget then
+            Wait(1000)
+        end
+
+        -- Find the player by server id.
+        local targetPed = nil
+        for _, pid in ipairs(GetActivePlayers()) do
+            local serverId = GetPlayerServerId(pid)
+            if serverId == pbTarget then
+                targetPed = GetPlayerPed(pid)
+                break
+            end
+        end
+
+        if targetPed and DoesEntityExist(targetPed) then
+            -- Create only: AddBlipForEntity attaches to the ped and follows it,
+            -- so there is nothing to update per tick.
+            if not pbBlip then
+                pbBlip = AddBlipForEntity(targetPed)
+                SetBlipSprite(pbBlip, 1)
+                SetBlipColour(pbBlip, 1) -- red
+                SetBlipScale(pbBlip, 1.0)
+                BeginTextCommandSetBlipName('STRING')
+                AddTextComponentSubstringPlayerName('BOUNTY: ' .. (GetPlayerName(GetPlayerFromServerId(pbTarget)) or ''))
+                EndTextCommandSetBlipName(pbBlip)
+            end
+        else
+            -- Target not in scope right now; keep a stale blip from the last
+            -- known position is pointless, so drop it until we see them again.
+            clearPBBlip()
+        end
+    end
+end)
+
+-- Claim when we deal the killing blow to the marked player. Uses the same
+-- gameEventTriggered detection as the scoreboard.
+AddEventHandler('gameEventTriggered', function(name, args)
+    if name ~= 'CEventNetworkEntityDamage' or not pbTarget then
+        return
+    end
+    local victim = args[1]
+    local killer = args[2]
+    local fatal = args[4] == 1 or args[6] == 1
+    if not fatal or not IsEntityAPed(victim) then
+        return
+    end
+
+    -- Victim must be the marked player; killer must be us.
+    local victimPlayer = NetworkGetPlayerIndexFromPed(victim)
+    if victimPlayer == -1 then
+        return
+    end
+    local victimServerId = GetPlayerServerId(victimPlayer)
+    if victimServerId ~= pbTarget then
+        return
+    end
+
+    -- Corroboration for the server's claim check, and only worth anything if it
+    -- comes from the victim — a claimant vouching for its own kill is not
+    -- evidence.
+    if victimPlayer == PlayerId() then
+        TriggerServerEvent('npc:pbounty:deathnotify', pbTarget)
+    end
+
+    if killer ~= PlayerPedId() then
+        return
+    end
+
+    -- Claim it. The server sorts out first-wins / placer-no-reward.
+    local t = GetGameTimer()
+    if t - pbLastClaim > 2000 then
+        pbLastClaim = t
+        TriggerServerEvent('npc:pbounty:claim', pbTarget)
+    end
+end)
+
 AddEventHandler('onClientResourceStart', function(resource)
     if resource ~= GetCurrentResourceName() then
         return
@@ -146,10 +264,15 @@ AddEventHandler('onClientResourceStart', function(resource)
 
     TriggerEvent('chat:addSuggestion', '/bounty', 'Put a bounty target somewhere on the map. First to kill it wins.')
     TriggerEvent('chat:addSuggestion', '/bounties', 'Show the bounty scoreboard.')
+    TriggerEvent('chat:addSuggestion', '/mark', 'Place a bounty on a player. First to kill them claims it.', {
+        { name = 'player', help = 'Name or unique prefix.' },
+    })
 end)
 
 AddEventHandler('onClientResourceStop', function(resource)
     if resource == GetCurrentResourceName() then
         clearBlip()
+        clearPBBlip()
+        pbTarget = nil
     end
 end)
