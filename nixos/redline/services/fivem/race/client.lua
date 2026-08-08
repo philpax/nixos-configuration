@@ -22,6 +22,18 @@ local lastFinishReport = 0
 local finishAcked = false
 local finishNotified = false
 
+-- Throttle for the "you're not in your race car" nag at the line, which would
+-- otherwise fire at the 50ms arrival-detection rate.
+local lastSeatWarning = 0
+
+-- GetGameTimer() when the race car was first seen wrecked or gone, or nil while
+-- it's healthy. A car can read as undriveable for a moment after a hard landing,
+-- so a DNF needs the condition to persist rather than to have happened once.
+local vehicleLostSince = nil
+local vehicleLostWarned = false
+
+local DNF_GRACE_MS = 10000
+
 local function notify(message)
     TriggerEvent('chat:addMessage', {
         color = { 90, 200, 255 },
@@ -47,6 +59,23 @@ local function loadModel(model)
         return nil
     end
     return hash
+end
+
+-- The handle, not the model: a second copy of the same car doesn't count.
+local function inRaceCarSeat()
+    if spawnedVeh == 0 or not DoesEntityExist(spawnedVeh) then
+        return false
+    end
+    local ped = PlayerPedId()
+    return GetVehiclePedIsIn(ped, false) == spawnedVeh
+        and GetPedInVehicleSeat(spawnedVeh, -1) == ped
+end
+
+local function raceCarIsAlive()
+    return spawnedVeh ~= 0
+        and DoesEntityExist(spawnedVeh)
+        and not IsEntityDead(spawnedVeh)
+        and IsVehicleDriveable(spawnedVeh, false)
 end
 
 local function deleteRaceCar()
@@ -92,6 +121,9 @@ RegisterNetEvent('race:begin', function(finish, finishName, countdownMs, car)
     lastFinishReport = 0
     finishAcked = false
     finishNotified = false
+    lastSeatWarning = 0
+    vehicleLostSince = nil
+    vehicleLostWarned = false
     SendNUIMessage({ type = 'standings', data = { status = 'countdown', list = {}, leader = nil } })
 
     -- Point everyone at the finish.
@@ -185,7 +217,8 @@ end
 
 -- Position reporting for the leaderboard, during the countdown as well so the
 -- board starts out ordered. Gated on the race, not on the car still existing:
--- a racer whose car exploded is still in the race.
+-- a wrecked car has a grace period before it's a DNF, and the board should keep
+-- tracking the player through it.
 CreateThread(function()
     while true do
         Wait(500)
@@ -212,17 +245,60 @@ CreateThread(function()
             -- Keeps reporting until race:standings acknowledges it. raceRunning
             -- must not be cleared here: a rejected report would then lock this
             -- player out of finishing, and a stuck racer blocks the whole race.
-            if dist < 40.0 and GetGameTimer() - lastFinishReport > 2000 then
-                lastFinishReport = GetGameTimer()
-                if not finishNotified then
-                    finishNotified = true
-                    notify('^2finished!')
+            if dist < 40.0 then
+                if not inRaceCarSeat() then
+                    -- Silence here reads as a broken finish line, so say why.
+                    if GetGameTimer() - lastSeatWarning > 5000 then
+                        lastSeatWarning = GetGameTimer()
+                        notify('^3cross the line in the driver\'s seat of your own race car')
+                    end
+                elseif GetGameTimer() - lastFinishReport > 2000 then
+                    lastFinishReport = GetGameTimer()
+                    if not finishNotified then
+                        finishNotified = true
+                        notify('^2finished!')
+                    end
+                    TriggerServerEvent('race:finish', goAt and (GetGameTimer() - goAt) or nil)
                 end
-                TriggerServerEvent('race:finish', goAt and (GetGameTimer() - goAt) or nil)
             end
         end
 
         Wait(interval)
+    end
+end)
+
+-- Write-off watch. The finish now requires the car you started in, so a wrecked
+-- one is unfinishable — better to call it than to leave the player driving a
+-- dead race and the field waiting on them.
+CreateThread(function()
+    while true do
+        Wait(500)
+
+        if not (raceRunning and raceFinish) or finishAcked then
+            vehicleLostSince = nil
+            vehicleLostWarned = false
+        elseif raceCarIsAlive() then
+            if vehicleLostWarned then
+                notify('^2car\'s back in one piece — still racing')
+            end
+            vehicleLostSince = nil
+            vehicleLostWarned = false
+        else
+            vehicleLostSince = vehicleLostSince or GetGameTimer()
+            if not vehicleLostWarned then
+                vehicleLostWarned = true
+                notify(('^3your car is wrecked — DNF in %ds unless it recovers'):format(DNF_GRACE_MS / 1000))
+            end
+            if GetGameTimer() - vehicleLostSince >= DNF_GRACE_MS then
+                vehicleLostSince = nil
+                vehicleLostWarned = false
+                -- Locally, immediately: the server's confirmation is a
+                -- standings broadcast and this loop must stop firing now.
+                raceRunning = false
+                notify('^1your car is a write-off — DNF')
+                TriggerServerEvent('race:dnf')
+            end
+        end
     end
 end)
 

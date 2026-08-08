@@ -20,13 +20,14 @@ function fmtTime(ms) {
 }
 
 function timeLabel(p) {
+  if (p.dnf) return 'DNF';
   return fmtTime(p.elapsedMs);
 }
 
 // The board orders on this, so show it — otherwise the rows shuffle mid-race
 // for no visible reason.
 function distLabel(p) {
-  if (p.finished) return '—';
+  if (p.finished || p.dnf) return '—';
   if (typeof p.distance !== 'number') return '…';
   return p.distance >= 1000
     ? `${(p.distance / 1000).toFixed(2)} km`
@@ -45,6 +46,7 @@ function render() {
     const tr = document.createElement('tr');
     if (p.me) tr.classList.add('me');
     if (p.finished) tr.classList.add('done');
+    if (p.dnf) tr.classList.add('dnf');
 
     // textContent, never innerHTML: p.name is player-chosen and relayed to
     // everyone, and CEF script here reaches every resource's NUI callbacks.

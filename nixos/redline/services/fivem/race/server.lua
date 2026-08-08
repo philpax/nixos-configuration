@@ -118,12 +118,12 @@ local function broadcast(message)
 end
 
 local function finishOrder(list)
-    -- Finished first (by order), then unfinished (by live distance to finish,
-    -- closest = leading).
+    -- Finished first (by order), then still going (by live distance to finish,
+    -- closest = leading), then DNFs.
     table.sort(list, function(a, b)
-        if a.finished and b.finished then return a.order < b.order end
-        if a.finished then return true end
-        if b.finished then return false end
+        if a.finished ~= b.finished then return a.finished end
+        if a.finished then return a.order < b.order end
+        if a.dnf ~= b.dnf then return b.dnf end
         return (a.distance or math.huge) < (b.distance or math.huge)
     end)
 end
@@ -149,21 +149,24 @@ local function broadcastStandings()
             name = p.name,
             car = p.vehicleModel,
             finished = p.finishedAt ~= nil,
+            dnf = p.dnf == true,
             order = p.order or 0,
             distance = p.distance,
             elapsedMs = elapsedMs,
         }
     end
     finishOrder(list)
-    -- Current leader = first unfinished (or the winner if everyone's done).
+    -- Current leader = first still going (or the winner if everyone's done).
     local leader = nil
-    for i, entry in ipairs(list) do
-        if not entry.finished then
+    for _, entry in ipairs(list) do
+        if not entry.finished and not entry.dnf then
             leader = entry.id
             break
         end
     end
-    leader = leader or (list[1] and list[1].id or nil)
+    -- Falls back to the winner once everyone's home, but never to a DNF: an
+    -- all-DNF field has no leader to name.
+    leader = leader or (list[1] and list[1].finished and list[1].id) or nil
 
     TriggerClientEvent('race:standings', -1, {
         status = race.status,
@@ -289,7 +292,7 @@ RegisterNetEvent('race:position', function(x, y)
         return
     end
     local p = race.participants[source]
-    if not p or p.finishedAt then
+    if not p or p.finishedAt or p.dnf then
         return
     end
     -- `x ~= x` rejects NaN, which is type "number" and compares false against
@@ -307,6 +310,20 @@ local MAX_CLOCK_SKEW_MS = 2000
 -- Slack on purpose: the server's view of a player's position is up to 500ms
 -- stale, ~30m at racing speed. It rejects nonsense, it doesn't judge close calls.
 local MAX_FINISH_DISTANCE = 250.0
+
+-- Counted with pairs: `participants` is keyed by server id, so `#` on it is
+-- meaningless. A DNF counts as settled — otherwise a wrecked field holds the
+-- race open until MAX_RACE_MS.
+local function raceIsComplete()
+    local total, settled = 0, 0
+    for _, p in pairs(race.participants) do
+        total = total + 1
+        if p.finishedAt or p.dnf then
+            settled = settled + 1
+        end
+    end
+    return total > 0 and settled >= total
+end
 
 -- Places come from elapsed times, never from arrival order — the latter ranks
 -- by ping, and permanently, since a report is only ever seen once.
@@ -339,7 +356,7 @@ RegisterNetEvent('race:finish', function(clientElapsedMs)
         return
     end
     local p = race.participants[source]
-    if not p or p.finishedAt then
+    if not p or p.finishedAt or p.dnf then
         return
     end
 
@@ -372,16 +389,31 @@ RegisterNetEvent('race:finish', function(clientElapsedMs)
         p.name, ordinal(p.order), formatTime(p.elapsedMs)))
     broadcastStandings()
 
-    -- Counted with pairs: `participants` is keyed by server id, so `#` on it is
-    -- meaningless.
-    local total, finished = 0, 0
-    for _, pp in pairs(race.participants) do
-        total = total + 1
-        if pp.finishedAt then
-            finished = finished + 1
-        end
+    if raceIsComplete() then
+        finishRace()
     end
-    if finished >= total then
+end)
+
+-- Client -> server: "my car is a write-off." Self-reported, like every other
+-- client claim here — it costs the reporter their own race, so there's nothing
+-- to gain by lying.
+RegisterNetEvent('race:dnf', function()
+    local source = source
+    if not race or (race.status ~= 'running' and race.status ~= 'countdown') then
+        return
+    end
+    local p = race.participants[source]
+    if not p or p.finishedAt or p.dnf then
+        return
+    end
+
+    p.dnf = true
+    -- Otherwise they keep a leading distance on the board forever.
+    p.distance = nil
+    broadcast(('^1%s is out — wrecked car'):format(p.name))
+    broadcastStandings()
+
+    if race.status == 'running' and raceIsComplete() then
         finishRace()
     end
 end)
@@ -431,7 +463,14 @@ function finishRace()
         end
         podium[#podium + 1] = ('%s. %s (%s)'):format(ordinal(i), entry.name, time)
     end
-    broadcast('^2Race finished! ' .. table.concat(podium, ' | '))
+
+    -- Reachable now that DNFs settle the race: a field that all wrecks gets
+    -- here with nobody to put on the podium.
+    if #podium == 0 then
+        broadcast('^1race over — nobody made it to the finish')
+    else
+        broadcast('^2Race finished! ' .. table.concat(podium, ' | '))
+    end
 
     -- Captured, because the current race 15s from now may be a different one —
     -- cancelling and restarting inside the window is enough.
@@ -533,14 +572,7 @@ AddEventHandler('playerDropped', function()
         race.participants[source] = nil
         broadcastStandings()
 
-        local total, finished = 0, 0
-        for _, pp in pairs(race.participants) do
-            total = total + 1
-            if pp.finishedAt then
-                finished = finished + 1
-            end
-        end
-        if total > 0 and finished >= total and race.status == 'running' then
+        if race.status == 'running' and raceIsComplete() then
             finishRace()
         end
     end

@@ -32,6 +32,8 @@ th { text-align:left; color:var(--muted); font-size:10px; text-transform:upperca
 td { padding:5px 4px; border-bottom:1px solid rgba(255,255,255,.05); white-space:nowrap; }
 tr.me td { color:var(--accent); }
 tr.done td { color:var(--gold); opacity:.9; }
+/* After tr.done and tr.me so a DNF wins over both. */
+tr.dnf td { color:var(--muted); opacity:.6; text-decoration:line-through; }
 
 #rleader {
   margin-top:8px;
