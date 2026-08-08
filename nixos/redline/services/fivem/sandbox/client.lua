@@ -140,6 +140,35 @@ RegisterCommand('heal', function()
     notify('healed')
 end, false)
 
+-- /goto: teleport to another player. The server resolves the name and sends
+-- back their coords; we ground-snap on arrival (same approach as /wp).
+RegisterNetEvent('sandbox:goto:target', function(target, name)
+    local ped = PlayerPedId()
+
+    for height = 1000, 0, -25 do
+        SetEntityCoords(ped, target.x, target.y, height + 0.0, false, false, false, false)
+        Wait(50)
+
+        local found, ground = GetGroundZFor_3dCoord(target.x, target.y, height + 0.0, false)
+        if found then
+            SetEntityCoords(ped, target.x, target.y, ground + 1.0, false, false, false, false)
+            notify('teleported to ' .. name)
+            return
+        end
+    end
+
+    notify('^1could not find ground at ' .. name)
+end)
+
+RegisterCommand('goto', function(_, args)
+    local query = table.concat(args, ' ')
+    if query == '' then
+        notify('^1usage: /goto <player>')
+        return
+    end
+    TriggerServerEvent('sandbox:goto:request', query)
+end, false)
+
 AddEventHandler('onClientResourceStart', function(resource)
     if resource ~= GetCurrentResourceName() then
         return
@@ -157,4 +186,7 @@ AddEventHandler('onClientResourceStart', function(resource)
     })
     TriggerEvent('chat:addSuggestion', '/wp', 'Teleport to your map waypoint.')
     TriggerEvent('chat:addSuggestion', '/heal', 'Full health and armour.')
+    TriggerEvent('chat:addSuggestion', '/goto', 'Teleport to another player.', {
+        { name = 'player', help = 'Name or unique prefix.' },
+    })
 end)

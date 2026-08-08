@@ -14,10 +14,13 @@ local COMMANDS = {
     { '/tp <x> <y> <z>', 'Teleport to coordinates.' },
     { '/wp', 'Teleport to your map waypoint.' },
     { '/heal', 'Full health and armour.' },
+    { '/goto <player>', 'Teleport to another player. Name or unique prefix.' },
     { '/squad [n] [tier]', 'Spawn hostile NPCs. tier 1-5. /squad clear removes them.' },
     { '/survival', 'Escalating waves of hostiles. Run again to stop.' },
     { '/bounty', 'Put a target on the map. First to kill it wins.' },
     { '/bounties', 'Show the bounty scoreboard.' },
+    { '/scoreboard', 'Toggle the player scoreboard overlay (F5 also works).' },
+    { '/race', 'Race to your map waypoint — everyone gets the same randomly drawn vehicle, server ranks finishers.' },
 }
 
 local shown = false
