@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scoreboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scoreboard" class="hidden">
+  <header>
+    <h1 id="server-name">redline sandbox</h1>
+    <div id="server-meta"></div>
+  </header>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="num">#</th>
+        <th>Player</th>
+        <th class="num">Kills</th>
+        <th class="num">Deaths</th>
+        <th class="num">K/D</th>
+        <th class="bdown">Kill breakdown</th>
+        <th class="num">Bounty</th>
+        <th>Vehicle</th>
+        <th class="num">Ping</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <footer>
+    <span class="chip" id="hostiles-chip"></span>
+    <span class="chip" id="bounty-chip"></span>
+    <span class="legend" id="legend"></span>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

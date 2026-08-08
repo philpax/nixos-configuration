@@ -1,0 +1,100 @@
+:root {
+  --bg: rgba(10, 12, 16, 0.88);
+  --panel: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.10);
+  --text: #e8e8ea;
+  --muted: #9aa0a8;
+  --accent: #ffb400;
+  --danger: #ff5f56;
+  --ok: #57d9a3;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: transparent;
+  color: var(--text);
+}
+
+.hidden { display: none !important; }
+
+#scoreboard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, 94vw);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 22px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+h1 .dot { color: var(--ok); }
+
+#server-meta { font-size: 13px; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+
+thead th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+tbody tr { border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+tbody tr.me { background: rgba(255, 180, 0, 0.07); }
+tbody tr.offline td { opacity: 0.45; }
+
+td { padding: 7px 8px; white-space: nowrap; }
+td.name .tag { color: var(--muted); font-size: 12px; }
+
+.kd { font-weight: 600; }
+.kd.inf { color: var(--accent); }
+
+.bdown { min-width: 180px; }
+.breakdown { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.breakdown b { color: var(--text); font-weight: 500; }
+
+footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.chip b { color: var(--text); font-weight: 600; }
+.chip.bounty-live { border-color: rgba(255, 180, 0, 0.4); color: #ffd97a; }
+
+.legend { font-size: 11px; color: var(--muted); margin-left: auto; }

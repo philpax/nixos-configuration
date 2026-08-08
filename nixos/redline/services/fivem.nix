@@ -108,6 +108,7 @@ let
     cp -r --no-preserve=mode ${./fivem/sandbox} $out/sandbox
     cp -r --no-preserve=mode ${./fivem/npc} $out/npc
     cp -r --no-preserve=mode ${./fivem/joinpassword} $out/joinpassword
+    cp -r --no-preserve=mode ${./fivem/scoreboard} $out/scoreboard
   '';
 
   serverCfg = pkgs.writeText "fivem-server.cfg" ''
@@ -211,6 +212,7 @@ let
     ensure vMenu
     ensure sandbox
     ensure npc
+    ensure scoreboard
   '';
 in
 {
