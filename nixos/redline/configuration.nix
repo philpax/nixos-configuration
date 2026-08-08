@@ -133,7 +133,7 @@ in {
     ];
     firewall.allowedUDPPorts = [];
     defaultGateway = "192.168.50.1";
-    interfaces.enp68s0f0.ipv4.addresses = [{
+    interfaces.enp67s0f0.ipv4.addresses = [{
       address = "192.168.50.201";
       prefixLength = 24;
     }];
