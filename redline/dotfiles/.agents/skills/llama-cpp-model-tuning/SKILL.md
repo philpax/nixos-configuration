@@ -18,10 +18,10 @@ This skill was written for one deployment. Everything below is a local value; su
 |---|---|
 | ananke source (and `dump-gguf`/`estimate` examples) | `/mnt/ssd0/ai/ananke` |
 | model files (GGUFs, `bench/` dirs) | `/mnt/ssd0/ai/llm` |
-| the model list config | `~/nixos-configuration/nixos/redline/ai/ananke.nix` |
-| llama.cpp flake pin | `~/nixos-configuration/nixos/redline/ai/llama-flake/flake.nix` |
+| the model list config | `~/nixos-configuration/redline/ai/ananke.nix` |
+| llama.cpp flake pin | `~/nixos-configuration/redline/ai/llama-flake/flake.nix` |
 | llama.cpp source checkout | `~/programming/llama.cpp` |
-| ik_llama.cpp flake pin | `~/nixos-configuration/nixos/redline/ai/ik-llama-flake/flake.nix` |
+| ik_llama.cpp flake pin | `~/nixos-configuration/redline/ai/ik-llama-flake/flake.nix` |
 | ik_llama.cpp source checkout | `~/programming/ik_llama.cpp` |
 
 Both llama-server binaries are on `PATH`: mainline as `llama-server`, the fork (ikawrakow's ik_llama.cpp) as `ik-llama-server` — prefixed so the names don't collide. See *Serving with ik_llama.cpp*.
@@ -256,7 +256,7 @@ Two halves: llama.cpp must support it, and ananke's estimator must size it. Chec
 
 ```
 cd ~/programming/llama.cpp
-REV=$(grep -oP 'llama.cpp/\K[0-9a-f]{40}' ~/nixos-configuration/nixos/redline/ai/llama-flake/flake.nix)
+REV=$(grep -oP 'llama.cpp/\K[0-9a-f]{40}' ~/nixos-configuration/redline/ai/llama-flake/flake.nix)
 git fetch origin "$REV" && git checkout "$REV"
 ```
 

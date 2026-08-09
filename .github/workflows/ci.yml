@@ -4,13 +4,32 @@ on:
   push:
     paths:
       - "*.py"
+      - "*.md"
       - "pyproject.toml"
       - ".github/workflows/ci.yml"
+      # Target-first layout: each target dir owns Nix files (+ dotfiles/).
+      - "common-all/**"
+      - "common-desktop/**"
+      - "common-dev/**"
+      - "common-dev-desktop/**"
+      - "jinroh/**"
+      - "mindgame/**"
+      - "paprika/**"
+      - "redline/**"
   pull_request:
     paths:
       - "*.py"
+      - "*.md"
       - "pyproject.toml"
       - ".github/workflows/ci.yml"
+      - "common-all/**"
+      - "common-desktop/**"
+      - "common-dev/**"
+      - "common-dev-desktop/**"
+      - "jinroh/**"
+      - "mindgame/**"
+      - "paprika/**"
+      - "redline/**"
 
 jobs:
   lint:

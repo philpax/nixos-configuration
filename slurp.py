@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""slurp — move file(s) or director(ies) into dotfiles/ and symlink them back.
+"""slurp — move file(s) or director(ies) into a target's dotfiles/ and symlink them back.
 
-For each path, the item is moved into ``dotfiles/<target>/<path-relative-to-home>``
+The repository is target-first: each machine or shared layer ("target") owns a
+directory at the repo root (common-all/, common-desktop/, ..., redline/)
+containing its Nix files directly, plus a ``dotfiles/`` subdirectory where it
+has dotfiles.
+
+For each path, the item is moved into ``<target>/dotfiles/<path-relative-to-home>``
 and recreated at its original location as per-file symlinks: a file becomes a
 single symlink, a directory becomes a real directory tree whose files are each
 symlinked individually (matching sync.py, so directories round-trip cleanly).
@@ -29,7 +34,9 @@ import tty
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
-DOTFILES_SOURCE = REPO_DIR / "dotfiles"
+# Target-first layout: each target lives at the repo root, with its dotfiles
+# under <target>/dotfiles/. There is no top-level dotfiles/ grouping dir.
+TARGETS_ROOT = REPO_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -148,13 +155,6 @@ def _unique_backup(dest: Path) -> Path:
     return candidate
 
 
-def list_targets(dotfiles_dir: Path) -> list[str]:
-    """Sorted list of immediate subdirectories of the dotfiles directory."""
-    if not dotfiles_dir.is_dir():
-        return []
-    return sorted(e.name for e in dotfiles_dir.iterdir() if e.is_dir())
-
-
 def show_diff(existing: Path, incoming: Path) -> None:
     """Print a recursive diff of the existing dotfiles copy vs. the incoming source.
 
@@ -225,23 +225,34 @@ def prompt_choice(prompt: str, choices: str, default: str) -> str:
         print(f"  {yellow('?')} please choose one of [{choices}]")
 
 
-def choose_target(dotfiles_dir: Path) -> str:
-    """Interactively pick (or default-create) a dotfiles target subdirectory."""
-    targets = list_targets(dotfiles_dir)
-    if not targets:
-        print(f"No targets found in {dotfiles_dir}. Using {cyan('common-all')}.")
-        return "common-all"
+def target_candidates(dotfiles_root: Path) -> list[Path]:
+    """Repo-root dirs that own a dotfiles/ subdirectory (sorted)."""
+    if not dotfiles_root.is_dir():
+        return []
+    return sorted(d for d in dotfiles_root.iterdir() if d.is_dir() and (d / "dotfiles").is_dir())
+
+
+def choose_target(dotfiles_root: Path) -> str:
+    """Interactively pick a target directory that owns a dotfiles/ subdir.
+
+    ``dotfiles_root`` is the repo root in the target-first layout (a target's
+    dotfiles live at ``<target>/dotfiles``).
+    """
+    candidates = target_candidates(dotfiles_root)
+    if not candidates:
+        print(f"No targets with a dotfiles/ subdir found under {dotfiles_root}.")
+        raise SystemExit("Error: no targets available.")
     print("Available targets:")
-    for i, name in enumerate(targets, 1):
-        print(f"  {i}. {name}")
+    for i, d in enumerate(candidates, 1):
+        print(f"  {i}. {d.name}")
     print()
     while True:
         try:
-            raw = input(f"Choose target [1-{len(targets)}]: ").strip()
+            raw = input(f"Choose target [1-{len(candidates)}]: ").strip()
         except EOFError:
             raise SystemExit("Error: no target selected.")
-        if raw.isdigit() and 1 <= int(raw) <= len(targets):
-            return targets[int(raw) - 1]
+        if raw.isdigit() and 1 <= int(raw) <= len(candidates):
+            return candidates[int(raw) - 1].name
         print(f"  {red('Invalid selection.')}")
 
 
@@ -414,7 +425,11 @@ def slurp_item(
     force: bool,
     dry_run: bool,
 ) -> bool:
-    """Process one path. Returns True on success (or clean skip), False on error."""
+    """Process one path. Returns True on success (or clean skip), False on error.
+
+    ``target_dir`` is the target's dotfiles dir (``<target>/dotfiles``); the
+    item is moved to ``target_dir / <path-relative-to-home>``.
+    """
     absolute = resolve_input(input_path, home, cwd)
     display = shorten_path(absolute, home)
 
@@ -503,8 +518,9 @@ def _plan_unslurp(
     Accepts either end of a slurp: the original location (a symlink mirror
     pointing into dotfiles) or the in-repo dotfiles copy itself. Returns
     ``None`` if the path is neither. When given the dotfiles copy the original
-    location is reconstructed the way slurp lays it out — ``dotfiles/<target>/
-    <rel>`` came from ``$HOME/<rel>``.
+    location is reconstructed the way slurp lays it out — ``<target>/dotfiles/
+    <rel>`` came from ``$HOME/<rel>``. ``dotfiles_dir`` is the per-target
+    dotfiles dir (``<target>/dotfiles``).
     """
     dots = dotfiles_dir if dotfiles_dir.is_absolute() else (cwd / dotfiles_dir)
     dots = Path(os.path.normpath(dots))
@@ -516,10 +532,11 @@ def _plan_unslurp(
         except ValueError:
             rel = None
         if rel is not None:
-            # rel is <target>/<path-relative-to-home>; need both halves.
-            if len(rel.parts) < 2:
+            # rel is <path-relative-to-home> (no leading target component —
+            # dots IS the per-target dotfiles dir).
+            if not rel.parts:
                 return None
-            return home / Path(*rel.parts[1:]), absolute, True
+            return home / rel, absolute, True
 
     # The original location: follow its symlink(s) back to the dotfiles copy.
     dest = resolve_dest_from_links(absolute)
@@ -623,14 +640,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("paths", nargs="+", help="file(s) or director(ies) to slurp")
     parser.add_argument(
-        "-t", "--target", help="target subdirectory in dotfiles/ (prompts if omitted)"
+        "-t",
+        "--target",
+        help="target dir at the repo root that owns a dotfiles/ subdir (prompts if omitted)",
     )
     parser.add_argument(
         "-d",
         "--dotfiles",
         type=Path,
-        default=DOTFILES_SOURCE,
-        help="override dotfiles directory (default: ./dotfiles)",
+        default=TARGETS_ROOT,
+        help=(
+            "override the dotfiles root (default: the repo root). Forward slurps "
+            "go to <root>/<target>/dotfiles; reverse requires -d <target>/dotfiles"
+        ),
     )
     parser.add_argument("-n", "--dry-run", action="store_true", help="show what would be done")
     parser.add_argument(
@@ -671,11 +693,13 @@ def main(argv: list[str] | None = None) -> int:
     target = args.target
     if not target:
         if not dotfiles_dir.is_dir():
-            print(f"Error: dotfiles directory not found: {dotfiles_dir}")
+            print(f"Error: dotfiles root not found: {dotfiles_dir}")
             return 1
         target = choose_target(dotfiles_dir)
 
-    target_dir = dotfiles_dir / target
+    # Forward slurp: files go into the target's dotfiles dir at
+    # <target>/dotfiles/<rel>.
+    target_dir = dotfiles_dir / target / "dotfiles"
     if not args.dry_run:
         target_dir.mkdir(parents=True, exist_ok=True)
 

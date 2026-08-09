@@ -41,7 +41,7 @@ virsh start hermes
 virsh console hermes               # watch cloud-init; ctrl-] to exit
 ssh philpax@10.100.0.2             # once it is up
 
-cd nixos/redline/hermes/ansible
+cd redline/hermes/ansible
 ansible-playbook -i inventory.ini hermes.yml
 ```
 

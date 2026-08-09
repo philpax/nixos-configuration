@@ -36,14 +36,14 @@ class TestRelativePlacement:
 
 class TestSymlinkTargetFor:
     def test_relative_when_under_home(self):
-        dest = Path("/home/u/cfg/dotfiles/common-all/.config/nvim")
+        dest = Path("/home/u/cfg/common-all/dotfiles/.config/nvim")
         link = Path("/home/u/.config/nvim")
         target = slurp.symlink_target_for(dest, link, under_home=True)
         assert not os.path.isabs(target)
         assert (link.parent / target).resolve() == dest.resolve()
 
     def test_absolute_when_outside_home(self):
-        dest = Path("/repo/dotfiles/x/thing")
+        dest = Path("/repo/common-all/dotfiles/thing")
         link = Path("/srv/thing")
         assert slurp.symlink_target_for(dest, link, under_home=False) == str(dest)
 
@@ -411,7 +411,7 @@ class TestUnslurpItem:
         dots = tmp_path / "dots"
         slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
         assert item.is_symlink()
-        assert self._run(item, home, tmp_path, dots) is True
+        assert self._run(item, home, tmp_path, dots / "common-all") is True
         assert item.is_file() and not item.is_symlink()
         assert item.read_text() == "cfg"
         assert not (dots / "common-all" / ".config" / "app").exists()
@@ -426,7 +426,7 @@ class TestUnslurpItem:
         slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
         copy = dots / "common-all" / ".config" / "app"
         assert copy.is_file()
-        assert self._run(copy, home, tmp_path, dots) is True
+        assert self._run(copy, home, tmp_path, dots / "common-all") is True
         assert item.is_file() and not item.is_symlink()
         assert item.read_text() == "cfg"
         assert not copy.exists()
@@ -441,9 +441,28 @@ class TestUnslurpItem:
         dots = tmp_path / "dots"
         slurp.slurp_item(str(item), dots / "cdd", home, tmp_path, force=False, dry_run=False)
         copy = dots / "cdd" / ".config" / "nvim"
-        assert self._run(copy, home, tmp_path, dots) is True
+        assert self._run(copy, home, tmp_path, dots / "cdd") is True
         assert item.is_dir() and not item.is_symlink()
         assert (item / "lua" / "p.lua").read_text() == "b"
+        assert not copy.exists()
+
+    def test_reverses_in_repo_copy_two_component_path(self, tmp_path):
+        """Regression: unslurping the in-repo copy of a two-component path
+        (e.g. .config/app) restores to home/.config/app — the case the old
+        parts[1:] slicing would have gotten wrong."""
+        home = tmp_path / "home"
+        item = home / ".config" / "app"
+        item.parent.mkdir(parents=True)
+        item.write_text("cfg")
+        dots = tmp_path / "dots"
+        slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
+        copy = dots / "common-all" / ".config" / "app"
+        assert copy.is_file()
+        assert self._run(copy, home, tmp_path, dots / "common-all") is True
+        # Restored to home/.config/app, not home/app
+        assert item.is_file() and not item.is_symlink()
+        assert item.read_text() == "cfg"
+        assert not (home / "app").exists()
         assert not copy.exists()
 
     def test_not_slurped_errors(self, tmp_path):
@@ -451,7 +470,9 @@ class TestUnslurpItem:
         home.mkdir()
         item = home / "plain"
         item.write_text("x")
-        assert self._run(item, home, tmp_path, tmp_path / "dots") is False
+        dots = tmp_path / "dots"
+        (dots / "common-all").mkdir(parents=True)
+        assert self._run(item, home, tmp_path, dots / "common-all") is False
         assert item.read_text() == "x"
 
     def test_skips_link_outside_dotfiles(self, tmp_path):
@@ -462,7 +483,9 @@ class TestUnslurpItem:
         link = home / "link"
         link.symlink_to(outside)
         # dotfiles dir is a different subtree, so the link must not be reversed.
-        assert self._run(link, home, tmp_path, tmp_path / "dots") is False
+        dots = tmp_path / "dots"
+        (dots / "common-all").mkdir(parents=True)
+        assert self._run(link, home, tmp_path, dots / "common-all") is False
         assert link.is_symlink()
         assert outside.read_text() == "x"
 
@@ -473,7 +496,47 @@ class TestUnslurpItem:
         item.write_text("cfg")
         dots = tmp_path / "dots"
         slurp.slurp_item(str(item), dots / "common-all", home, tmp_path, force=False, dry_run=False)
-        assert self._run(item, home, tmp_path, dots, dry_run=True) is True
+        assert self._run(item, home, tmp_path, dots / "common-all", dry_run=True) is True
         # Still the symlink mirror; nothing moved back.
         assert item.is_symlink()
         assert (dots / "common-all" / ".config" / "app").read_text() == "cfg"
+
+
+class TestMain:
+    def test_forward_target_resolves_to_per_target_dotfiles_dir(self, tmp_path, monkeypatch):
+        """main('-t <target>') must compute TARGETS_ROOT/<target>/dotfiles —
+        no double /target append, no <target>/dotfiles/<target> path."""
+        root = tmp_path / "repo"
+        (root / "common-all" / "dotfiles").mkdir(parents=True)
+        home = tmp_path / "home"
+        home.mkdir()
+        f = home / "thing"
+        f.write_text("x")
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(home)
+        rc = slurp.main(["-t", "common-all", "-d", str(root), "-n", str(f)])
+        assert rc == 0
+        # The dry-run prints the per-target dotfiles path; verify via slurp_item directly
+        target_dir = root / "common-all" / "dotfiles"
+        assert target_dir.is_dir()
+
+    def test_reverse_uses_per_target_dotfiles_dir_as_root(self, tmp_path, monkeypatch):
+        """main('-r') treats -d as the per-target dotfiles dir, so reversing the
+        in-repo copy of .config/app restores to home/.config/app."""
+        root = tmp_path / "repo"
+        (root / "common-all" / "dotfiles").mkdir(parents=True)
+        home = tmp_path / "home"
+        item = home / ".config" / "app"
+        item.parent.mkdir(parents=True)
+        item.write_text("cfg")
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(home)
+        slurp.main(["-t", "common-all", "-d", str(root), str(item)])
+        copy = root / "common-all" / "dotfiles" / ".config" / "app"
+        assert copy.is_file()
+        rc = slurp.main(["-r", "-d", str(root / "common-all" / "dotfiles"), str(copy)])
+        assert rc == 0
+        assert item.is_file() and not item.is_symlink()
+        assert item.read_text() == "cfg"
+        assert not copy.exists()
+        assert not (home / "app").exists()

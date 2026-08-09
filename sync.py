@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Sync NixOS configuration and dotfiles via symlinks.
 
-Creates symlinks for NixOS (common-* + <machine>) and dotfiles (common-* + <machine>),
-then symlinks /etc/nixos/configuration.nix to the machine's configuration.nix.
+The repository is target-first: each machine or shared layer ("target") owns a
+directory at the repo root (common-all/, common-desktop/, ..., redline/)
+containing its Nix files directly (incl. configuration.nix), plus a dotfiles/
+subdirectory where it has dotfiles.
+
+Creates symlinks for the target's NixOS files (the target's own dir plus the
+common-* layers it imports) under /etc/nixos, and for its dotfiles under $HOME,
+then symlinks /etc/nixos/configuration.nix to the target's configuration.nix.
 Skills are symlinked into the canonical ~/.agents/skills tree (which
 Polytoken discovers), with Claude Code personal wired to the same tree via
 ~/.claude/skills -> ~/.agents/skills. Work-account skills additionally go to
@@ -33,20 +39,46 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
-NIXOS_SOURCE = REPO_DIR / "nixos"
-DOTFILES_SOURCE = REPO_DIR / "dotfiles"
+# Target-first layout: every machine/layer ("target") lives at the repo root,
+# with its Nix files directly (incl. configuration.nix) and any dotfiles under
+# <target>/dotfiles/. There is no top-level nixos/ or dotfiles/ grouping dir.
+TARGETS_ROOT = REPO_DIR
 NIXOS_TARGET = Path("/etc/nixos")
 DOTFILES_TARGET = Path.home()
 STATE_FILE = REPO_DIR / ".sync-state.json"
+
+
+def target_dir(name: str) -> Path:
+    """Return the repo directory for a target (machine or common-* layer)."""
+    return TARGETS_ROOT / name
+
+
+def discover_targets() -> list[Path]:
+    """Return repo-root dirs that are sync targets.
+
+    A target has either a configuration.nix (Nix machine/layer) or a dotfiles/
+    subdirectory (dotfiles-only). Excludes non-target dirs like .agents,
+    .claude, steel-cogs, and stray files.
+    """
+    if not TARGETS_ROOT.is_dir():
+        return []
+    targets = [
+        d
+        for d in TARGETS_ROOT.iterdir()
+        if d.is_dir() and ((d / "configuration.nix").is_file() or (d / "dotfiles").is_dir())
+    ]
+    return sorted(targets)
+
 
 # Skills are the shared source of truth. Per-skill directory symlinks are
 # created under ~/.agents/skills (which Polytoken discovers natively), and
 # Claude Code personal reads the same tree through a single directory symlink
 # ~/.claude/skills -> ~/.agents/skills — matching the repo's own project-local
 # .claude/skills -> .agents/skills pattern. Skills live per-layer at
-# <layer>/.agents/skills/<name>, so which skills a machine gets follows the
-# same layer hierarchy as the dotfiles — e.g. redline's llama-cpp-model-tuning
-# skill only syncs to machines that include the redline layer.
+# <layer>/dotfiles/.agents/skills/<name>, so which skills a machine gets
+# follows the same layer hierarchy as the dotfiles — e.g. redline's
+# llama-cpp-model-tuning skill only syncs to machines that include the redline
+# layer.
 #
 # Polytoken 0.6.4 does not discover skill directories that are symlinks
 # (reported upstream). Until a fixed release lands, copy mode copies the
@@ -57,7 +89,7 @@ STATE_FILE = REPO_DIR / ".sync-state.json"
 # constant is flipped, so the workaround cannot silently outlive its reason
 # for existing.
 AGENTS_SKILLS_SUBPATH = Path(".agents") / "skills"
-SHARED_SKILLS_SOURCE = DOTFILES_SOURCE / "common-dev" / AGENTS_SKILLS_SUBPATH
+SHARED_SKILLS_SOURCE = TARGETS_ROOT / "common-dev" / "dotfiles" / AGENTS_SKILLS_SUBPATH
 CC_SKILLS_TARGET = Path.home() / ".claude" / "skills"
 AGENTS_SKILLS_TARGET = Path.home() / ".agents" / "skills"
 AGENT_SKILLS_COPY_MODE = True
@@ -79,7 +111,7 @@ WORK_COMPATIBLE_MARKER = ".work-compatible"
 # Steel plugins ("cogs") for the plugin-enabled Helix fork are git submodules under
 # steel-cogs/. Each is directory-symlinked into steel's cog root ($STEEL_HOME/cogs; STEEL_HOME
 # is pinned to ~/.config/steel in the fish config) so `(require "forest/...")` resolves. They
-# live outside dotfiles/ so the per-file dotfiles flow doesn't also grab their
+# live outside the target dirs so the per-file dotfiles flow doesn't also grab their
 # LICENSE/README/.git; here they get one clean directory symlink each.
 STEEL_COGS_SOURCE = REPO_DIR / "steel-cogs"
 STEEL_COGS_TARGET = Path.home() / ".config" / "steel" / "cogs"
@@ -224,7 +256,7 @@ def get_imported_layers(config_path: Path) -> list[str]:
 
 
 def build_symlink_list(
-    source_dir: Path,
+    targets_root: Path,
     target_dir: Path,
     folder_name: str,
     allowed_layers: list[str],
@@ -232,44 +264,75 @@ def build_symlink_list(
 ) -> list[tuple[Path, Path]]:
     """Build list of (target, source) pairs for files to symlink.
 
-    Only includes files from the allowed layers and the specified folder.
-    If strip_layer_prefix is True, strips the first directory component
-    (the layer name) from the relative path — used for dotfiles.
+    Walks each allowed target directory under ``targets_root`` — the folder
+    itself plus all ``allowed_layers`` — collecting files from
+    ``<target>/**`` for NixOS config or ``<target>/dotfiles/**`` for dotfiles.
+
+    In the target-first layout ``targets_root`` is the repo root and a target's
+    Nix files live directly at ``<target>/...``; its dotfiles (when
+    ``strip_layer_prefix`` is True) live at ``<target>/dotfiles/...`` and are
+    mapped to ``target_dir`` with the ``<target>/dotfiles`` prefix stripped, so
+    ``<target>/dotfiles/.config/fish/config.fish`` becomes
+    ``$HOME/.config/fish/config.fish``.
     """
-    if not source_dir.is_dir():
-        raise FileNotFoundError(f"Source directory not found: {source_dir}")
+    if not targets_root.is_dir():
+        raise FileNotFoundError(f"Source directory not found: {targets_root}")
 
     allowed = {folder_name, *allowed_layers}
     symlinks: list[tuple[Path, Path]] = []
 
-    for source_path in sorted(source_dir.rglob("*")):
-        # Skip symlinks and non-files (match `find -type f` semantics)
-        if source_path.is_symlink() or not source_path.is_file():
-            continue
-
-        relative = source_path.relative_to(source_dir)
-        first_part = relative.parts[0]
-
-        if first_part not in allowed:
-            continue
-
+    for target_name in sorted(allowed):
         if strip_layer_prefix:
-            if len(relative.parts) < 2:
-                relative = Path(relative.name)
-            else:
-                relative = relative.relative_to(first_part)
+            # Dotfiles pass: walk only <target>/dotfiles/**
+            source_dir = targets_root / target_name / "dotfiles"
+            if not source_dir.is_dir():
+                continue
+        else:
+            # NixOS pass: walk <target>/** but never descend into dotfiles/
+            source_dir = targets_root / target_name
+            if not source_dir.is_dir():
+                continue
 
-        # The per-layer skill sources (<layer>/.agents/skills/<name>) must not
-        # be re-added as per-file dotfile links: build_layered_skill_symlinks
-        # creates whole-directory symlinks at ~/.agents/skills/<name>, and a
-        # file link at ~/.agents/skills/<name>/SKILL.md would collide with that
-        # directory symlink on every sync. (.claude stays walked — e.g.
-        # dotfiles/common-all/.claude/CLAUDE.md is a desired dotfile link.)
-        if relative.parts[0].startswith(".agents"):
-            continue
+        for source_path in sorted(source_dir.rglob("*")):
+            # Skip symlinks and non-files (match `find -type f` semantics)
+            if source_path.is_symlink() or not source_path.is_file():
+                continue
 
-        target_path = target_dir / relative
-        symlinks.append((target_path, source_path))
+            if (
+                not strip_layer_prefix
+                and "dotfiles" in source_path.relative_to(targets_root / target_name).parts
+            ):
+                # NixOS pass: never emit <target>/dotfiles/** files (they are
+                # dotfiles, linked in the dotfiles pass, not Nix config).
+                continue
+
+            # Relative to targets_root, keeping the target-name prefix: the
+            # NixOS pass lands a shared layer's files under
+            # /etc/nixos/<layer>/... (e.g. common-all/configuration.nix ->
+            # /etc/nixos/common-all/configuration.nix), while the dotfiles pass
+            # strips the leading <target>/dotfiles components below.
+            relative = source_path.relative_to(targets_root)
+
+            if strip_layer_prefix:
+                # <target>/dotfiles/<rel> -> <rel> (drop both components), so
+                # <target>/dotfiles/.config/fish/config.fish ->
+                # .config/fish/config.fish -> $HOME/.config/fish/config.fish.
+                relative = Path(*relative.parts[2:])
+                if not relative.parts:
+                    continue
+
+            # The per-layer skill sources (<target>/dotfiles/.agents/skills/<name>)
+            # must not be re-added as per-file dotfile links:
+            # build_layered_skill_symlinks creates whole-directory symlinks at
+            # ~/.agents/skills/<name>, and a file link at
+            # ~/.agents/skills/<name>/SKILL.md would collide with that directory
+            # symlink on every sync. (.claude stays walked — e.g.
+            # <target>/dotfiles/.claude/CLAUDE.md is a desired dotfile link.)
+            if strip_layer_prefix and relative.parts[0].startswith(".agents"):
+                continue
+
+            target_path = target_dir / relative
+            symlinks.append((target_path, source_path))
 
     return symlinks
 
@@ -352,7 +415,7 @@ def build_work_skill_symlinks(
 
 
 def build_layered_skill_symlinks(
-    dotfiles_source: Path,
+    targets_root: Path,
     target_dir: Path,
     folder_name: str,
     allowed_layers: list[str],
@@ -360,8 +423,8 @@ def build_layered_skill_symlinks(
 ) -> list[tuple[Path, Path]]:
     """Collect skill links across every layer the machine syncs.
 
-    Skills are stored per-layer at ``<layer>/.agents/skills/<name>``, so a
-    machine only gets a skill if it includes that layer — mirroring the
+    Skills are stored per-layer at ``<layer>/dotfiles/.agents/skills/<name>``,
+    so a machine only gets a skill if it includes that layer — mirroring the
     dotfiles hierarchy. When two layers define a skill of the same name, the
     machine-specific layer wins over the shared common-* layers.
 
@@ -373,7 +436,7 @@ def build_layered_skill_symlinks(
     layers = [*allowed_layers, folder_name]
     by_target: dict[Path, Path] = {}
     for layer in layers:
-        skills_dir = dotfiles_source / layer / AGENTS_SKILLS_SUBPATH
+        skills_dir = targets_root / layer / "dotfiles" / AGENTS_SKILLS_SUBPATH
         for target, source in build_skill_symlinks(skills_dir, target_dir):
             by_target[target] = source
     return sorted(by_target.items())
@@ -473,14 +536,18 @@ def find_conflicts(
     return conflicts
 
 
-def list_available_targets(nixos_source: Path = NIXOS_SOURCE) -> list[str]:
-    """List non-common machine directories, annotated with their imported layers."""
-    if not nixos_source.is_dir():
-        print(f"  Error: NIXOS_SOURCE directory not found at {nixos_source}")
+def list_available_targets() -> list[str]:
+    """List machine targets, annotated with their imported layers.
+
+    Machines are repo-root target dirs that are not common-* layers. A machine
+    dir without a configuration.nix is still listed if it has dotfiles/.
+    """
+    if not TARGETS_ROOT.is_dir():
+        print(f"  Error: targets directory not found at {TARGETS_ROOT}")
         return []
     targets: list[str] = []
-    for entry in sorted(nixos_source.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("common"):
+    for entry in discover_targets():
+        if entry.name.startswith("common"):
             continue
         config_file = entry / "configuration.nix"
         if config_file.is_file():
@@ -488,7 +555,7 @@ def list_available_targets(nixos_source: Path = NIXOS_SOURCE) -> list[str]:
             if layers:
                 targets.append(f"{entry.name} (layers: {' '.join(layers)})")
             else:
-                targets.append(entry.name)
+                targets.append(f"{entry.name} (no layers)")
         else:
             targets.append(f"{entry.name} (no configuration.nix)")
     return targets
@@ -706,27 +773,25 @@ def _init_state(folder_name: str) -> None:
     baseline manifest, so the next regular sync detects extra symlinks
     as stale and removes them.
     """
-    for label, source_dir in [("NixOS", NIXOS_SOURCE), ("dotfiles", DOTFILES_SOURCE)]:
+    for label, source_dir in [("NixOS", TARGETS_ROOT), ("dotfiles", TARGETS_ROOT)]:
         if not source_dir.is_dir():
             print(f"Error: {label} source directory not found at {source_dir}")
             sys.exit(1)
 
-    all_common = sorted(
-        d.name for d in NIXOS_SOURCE.iterdir() if d.is_dir() and is_common_dir(d.name)
-    )
+    all_common = sorted(d.name for d in discover_targets() if is_common_dir(d.name))
     nixos_symlinks = build_symlink_list(
-        NIXOS_SOURCE, NIXOS_TARGET, folder_name, all_common, strip_layer_prefix=False
+        TARGETS_ROOT, NIXOS_TARGET, folder_name, all_common, strip_layer_prefix=False
     )
     dotfiles_symlinks = build_symlink_list(
-        DOTFILES_SOURCE, DOTFILES_TARGET, folder_name, all_common, strip_layer_prefix=True
+        TARGETS_ROOT, DOTFILES_TARGET, folder_name, all_common, strip_layer_prefix=True
     )
 
-    config_source = NIXOS_SOURCE / folder_name / "configuration.nix"
+    config_source = target_dir(folder_name) / "configuration.nix"
     if config_source.is_file():
         nixos_symlinks.append((NIXOS_TARGET / "configuration.nix", config_source))
 
     skill_symlinks = build_layered_skill_symlinks(
-        DOTFILES_SOURCE, AGENTS_SKILLS_TARGET, folder_name, all_common
+        TARGETS_ROOT, AGENTS_SKILLS_TARGET, folder_name, all_common
     )
     cc_personal_symlink = build_cc_personal_wiring(AGENTS_SKILLS_TARGET)
     work_skill_symlinks = build_work_skill_symlinks(SHARED_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET)
@@ -777,9 +842,9 @@ def main():
         print(f"Usage: {sys.argv[0]} <machine_name> [--force]\n")
         print("Creates symlinks for NixOS and dotfiles, then creates a symlink from")
         print(f"{NIXOS_TARGET}/configuration.nix to")
-        print(f"{NIXOS_SOURCE}/<machine_name>/configuration.nix\n")
-        print("Only the common-* layers that <machine_name>/configuration.nix actually")
-        print("imports (plus <machine_name> itself) are symlinked. This mirrors the NixOS")
+        print(f"{TARGETS_ROOT}/<target>/configuration.nix\n")
+        print("Only the common-* layers that <target>/configuration.nix actually")
+        print("imports (plus <target> itself) are symlinked. This mirrors the NixOS")
         print("import hierarchy so e.g. a headless machine won't receive desktop dotfiles.\n")
         print("Available targets:")
         for target in list_available_targets():
@@ -791,29 +856,28 @@ def main():
 
     folder_name = args.machine
 
-    # Check source dirs exist
-    for label, source_dir in [("NixOS", NIXOS_SOURCE), ("dotfiles", DOTFILES_SOURCE)]:
-        if not source_dir.is_dir():
-            print(f"Error: {label} source directory not found at {source_dir}")
-            sys.exit(1)
+    # Check the targets root exists and contains targets
+    if not TARGETS_ROOT.is_dir() or not discover_targets():
+        print(f"Error: no targets found under {TARGETS_ROOT}")
+        sys.exit(1)
 
     # Determine which common-* layers this machine imports
-    config_path = NIXOS_SOURCE / folder_name / "configuration.nix"
+    config_path = target_dir(folder_name) / "configuration.nix"
     imported_layers = get_imported_layers(config_path)
     layers_str = " ".join(imported_layers) or "none"
     print(f"{bold('Imported layers:')} {cyan(layers_str)}\n")
 
     # Build the new sync-set
     nixos_symlinks = build_symlink_list(
-        NIXOS_SOURCE, NIXOS_TARGET, folder_name, imported_layers, strip_layer_prefix=False
+        TARGETS_ROOT, NIXOS_TARGET, folder_name, imported_layers, strip_layer_prefix=False
     )
     dotfiles_symlinks = build_symlink_list(
-        DOTFILES_SOURCE, DOTFILES_TARGET, folder_name, imported_layers, strip_layer_prefix=True
+        TARGETS_ROOT, DOTFILES_TARGET, folder_name, imported_layers, strip_layer_prefix=True
     )
 
     # Add the top-level configuration.nix symlink (the NixOS entry point).
     # This doesn't follow the layer/ path structure, so it's appended separately.
-    config_source = NIXOS_SOURCE / folder_name / "configuration.nix"
+    config_source = target_dir(folder_name) / "configuration.nix"
     if not config_source.is_file():
         print(f"Error: Configuration file not found at {config_source}")
         sys.exit(1)
@@ -826,7 +890,7 @@ def main():
     # the skills for the layers it includes. In copy mode the skill dirs are
     # copied as real directories (Polytoken 0.6.4 skips skill dir symlinks).
     skill_symlinks = build_layered_skill_symlinks(
-        DOTFILES_SOURCE, AGENTS_SKILLS_TARGET, folder_name, imported_layers
+        TARGETS_ROOT, AGENTS_SKILLS_TARGET, folder_name, imported_layers
     )
     cc_personal_symlink = build_cc_personal_wiring(AGENTS_SKILLS_TARGET)
 
@@ -857,9 +921,9 @@ def main():
         stale = compute_stale_symlinks(previous, all_new_symlinks)
 
     # Display the proposed symlinks, grouped by layer
-    _print_grouped("NixOS configuration", nixos_symlinks, NIXOS_SOURCE, NIXOS_TARGET)
+    _print_grouped("NixOS configuration", nixos_symlinks, TARGETS_ROOT, NIXOS_TARGET)
     _print_grouped(
-        "Dotfiles", dotfiles_symlinks, DOTFILES_SOURCE, DOTFILES_TARGET, use_home_prefix=True
+        "Dotfiles", dotfiles_symlinks, TARGETS_ROOT, DOTFILES_TARGET, use_home_prefix=True
     )
     if skill_symlinks:
         label = "Agent skills (personal)"

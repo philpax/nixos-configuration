@@ -5,18 +5,44 @@ Personal NixOS configuration managing multiple machines with shared configuratio
 ## Deployment
 
 ```bash
-# Sync config to a machine (creates symlinks for nixos/ and dotfiles/)
+# Sync config to a machine (creates symlinks for <target>/ and <target>/dotfiles/)
 ./sync.sh <machine_name> [--force]
 
 # After syncing, rebuild the system
 sudo nixos-rebuild switch
 ```
 
+Machines synced before 2026-08-09 (the target-first inversion) need the migration steps in [MIGRATION.md](MIGRATION.md). The file covers the stale-symlink sweep for old `nixos/` and `dotfiles/` paths, root-owned dangling links, the mindgame nixpkgs-config rebuild failure, and the redline secrets relocation.
+
 ## Architecture
+
+### Repository Layout
+
+The repository is target-first: every machine or shared layer ("target") owns a
+directory at the repo root, containing its Nix files directly (incl.
+`configuration.nix`) plus a `dotfiles/` subdirectory where it has dotfiles:
+
+```
+common-all/          → Base: users, SSH, packages, locale
+common-desktop/      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
+common-dev/          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
+common-dev-desktop/  → Niri compositor, Waybar, Alacritty, Steam, Wine
+jinroh/
+mindgame/
+paprika/
+redline/
+```
+
+There are no top-level `nixos/` or `dotfiles/` grouping directories — the
+machine dirs and the `common-*` layers live side by side at the root, and each
+target holds its own `dotfiles/` subdir (e.g. `redline/dotfiles/.config/...`).
 
 ### Configuration Layering
 
-Machines compose from shared layers via NixOS imports:
+Machines compose from shared layers via NixOS imports. Each layer's Nix files
+live at `<layer>/...` and its dotfiles at `<layer>/dotfiles/...`; a machine's
+own config likewise lives at `<machine>/...` with dotfiles at
+`<machine>/dotfiles/...`:
 
 ```
 common-all          → Base: users, SSH, packages, locale
@@ -37,12 +63,13 @@ common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 
 ### Dotfiles
 
-`sync.sh` reads `<machine_name>/configuration.nix` to determine which `common-*`
-layers the machine imports, then only symlinks dotfiles for those layers. This
-mirrors the NixOS import hierarchy — e.g. redline (headless, imports only
-`common-all`) won't receive desktop dotfiles like niri or quickshell configs.
-When re-syncing a different machine, symlinks from the previous sync that are
-no longer needed are detected via `.sync-state.json` and offered for removal.
+`sync.sh` reads `<target>/configuration.nix` to determine which `common-*`
+layers a machine imports, then symlinks its dotfiles from each imported
+target's `dotfiles/` subdir. This mirrors the NixOS import hierarchy — e.g.
+redline (headless, imports only `common-all`) won't receive desktop dotfiles
+like niri or quickshell configs. When re-syncing a different machine, symlinks
+from the previous sync that are no longer needed are detected via
+`.sync-state.json` and offered for removal.
 
 ### Agent skills
 
@@ -50,17 +77,17 @@ no longer needed are detected via `.sync-state.json` and offered for removal.
 Polytoken discovers, then wires Claude Code personal to the same tree via a
 single `~/.claude/skills → ~/.agents/skills` directory symlink — the same
 pattern as the repo's own project-local `.claude/skills → .agents/skills`.
-Skills are stored per-layer at `dotfiles/<layer>/.agents/skills/<name>/`, so a
+Skills are stored per-layer at `<layer>/dotfiles/.agents/skills/<name>/`, so a
 machine gets a skill only if it includes that layer; the shared dev-workflow
 skills (committing, GitHub issues, contributing docs, prose) live in
-`dotfiles/common-dev/.agents/skills/` and reach the dev machines (paprika,
+`common-dev/dotfiles/.agents/skills/` and reach the dev machines (paprika,
 mindgame, redline), not jinroh.
 
 Skills marked with a `.work-compatible` marker file are additionally symlinked
 into the work-account directory `~/.claude-work/skills/<name>` (sourced from
-`common-dev/.agents/skills`), so the personal and work accounts load the same
-skills. Add the marker file to a skill's directory to opt it into the work
-account.
+`common-dev/dotfiles/.agents/skills`), so the personal and work accounts load
+the same skills. Add the marker file to a skill's directory to opt it into the
+work account.
 
 ### Redline Server
 

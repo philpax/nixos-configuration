@@ -1,6 +1,6 @@
 # Upgrading the Minecraft server to a new modpack version
 
-High-level runbook for moving to a newer AoC Aeronautics (or any NeoForge modpack) release. The live server lives at `/mnt/ssd0/minecraft` and runs as the `minecraft` user via the `minecraft-server` systemd service (defined in `~/nixos-configuration/nixos/redline/services/minecraft.nix`). The service always points at `/mnt/ssd0/minecraft`, so the upgrade is "swap what's behind that path".
+High-level runbook for moving to a newer AoC Aeronautics (or any NeoForge modpack) release. The live server lives at `/mnt/ssd0/minecraft` and runs as the `minecraft` user via the `minecraft-server` systemd service (defined in `~/nixos-configuration/redline/services/minecraft.nix`). The service always points at `/mnt/ssd0/minecraft`, so the upgrade is "swap what's behind that path".
 
 Everything below touches `minecraft`-owned files, so most steps need `sudo`. Claude can do the readable bulk; the rest is a handful of sudo commands it will hand you.
 

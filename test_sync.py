@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -289,14 +290,33 @@ class TestSplitByTarget:
 
 
 class TestBuildSymlinkList:
+    def _make_target(
+        self,
+        root: Path,
+        name: str,
+        nix_files: dict[str, str] | None = None,
+        dotfiles: dict[str, str] | None = None,
+    ) -> None:
+        """Create a target dir with optional nix files and a dotfiles/ subdir."""
+        tdir = root / name
+        tdir.mkdir(parents=True, exist_ok=True)
+        for rel, content in (nix_files or {}).items():
+            p = tdir / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+        if dotfiles is not None:
+            ddir = tdir / "dotfiles"
+            ddir.mkdir(parents=True, exist_ok=True)
+            for rel, content in dotfiles.items():
+                p = ddir / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content)
+
     def test_filters_by_allowed_layers(self, tmp_path):
         source = tmp_path / "source"
-        (source / "common-all" / "config").mkdir(parents=True)
-        (source / "common-all" / "config" / "app.nix").write_text("# app")
-        (source / "common-desktop" / "config").mkdir(parents=True)
-        (source / "common-desktop" / "config" / "gui.nix").write_text("# gui")
-        (source / "my-machine").mkdir()
-        (source / "my-machine" / "machine.nix").write_text("# machine")
+        self._make_target(source, "common-all", {"config/app.nix": "# app"})
+        self._make_target(source, "common-desktop", {"config/gui.nix": "# gui"})
+        self._make_target(source, "my-machine", {"machine.nix": "# machine"})
 
         target = tmp_path / "target"
         symlinks = sync.build_symlink_list(
@@ -313,10 +333,12 @@ class TestBuildSymlinkList:
         assert target / "common-desktop" / "config" / "gui.nix" not in targets
 
     def test_strip_layer_prefix(self, tmp_path):
-        source = tmp_path / "dotfiles"
-        (source / "common-all" / ".config" / "fish").mkdir(parents=True)
-        (source / "common-all" / ".config" / "fish" / "config.fish").write_text("# fish")
-        (source / "common-all" / ".gitconfig").write_text("# git")
+        source = tmp_path / "source"
+        self._make_target(
+            source,
+            "common-all",
+            dotfiles={".config/fish/config.fish": "# fish", ".gitconfig": "# git"},
+        )
 
         target = tmp_path / "home"
         symlinks = sync.build_symlink_list(
@@ -333,9 +355,8 @@ class TestBuildSymlinkList:
         assert not any("common-all" in str(t) for t, s in symlinks)
 
     def test_no_strip_preserves_full_path(self, tmp_path):
-        source = tmp_path / "nixos"
-        (source / "common-all").mkdir(parents=True)
-        (source / "common-all" / "configuration.nix").write_text("# config")
+        source = tmp_path / "source"
+        self._make_target(source, "common-all", {"configuration.nix": "# config"})
 
         target = tmp_path / "target"
         symlinks = sync.build_symlink_list(
@@ -373,9 +394,8 @@ class TestBuildSymlinkList:
 
     def test_skips_symlinks_in_source(self, tmp_path):
         source = tmp_path / "source"
-        (source / "common-all").mkdir(parents=True)
+        self._make_target(source, "common-all", {"real.nix": "# real"})
         real_file = source / "common-all" / "real.nix"
-        real_file.write_text("# real")
         link_file = source / "common-all" / "link.nix"
         link_file.symlink_to(real_file)
 
@@ -389,11 +409,26 @@ class TestBuildSymlinkList:
         assert str(real_file) in sources
         assert str(link_file) not in sources
 
-    def test_file_directly_under_layer_dir(self, tmp_path):
-        """File with no subdirectory after the layer name (e.g. .gitconfig)."""
-        source = tmp_path / "dotfiles"
-        (source / "common-all").mkdir(parents=True)
-        (source / "common-all" / ".gitconfig").write_text("# git")
+    def test_nixos_pass_skips_dotfiles_subdir(self, tmp_path):
+        """The NixOS walk must not emit <target>/dotfiles/** as Nix config."""
+        source = tmp_path / "source"
+        self._make_target(source, "common-all", {"config.nix": "# c"}, dotfiles={".x": "# dot"})
+
+        symlinks = sync.build_symlink_list(
+            source,
+            tmp_path / "target",
+            "machine",
+            allowed_layers=["common-all"],
+            strip_layer_prefix=False,
+        )
+        targets = {str(t) for t, s in symlinks}
+        assert str(tmp_path / "target" / "common-all" / "config.nix") in targets
+        assert not any("/dotfiles/" in t for t in targets)
+
+    def test_file_directly_under_dotfiles_dir(self, tmp_path):
+        """File with no subdirectory after the target's dotfiles dir (e.g. .gitconfig)."""
+        source = tmp_path / "source"
+        self._make_target(source, "common-all", dotfiles={".gitconfig": "# git"})
 
         symlinks = sync.build_symlink_list(
             source,
@@ -407,12 +442,9 @@ class TestBuildSymlinkList:
 
     def test_multiple_allowed_layers(self, tmp_path):
         source = tmp_path / "source"
-        (source / "common-all").mkdir(parents=True)
-        (source / "common-all" / "a.nix").write_text("a")
-        (source / "common-desktop").mkdir(parents=True)
-        (source / "common-desktop" / "b.nix").write_text("b")
-        (source / "common-dev").mkdir(parents=True)
-        (source / "common-dev" / "c.nix").write_text("c")
+        self._make_target(source, "common-all", {"a.nix": "a"})
+        self._make_target(source, "common-desktop", {"b.nix": "b"})
+        self._make_target(source, "common-dev", {"c.nix": "c"})
 
         symlinks = sync.build_symlink_list(
             source,
@@ -430,20 +462,17 @@ class TestBuildSymlinkList:
         build_layered_skill_symlinks creates whole-directory symlinks at
         ~/.agents/skills/<name>, and file links at ~/.agents/skills/<name>/…
         would collide with those directory symlinks."""
-        source = tmp_path / "dotfiles"
-        (source / "common-dev" / ".agents" / "skills" / "committing").mkdir(parents=True)
-        (source / "common-dev" / ".agents" / "skills" / "committing" / "SKILL.md").write_text(
-            "# committing"
+        source = tmp_path / "source"
+        self._make_target(
+            source,
+            "common-dev",
+            dotfiles={
+                ".agents/skills/committing/SKILL.md": "# committing",
+                ".agents/skills/committing/.work-compatible": "marker",
+                ".gitconfig": "# git",
+            },
         )
-        marker_path = (
-            source / "common-dev" / ".agents" / "skills" / "committing" / ".work-compatible"
-        )
-        marker_path.write_text("marker")
-        # A real (non-skill) dotfile in the same layer must still be picked up
-        (source / "common-dev" / ".gitconfig").write_text("# git")
-        # .claude stays walked — CLAUDE.md is a desired dotfile link
-        (source / "common-all" / ".claude").mkdir(parents=True)
-        (source / "common-all" / ".claude" / "CLAUDE.md").write_text("@CONTRIBUTING.md")
+        self._make_target(source, "common-all", dotfiles={".claude/CLAUDE.md": "@CONTRIBUTING.md"})
 
         home = tmp_path / "home"
         symlinks = sync.build_symlink_list(
@@ -585,7 +614,7 @@ class TestIsCommonDir:
 
 class TestGroupByLayer:
     def test_groups_correctly(self):
-        source_dir = Path("/repo/nixos")
+        source_dir = Path("/repo")
         symlinks = [
             (Path("/etc/nixos/common-all/a.nix"), source_dir / "common-all" / "a.nix"),
             (Path("/etc/nixos/common-all/b.nix"), source_dir / "common-all" / "b.nix"),
@@ -648,12 +677,12 @@ class TestRepoIntegration:
     def test_redline_gets_common_all_and_dev_dotfiles(self):
         """redline imports common-all directly and common-dev transitively
         (via programs/development.nix) — but not common-desktop or common-dev-desktop."""
-        config = sync.NIXOS_SOURCE / "redline" / "configuration.nix"
+        config = sync.target_dir("redline") / "configuration.nix"
         layers = sync.get_imported_layers(config)
         assert layers == ["common-all", "common-dev"]
 
         dotfiles = sync.build_symlink_list(
-            sync.DOTFILES_SOURCE,
+            sync.TARGETS_ROOT,
             sync.DOTFILES_TARGET,
             "redline",
             allowed_layers=layers,
@@ -672,7 +701,7 @@ class TestRepoIntegration:
 
     def test_paprika_gets_all_layers(self):
         """paprika imports all four layers — should get common-dev-desktop dotfiles."""
-        config = sync.NIXOS_SOURCE / "paprika" / "configuration.nix"
+        config = sync.target_dir("paprika") / "configuration.nix"
         layers = sync.get_imported_layers(config)
         assert "common-all" in layers
         assert "common-desktop" in layers
@@ -680,7 +709,7 @@ class TestRepoIntegration:
         assert "common-dev-desktop" in layers
 
         dotfiles = sync.build_symlink_list(
-            sync.DOTFILES_SOURCE,
+            sync.TARGETS_ROOT,
             sync.DOTFILES_TARGET,
             "paprika",
             allowed_layers=layers,
@@ -692,8 +721,8 @@ class TestRepoIntegration:
 
     def test_all_machines_parse_successfully(self):
         """Every machine directory should have a parseable configuration.nix."""
-        for entry in sorted(sync.NIXOS_SOURCE.iterdir()):
-            if not entry.is_dir() or entry.name.startswith("common"):
+        for entry in sync.discover_targets():
+            if entry.name.startswith("common"):
                 continue
             config = entry / "configuration.nix"
             assert config.is_file(), f"{entry.name} has no configuration.nix"
@@ -707,29 +736,48 @@ class TestRepoIntegration:
 
 
 class TestInitState:
+    def _make_target(
+        self,
+        root: Path,
+        name: str,
+        config_content: str | None = None,
+        dotfiles: dict[str, str] | None = None,
+    ) -> None:
+        tdir = root / name
+        tdir.mkdir(parents=True, exist_ok=True)
+        if config_content is not None:
+            (tdir / "configuration.nix").write_text(config_content)
+        if dotfiles is not None:
+            ddir = tdir / "dotfiles"
+            ddir.mkdir(parents=True, exist_ok=True)
+            for rel, content in dotfiles.items():
+                p = ddir / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content)
+
     def test_includes_all_common_layers(self, tmp_path, monkeypatch):
         """Init state should include all common-* dirs, not just imported ones."""
-        source = tmp_path / "nixos"
-        for layer in ["common-all", "common-desktop", "common-dev", "common-dev-desktop"]:
-            (source / layer).mkdir(parents=True)
-            (source / layer / "config.nix").write_text("# config")
-        (source / "redline").mkdir()
-        (source / "redline" / "configuration.nix").write_text(
-            "{ imports = [ ../common-all/configuration.nix ]; }"
+        source = tmp_path / "source"
+        self._make_target(source, "common-all", config_content="# config")
+        self._make_target(source, "common-desktop", config_content="# config")
+        self._make_target(source, "common-dev", config_content="# config")
+        self._make_target(source, "common-dev-desktop", config_content="# config")
+        self._make_target(
+            source,
+            "redline",
+            config_content="{ imports = [ ../common-all/configuration.nix ]; }",
         )
-
-        dotfiles = tmp_path / "dotfiles"
-        (dotfiles / "common-all").mkdir(parents=True)
-        (dotfiles / "common-all" / ".gitconfig").write_text("# git")
-        (dotfiles / "common-dev-desktop").mkdir(parents=True)
-        (dotfiles / "common-dev-desktop" / ".config" / "niri").mkdir(parents=True)
-        (dotfiles / "common-dev-desktop" / ".config" / "niri" / "config.kdl").write_text("# niri")
+        self._make_target(source, "common-all", dotfiles={".gitconfig": "# git"})
+        self._make_target(
+            source,
+            "common-dev-desktop",
+            dotfiles={".config/niri/config.kdl": "# niri"},
+        )
 
         state_file = tmp_path / ".sync-state.json"
 
-        monkeypatch.setattr(sync, "NIXOS_SOURCE", source)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", source)
         monkeypatch.setattr(sync, "NIXOS_TARGET", tmp_path / "etc-nixos")
-        monkeypatch.setattr(sync, "DOTFILES_SOURCE", dotfiles)
         monkeypatch.setattr(sync, "DOTFILES_TARGET", tmp_path / "home")
         monkeypatch.setattr(sync, "STATE_FILE", state_file)
 
@@ -740,9 +788,9 @@ class TestInitState:
 
         # redline only imports common-all, but init-state includes all layers
         targets = set(manifest.keys())
-        assert str(tmp_path / "etc-nixos" / "common-all" / "config.nix") in targets
-        assert str(tmp_path / "etc-nixos" / "common-desktop" / "config.nix") in targets
-        assert str(tmp_path / "etc-nixos" / "common-dev-desktop" / "config.nix") in targets
+        assert str(tmp_path / "etc-nixos" / "common-all" / "configuration.nix") in targets
+        assert str(tmp_path / "etc-nixos" / "common-desktop" / "configuration.nix") in targets
+        assert str(tmp_path / "etc-nixos" / "common-dev-desktop" / "configuration.nix") in targets
         assert str(tmp_path / "home" / ".gitconfig") in targets
         assert str(tmp_path / "home" / ".config" / "niri" / "config.kdl") in targets
 
@@ -751,7 +799,7 @@ class TestInitState:
             (source / "redline" / "configuration.nix").read_text()
         )
         new_symlinks = sync.build_symlink_list(
-            dotfiles, tmp_path / "home", "redline", imported, strip_layer_prefix=True
+            source, tmp_path / "home", "redline", imported, strip_layer_prefix=True
         )
         stale = sync.compute_stale_symlinks(manifest, new_symlinks)
         # niri config should be stale (common-dev-desktop not imported by redline)
@@ -763,33 +811,28 @@ class TestInitState:
         """Init-state manifest must reflect the new layout: per-skill symlinks
         under ~/.agents/skills/, the ~/.claude/skills -> ~/.agents/skills dir
         symlink, and work skills sourced from the shared dev skills tree."""
-        source = tmp_path / "nixos"
-        (source / "common-all").mkdir(parents=True)
-        (source / "common-all" / "config.nix").write_text("# config")
-        (source / "common-dev").mkdir(parents=True)
-        (source / "common-dev" / "config.nix").write_text("# config")
-        (source / "redline").mkdir()
-        (source / "redline" / "configuration.nix").write_text(
-            "{ imports = [ ../common-all/configuration.nix ]; }"
+        source = tmp_path / "source"
+        self._make_target(source, "common-all", config_content="# config")
+        self._make_target(source, "common-dev", config_content="# config")
+        self._make_target(
+            source,
+            "redline",
+            config_content="{ imports = [ ../common-all/configuration.nix ]; }",
         )
-
-        dotfiles = tmp_path / "dotfiles"
-        (dotfiles / "common-dev").mkdir(parents=True)
-        (dotfiles / "common-dev" / ".agents" / "skills" / "committing").mkdir(parents=True)
-        (dotfiles / "common-dev" / ".agents" / "skills" / "committing" / "SKILL.md").write_text(
-            "# committing"
-        )
-        (dotfiles / "common-dev" / ".agents" / "skills" / "github-issue").mkdir(parents=True)
-        (dotfiles / "common-dev" / ".agents" / "skills" / "github-issue" / "SKILL.md").write_text(
-            "# github-issue"
+        self._make_target(
+            source,
+            "common-dev",
+            dotfiles={
+                ".agents/skills/committing/SKILL.md": "# committing",
+                ".agents/skills/github-issue/SKILL.md": "# github-issue",
+            },
         )
 
         state_file = tmp_path / ".sync-state.json"
         home = tmp_path / "home"
 
-        monkeypatch.setattr(sync, "NIXOS_SOURCE", source)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", source)
         monkeypatch.setattr(sync, "NIXOS_TARGET", tmp_path / "etc-nixos")
-        monkeypatch.setattr(sync, "DOTFILES_SOURCE", dotfiles)
         monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
         monkeypatch.setattr(sync, "STATE_FILE", state_file)
         monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", home / ".agents" / "skills")
@@ -946,49 +989,53 @@ class TestBuildWorkSkillSymlinks:
 
 
 class TestBuildLayeredSkillSymlinks:
-    def _make_skill(self, dotfiles, layer, name):
-        skill = dotfiles / layer / ".agents" / "skills" / name
+    def _make_skill(self, targets_root, layer, name):
+        skill = targets_root / layer / "dotfiles" / ".agents" / "skills" / name
         skill.mkdir(parents=True)
         (skill / "SKILL.md").write_text(f"# {name}")
 
     def test_collects_across_layers(self, tmp_path):
-        dotfiles = tmp_path / "dotfiles"
-        self._make_skill(dotfiles, "common-dev", "committing")
-        self._make_skill(dotfiles, "redline", "llama-cpp-model-tuning")
+        targets_root = tmp_path / "source"
+        self._make_skill(targets_root, "common-dev", "committing")
+        self._make_skill(targets_root, "redline", "llama-cpp-model-tuning")
         target = tmp_path / "target"
 
-        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "redline", ["common-dev"])
+        symlinks = sync.build_layered_skill_symlinks(
+            targets_root, target, "redline", ["common-dev"]
+        )
         targets = {t.name for t, s in symlinks}
         assert targets == {"committing", "llama-cpp-model-tuning"}
 
     def test_only_included_layers(self, tmp_path):
-        dotfiles = tmp_path / "dotfiles"
-        self._make_skill(dotfiles, "common-dev", "committing")
-        self._make_skill(dotfiles, "redline", "llama-cpp-model-tuning")
+        targets_root = tmp_path / "source"
+        self._make_skill(targets_root, "common-dev", "committing")
+        self._make_skill(targets_root, "redline", "llama-cpp-model-tuning")
         target = tmp_path / "target"
 
         # jinroh doesn't include the redline or common-dev layers, so it shouldn't get the skills.
-        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "jinroh", [])
+        symlinks = sync.build_layered_skill_symlinks(targets_root, target, "jinroh", [])
         targets = {t.name for t, s in symlinks}
         assert targets == set()
 
     def test_machine_layer_overrides_common(self, tmp_path):
-        dotfiles = tmp_path / "dotfiles"
-        self._make_skill(dotfiles, "common-dev", "shared")
-        self._make_skill(dotfiles, "redline", "shared")
+        targets_root = tmp_path / "source"
+        self._make_skill(targets_root, "common-dev", "shared")
+        self._make_skill(targets_root, "redline", "shared")
         target = tmp_path / "target"
 
-        symlinks = sync.build_layered_skill_symlinks(dotfiles, target, "redline", ["common-dev"])
+        symlinks = sync.build_layered_skill_symlinks(
+            targets_root, target, "redline", ["common-dev"]
+        )
         assert len(symlinks) == 1
         target_path, source = symlinks[0]
         assert target_path.name == "shared"
         assert "redline" in source.parts and "common-dev" not in source.parts
 
     def test_no_skills_returns_empty(self, tmp_path):
-        dotfiles = tmp_path / "dotfiles"
-        (dotfiles / "common-dev").mkdir(parents=True)
+        targets_root = tmp_path / "source"
+        (targets_root / "common-dev" / "dotfiles").mkdir(parents=True)
         symlinks = sync.build_layered_skill_symlinks(
-            dotfiles, tmp_path / "target", "redline", ["common-dev"]
+            targets_root, tmp_path / "target", "redline", ["common-dev"]
         )
         assert symlinks == []
 
@@ -1007,14 +1054,19 @@ class TestCopyMode:
         return skill
 
     def test_layered_builder_returns_same_pairs_in_copy_mode(self, tmp_path):
-        dotfiles = tmp_path / "dotfiles"
-        self._make_source_skill(dotfiles / "common-dev" / ".agents" / "skills", "alpha")
+        targets_root = tmp_path / "source"
+        self._make_source_skill(
+            targets_root / "common-dev" / "dotfiles" / ".agents" / "skills", "alpha"
+        )
         target = tmp_path / "target"
         symlinks = sync.build_layered_skill_symlinks(
-            dotfiles, target, "redline", ["common-dev"], copy_mode=True
+            targets_root, target, "redline", ["common-dev"], copy_mode=True
         )
         assert symlinks == [
-            (target / "alpha", dotfiles / "common-dev" / ".agents" / "skills" / "alpha")
+            (
+                target / "alpha",
+                targets_root / "common-dev" / "dotfiles" / ".agents" / "skills" / "alpha",
+            )
         ]
 
     def test_copy_skill_tree_makes_real_dir_with_all_files(self, tmp_path):
@@ -1286,7 +1338,7 @@ class TestWorkSkillSymlinksRepoIntegration:
         # Personal skills are built layer-aware; redline imports common-dev
         # (via programs/development.nix), so it gets the shared dev skills.
         cc_symlinks = sync.build_layered_skill_symlinks(
-            sync.DOTFILES_SOURCE, sync.AGENTS_SKILLS_TARGET, "redline", ["common-dev"]
+            sync.TARGETS_ROOT, sync.AGENTS_SKILLS_TARGET, "redline", ["common-dev"]
         )
         cc_names = {t.name for t, s in cc_symlinks}
         work_symlinks = sync.build_work_skill_symlinks(
@@ -1501,3 +1553,92 @@ class TestFirstSyncStaleRemovalOrdering:
         assert (new_agents_src / "github-issue" / "SKILL.md").read_text() == "# github-issue (new)"
         # The combined created set includes the personal dir symlink
         assert (claude_skills, agents_skills) in created
+
+
+# ---------------------------------------------------------------------------
+# Repo layout — the target-first tree (AC.1)
+# ---------------------------------------------------------------------------
+
+
+TARGETS = [
+    "common-all",
+    "common-desktop",
+    "common-dev",
+    "common-dev-desktop",
+    "jinroh",
+    "mindgame",
+    "paprika",
+    "redline",
+]
+TARGETS_WITH_DOTFILES = [
+    "common-all",
+    "common-desktop",
+    "common-dev",
+    "common-dev-desktop",
+    "mindgame",
+    "redline",
+]
+
+
+class TestRepoLayout:
+    """The repository is target-first: no top-level nixos/ or dotfiles/ dirs,
+    the 8 targets live at the repo root, and the 6 expected dotfiles/ subdirs
+    exist. Fails on regression of the layout."""
+
+    def test_no_top_level_grouping_dirs(self):
+        assert not (sync.TARGETS_ROOT / "nixos").exists()
+        assert not (sync.TARGETS_ROOT / "dotfiles").exists()
+
+    def test_all_targets_exist_at_root(self):
+        for name in TARGETS:
+            assert (sync.TARGETS_ROOT / name).is_dir(), f"missing target {name}"
+
+    def test_dotfiles_subdirs_exist(self):
+        for name in TARGETS_WITH_DOTFILES:
+            assert (sync.TARGETS_ROOT / name / "dotfiles").is_dir(), (
+                f"{name} should have a dotfiles/ subdir"
+            )
+
+    def test_discover_targets_matches_expected(self):
+        names = {d.name for d in sync.discover_targets()}
+        assert names == set(TARGETS)
+
+    def test_machines_have_configuration_nix(self):
+        for name in ["jinroh", "mindgame", "paprika", "redline"]:
+            assert (sync.TARGETS_ROOT / name / "configuration.nix").is_file()
+
+
+# ---------------------------------------------------------------------------
+# Docs/skills — no stale nixos/<target> or dotfiles/<layer> paths (AC.6)
+# ---------------------------------------------------------------------------
+
+
+DOCS_AND_SKILLS = [
+    "CONTRIBUTING.md",
+    ".agents/skills/new-skill/SKILL.md",
+    "redline/dotfiles/.agents/skills/llama-cpp-model-tuning/SKILL.md",
+    "redline/hermes/README.md",
+    "redline/hermes/ansible/inventory.ini",
+    "redline/services/MINECRAFT_UPGRADE.md",
+]
+
+# Pre-move path forms only. The post-move forms (redline/dotfiles/...,
+# common-dev/dotfiles/...) are correct and must NOT be flagged.
+STALE_PATH_RE = re.compile(
+    r"nixos/(redline|mindgame|paprika|jinroh)"
+    r"|dotfiles/(common|redline|mindgame|paprika|jinroh)"
+    r"|dotfiles/<layer>"
+    r"|nixos-configuration/nixos/"
+)
+
+
+class TestRepoDocsNoStalePaths:
+    """Docs and skills must not reference pre-move paths (nixos/<target>,
+    dotfiles/<layer>, ~/nixos-configuration/nixos/...)."""
+
+    @pytest.mark.parametrize("relpath", DOCS_AND_SKILLS)
+    def test_no_stale_paths(self, relpath):
+        f = sync.TARGETS_ROOT / relpath
+        assert f.is_file(), f"missing doc/skill file {relpath}"
+        text = f.read_text()
+        assert not STALE_PATH_RE.search(text), f"{relpath} contains a stale pre-move path"
