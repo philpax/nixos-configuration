@@ -62,6 +62,7 @@ in
   };
 
   config = {
+    services.displayManager.sddm.wayland.enable = true;
     programs.niri = {
       enable = true;
       package = selected.package;
