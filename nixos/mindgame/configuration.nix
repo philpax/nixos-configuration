@@ -34,6 +34,36 @@
 
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia.open = true;
+
+  # Restrict the SDDM greeter to the MSI ultrawide — the Dell portrait's
+  # hotplug churn crashes the weston greeter. Connector names can change;
+  # each output entry below is annotated with the device it matches.
+  services.displayManager.sddm.wayland.compositorCommand =
+    let
+      # Written by hand: the nixpkgs INI generator can't emit repeated
+      # [output] sections, which is how weston expresses multiple outputs.
+      greeterIni = pkgs.writeText "sddm-greeter.ini" ''
+        [keyboard]
+        keymap_model=${config.services.xserver.xkb.model}
+        keymap_layout=${config.services.xserver.xkb.layout}
+        keymap_variant=${config.services.xserver.xkb.variant}
+        keymap_options=${config.services.xserver.xkb.options}
+
+        [libinput]
+        enable-tap=${if config.services.libinput.mouse.tapping then "true" else "false"}
+        left-handed=${if config.services.libinput.mouse.leftHanded then "true" else "false"}
+
+        # Only the MSI (DP-1) stays on; unlisted outputs keep their current mode.
+        [output]
+        name=HDMI-A-2
+        mode=off
+
+        [output]
+        name=DP-3
+        mode=off
+      '';
+    in
+    "${pkgs.weston}/bin/weston --shell=kiosk -c ${greeterIni}";
   # hardware.nvidia.package is set in ./nvidia-bsb-dsc.nix — it wraps
   # nvidiaPackages.latest to patch the open kernel modules for the Bigscreen
   # Beyond's DSC quirks.
