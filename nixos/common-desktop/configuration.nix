@@ -17,7 +17,7 @@ in
   networking.networkmanager.enable = true;
 
   # Display manager
-  services.displayManager.sddm.enable = true;
+  services.displayManager.lemurs.enable = true;
 
   # Audio with pipewire
   services.pulseaudio.enable = false;
