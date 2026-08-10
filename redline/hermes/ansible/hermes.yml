@@ -199,6 +199,28 @@
         mode: "0644"
       tags: [hermes]
 
+    # Tavily web search. The key is a secret and never lives in this repo: the
+    # playbook reads the host's ~/.tokens/tavily-token and injects it into the
+    # agent .env on the state disk. The gateway activates the Tavily backend
+    # when TAVILY_API_KEY is set.
+    - name: Read the host Tavily token
+      ansible.builtin.slurp:
+        src: "{{ lookup('env', 'HOME') }}/.tokens/tavily-token"
+      delegate_to: localhost
+      become: false
+      register: tavily_token
+      tags: [hermes]
+
+    - name: Set TAVILY_API_KEY in the agent env
+      ansible.builtin.lineinfile:
+        path: "{{ hermes_home }}/.env"
+        regexp: "^TAVILY_API_KEY=.*"
+        line: "TAVILY_API_KEY={{ tavily_token.content | b64decode | trim }}"
+        create: true
+        mode: "0600"
+      notify: restart hermes
+      tags: [hermes]
+
     # The dashboard builds its own frontend on first start, but only when npm
     # is present; otherwise it exits with "Web UI frontend not built". Ubuntu
     # 24.04 ships Node 18.19 and the build needs Node 20 or newer.
