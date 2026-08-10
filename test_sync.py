@@ -1041,26 +1041,26 @@ class TestBuildLayeredSkillSymlinks:
 
 
 # ---------------------------------------------------------------------------
-# copy mode (AGENT_SKILLS_COPY_MODE) — working around Polytoken skipping
-# skill directory symlinks
+# skills sync mode — personal skills are symlinked into ~/.agents/skills
+# (Polytoken follows skill directory symlinks since the fix shipped)
 # ---------------------------------------------------------------------------
 
 
-class TestCopyMode:
+class TestSkillsSyncMode:
     def _make_source_skill(self, root, name):
         skill = root / name
         (skill / "SKILL.md").parent.mkdir(parents=True, exist_ok=True)
         (skill / "SKILL.md").write_text(f"---\ndescription: {name}\n---\n")
         return skill
 
-    def test_layered_builder_returns_same_pairs_in_copy_mode(self, tmp_path):
+    def test_layered_builder_returns_symlink_pairs(self, tmp_path):
         targets_root = tmp_path / "source"
         self._make_source_skill(
             targets_root / "common-dev" / "dotfiles" / ".agents" / "skills", "alpha"
         )
         target = tmp_path / "target"
         symlinks = sync.build_layered_skill_symlinks(
-            targets_root, target, "redline", ["common-dev"], copy_mode=True
+            targets_root, target, "redline", ["common-dev"]
         )
         assert symlinks == [
             (
@@ -1069,20 +1069,7 @@ class TestCopyMode:
             )
         ]
 
-    def test_copy_skill_tree_makes_real_dir_with_all_files(self, tmp_path):
-        source = tmp_path / "src" / "alpha"
-        (source / "SKILL.md").parent.mkdir(parents=True)
-        (source / "SKILL.md").write_text("---\ndescription: alpha\n---\n")
-        (source / "companion.py").write_text("print('x')")
-        target = tmp_path / "agents" / "alpha"
-
-        sync.copy_skill_tree(source, target)
-
-        assert target.is_dir() and not target.is_symlink()
-        assert (target / "SKILL.md").read_text() == "---\ndescription: alpha\n---\n"
-        assert (target / "companion.py").read_text() == "print('x')"
-
-    def test_apply_sync_changes_copies_in_copy_mode(self, tmp_path):
+    def test_apply_sync_changes_symlinks_personal_skills(self, tmp_path):
         agents = tmp_path / "agents"
         source = tmp_path / "src" / "alpha"
         (source / "SKILL.md").parent.mkdir(parents=True)
@@ -1102,56 +1089,16 @@ class TestCopyMode:
             cc_skills_target=tmp_path / ".claude" / "skills",
             agents_skills_target=agents,
             work_skills_target=tmp_path / ".claude-work" / "skills",
-            copy_mode=True,
             machine=None,
         )
         assert created == [(agents / "alpha", source)]
-        assert (agents / "alpha").is_dir() and not (agents / "alpha").is_symlink()
-        assert (agents / "alpha" / "SKILL.md").read_text() == "---\ndescription: alpha\n---\n"
+        assert (agents / "alpha").is_symlink()
+        assert os.readlink(agents / "alpha") == str(source)
 
-    def test_copy_mode_expiry_raises(self, tmp_path, monkeypatch):
-        agents = tmp_path / "agents"
-        source = tmp_path / "src" / "alpha"
-        (source / "SKILL.md").parent.mkdir(parents=True)
-        (source / "SKILL.md").write_text("---\ndescription: alpha\n---\n")
-
-        # Force the timebomb to have tripped
-        monkeypatch.setattr(sync, "AGENT_SKILLS_COPY_MODE_EXPIRY", sync.date(2020, 1, 1))
-        with pytest.raises(SystemExit):
-            sync.apply_sync_changes(
-                nixos_symlinks=[],
-                dotfiles_symlinks=[],
-                skill_symlinks=[(agents / "alpha", source)],
-                cc_personal_symlink=[],
-                work_skill_symlinks=[],
-                cog_symlinks=[],
-                stale=[],
-                force=False,
-                nixos_target=tmp_path / "etc-nixos",
-                dotfiles_target=tmp_path / "home",
-                cc_skills_target=tmp_path / ".claude" / "skills",
-                agents_skills_target=agents,
-                work_skills_target=tmp_path / ".claude-work" / "skills",
-                copy_mode=True,
-                machine=None,
-            )
-
-    def test_find_conflicts_exempts_agents_tree(self, tmp_path):
+    def test_find_conflicts_reports_existing_real_skill_dir(self, tmp_path):
         agents = tmp_path / "agents"
         (agents / "alpha").mkdir(parents=True)
-        conflicts = sync.find_conflicts(
-            [(agents / "alpha", tmp_path / "src" / "alpha")],
-            exempt_targets=[agents],
-        )
-        assert conflicts == []
-
-    def test_find_conflicts_reports_without_exemption(self, tmp_path):
-        agents = tmp_path / "agents"
-        (agents / "alpha").mkdir(parents=True)
-        conflicts = sync.find_conflicts(
-            [(agents / "alpha", tmp_path / "src" / "alpha")],
-            exempt_targets=None,
-        )
+        conflicts = sync.find_conflicts([(agents / "alpha", tmp_path / "src" / "alpha")])
         assert conflicts == [agents / "alpha"]
 
 
@@ -1528,7 +1475,6 @@ class TestFirstSyncStaleRemovalOrdering:
             cc_skills_target=claude_skills,
             agents_skills_target=agents_skills,
             work_skills_target=work_skills,
-            copy_mode=False,
         )
 
         # The fresh ~/.agents/skills targets survive (never unlinked through
