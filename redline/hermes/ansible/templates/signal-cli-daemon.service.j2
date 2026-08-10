@@ -1,0 +1,21 @@
+# Managed by ansible. Edit ../hermes.yml, not this file.
+#
+# The account number is a secret, stored only at /srv/hermes/.signal-account
+# (0600, state disk), and read at exec time, so it never appears in this unit
+# or in git. The -d data dir keeps the linked-device credentials on the state
+# disk, so an OS-disk rebuild reattaches the same identity without re-pairing.
+[Unit]
+Description=signal-cli HTTP daemon (Signal bridge for Hermes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/bin/sh -c 'exec /usr/local/bin/signal-cli -a "$(cat /srv/hermes/.signal-account)" -d /srv/hermes/signal-cli-data daemon --http 127.0.0.1:8080'
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
