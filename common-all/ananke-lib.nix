@@ -3,9 +3,10 @@
 # mindgame/services/ananke.nix.
 { lib }:
 {
-  # `script` must accept the allocated port as its first arg (`{port}`) and
-  # support `--stop` for teardown. `env` has no default — ananke's spawner
-  # env_clear()s before exec, so callers must supply at least PATH.
+  # `script` must accept the allocated port as its last positional arg
+  # (`{port}`, after any `scriptArgs`) and support `--stop` for teardown.
+  # `env` has no default — ananke's spawner env_clear()s before exec, so
+  # callers must supply at least PATH.
   mkVllmService =
     { name
     , port
@@ -15,6 +16,7 @@
     , perGpuMib
     , env
     , gpuIndices ? [ 0 1 ]
+    , scriptArgs ? [ ]
     , description ? null
     , modality ? null
     , extraEnv ? { }
@@ -31,7 +33,7 @@
     {
       template = "command";
       inherit name port;
-      command = [ script "{port}" ];
+      command = [ script ] ++ scriptArgs ++ [ "{port}" ];
       shutdown_command = [ script "--stop" ];
       env = env // extraEnv;
       idle_timeout = idleTimeout;

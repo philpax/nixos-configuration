@@ -18,20 +18,41 @@ let
     HOME = home;
   };
 
-  # vramGb/perGpuMib: script's default mode targets gpu-memory-utilization
-  # 0.715 of the 5090's 32 GiB. upstreamModel matches vLLM's default
-  # served-model-name since the script doesn't pass --served-model-name.
-  diffusiongemmaService = anankeLib.mkVllmService {
-    name = "diffusiongemma";
-    port = llmBasePort;
-    script = "${home}/ai/diffusiongemma/diffusiongemma.sh";
-    upstreamModel = "nvidia/diffusiongemma-26B-A4B-it-NVFP4";
-    vramGb = 23;
-    perGpuMib = 23500;
-    gpuIndices = [ 0 ];
-    env = vllmEnv;
-    description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 2x128k mode).";
-  };
+  diffusiongemmaScript = "${home}/ai/diffusiongemma/diffusiongemma.sh";
+  diffusiongemmaUpstreamModel = "nvidia/diffusiongemma-26B-A4B-it-NVFP4";
+
+  # Two modes, one port each, so both can be registered with ananke at
+  # once (only one is ever resident — each pledges most of the 5090's 32
+  # GiB). vramGb/perGpuMib follow each mode's gpu-memory-utilization
+  # target; CONTAINER_SUFFIX keeps their docker container names distinct.
+  diffusiongemmaServices = [
+    (anankeLib.mkVllmService {
+      name = "diffusiongemma-26b-a4b-2x128k";
+      port = llmBasePort;
+      script = diffusiongemmaScript;
+      scriptArgs = [ "2x128k" ];
+      upstreamModel = diffusiongemmaUpstreamModel;
+      vramGb = 23;
+      perGpuMib = 23500;
+      gpuIndices = [ 0 ];
+      env = vllmEnv;
+      extraEnv = { CONTAINER_SUFFIX = "-2x128k"; };
+      description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 2x128k mode).";
+    })
+    (anankeLib.mkVllmService {
+      name = "diffusiongemma-26b-a4b-256k";
+      port = llmBasePort + 1;
+      script = diffusiongemmaScript;
+      scriptArgs = [ "1x256k" ];
+      upstreamModel = diffusiongemmaUpstreamModel;
+      vramGb = 22;
+      perGpuMib = 23000;
+      gpuIndices = [ 0 ];
+      env = vllmEnv;
+      extraEnv = { CONTAINER_SUFFIX = "-256k"; };
+      description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 1x256k mode).";
+    })
+  ];
 
   ananke_config = {
     daemon = {
@@ -43,7 +64,7 @@ let
     openai_api = {
       listen = "0.0.0.0:${toString openaiPort}";
     };
-    service = [ diffusiongemmaService ];
+    service = diffusiongemmaServices;
   };
 
   tomlFormat = pkgs.formats.toml { };
@@ -76,6 +97,6 @@ in
       environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
     };
 
-    networking.firewall.allowedTCPPorts = [ openaiPort managementPort llmBasePort ];
+    networking.firewall.allowedTCPPorts = [ openaiPort managementPort llmBasePort (llmBasePort + 1) ];
   };
 }
