@@ -20,12 +20,15 @@ This repo keeps agent skills in two kinds of places, and a new skill needs to la
 
 3. **Check for collisions.** If the target dir already has a `<name>/`, stop and propose a different name or ask before overwriting anything.
 
+3b. **Ask about work compatibility.** Ask the user whether the skill should also sync into the work-account Claude Code skill tree. This determines whether the scaffold includes the `.work-compatible` marker. Default to no marker unless the user opts in; the shared dev-workflow skills (committing, GitHub issues, contributing docs, prose) are the usual candidates for the marker.
+
 4. **Scaffold SKILL.md** in the house format — match the existing skills:
    - YAML frontmatter with a single `description:` line that says when to use the skill and includes likely trigger phrases.
    - A markdown body that starts with a `# Title`, then the workflow as numbered steps. If the skill creates external artifacts (issues, commits, files), spell out the consent requirements the way the `github-issue` and `committing` skills do.
    - Keep it to a single SKILL.md unless the skill genuinely needs companion files (see `redline/dotfiles/.agents/skills/llama-cpp-model-tuning/` for a multi-file example).
    - Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, consistent terminology, no metaphor or catchy emphasis statements. Bolded lead-in labels on numbered workflow steps are the documented exception and are kept; the prose after each label follows the register.
+   - Add a `.work-compatible` marker file to the skill directory when the skill should sync into the work-account Claude Code skill tree. The marker is an empty file; its presence is the signal, and its contents are ignored.
 
 5. **Write, then verify.** Write the file, re-read it, and confirm the frontmatter parses and the description reads like the other skills'. Say how it goes live: Polytoken picks up `~/.agents/skills` on reload; Claude Code reads `~/.claude/skills` — a symlink to `~/.agents/skills` — on machines after `./sync.sh`, and `.claude/skills` in this repo through the same project-local symlink.
 
-6. **Wrap up.** Show the final path, what triggers it, and remind that machine targets take effect per-machine via `./sync.sh <machine>`.
+6. **Wrap up.** Show the final path, what triggers it, whether it carries the `.work-compatible` marker, and remind that machine targets take effect per-machine via `./sync.sh <machine>`.
