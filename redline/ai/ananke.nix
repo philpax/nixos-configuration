@@ -3,6 +3,7 @@
 let
   folders = import ../folders.nix;
   lib = pkgs.lib;
+  anankeLib = import ../../common-all/ananke-lib.nix { inherit lib; };
 
   llmDir = folders.ai.llm;
   vllmDir = folders.ai.vllm;
@@ -448,86 +449,28 @@ let
       };
     in base // mmprojAttrs // (m.extras or { });
 
-  # vLLM scripts run docker in the foreground, accept the host port as
-  # their first arg (`{port}` → `-p $PORT:8000`), and shut down via a
-  # SIGTERM trap that calls `docker stop`. ananke supervises the
-  # foreground shell; that's enough for the lifecycle. Static allocation
-  # pinned per-GPU because the containers run without `--cgroup-parent`,
-  # so the snapshotter can't observe them — the pledge is the source
-  # of truth for VRAM accounting.
-  #
-  # `env.PATH` is required because ananke's spawner calls env_clear()
-  # before exec for reproducibility, and these are user-authored shell
-  # scripts that use bare `mkdir`/`docker` (unlike comfyui, which is a
-  # Nix-built wrapper with baked-in paths). HOME points docker at the
-  # ai user's `~/.docker` so credential helpers work. A service can add
-  # to this via `extra_env` (merged in mkVllmService) to feed its script
-  # tunables like MAX_MODEL_LEN / GPU_MEMORY_UTILIZATION / CONTAINER_SUFFIX.
+  # Static per-GPU allocation because the containers run without
+  # `--cgroup-parent`, so the snapshotter can't observe them — the pledge
+  # is the source of truth for VRAM accounting. `env.PATH` is required
+  # because ananke's spawner env_clear()s before exec, and these are
+  # user-authored scripts that use bare `mkdir`/`docker`.
   vllmEnv = {
     PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
     HOME = "/home/ai";
   };
-  mkVllmService = index: m:
-    let
-      # gpu_indices defaults to [ 0 1 ] for the dual-card services that
-      # made up the entire vLLM section before the embedding entry
-      # landed. Single-card services (the embedding model on GPU 1)
-      # pass `gpu_indices = [ 1 ]` to skip the gpu:0 pledge.
-      gpuIndices = m.gpu_indices or [ 0 1 ];
-      mkPlacementEntry = idx: lib.nameValuePair "gpu:${toString idx}" m.per_gpu_mib;
-      placementOverride = lib.listToAttrs (map mkPlacementEntry gpuIndices);
-      # Optional typed modality field. Folded in via lib.optionalAttrs
-      # so chat services emit no `modality` key at all (ananke defaults
-      # to chat, and the validator parses missing/`"chat"` identically),
-      # keeping the generated TOML identical to what shipped before the
-      # embedding service landed.
-      modalityAttrs = lib.optionalAttrs (m ? modality) { modality = m.modality; };
-      base = {
-        template = "command";
-        name = m.name;
-        port = llmBasePort + index;
-        description = m.description;
-        command = [ m.script "{port}" ];
-        # Explicit container teardown. The script's own EXIT/TERM trap can
-        # race ananke's SIGTERM→SIGKILL window (10s) — `docker stop` itself
-        # waits up to 10s for the container, and if the shell is killed
-        # mid-stop the orphaned `docker stop` client may not complete the
-        # request, leaving the container (and its VRAM) alive. Running
-        # `--stop` after the main child exits gets the explicit teardown
-        # under ananke's 30s shutdown-command grace.
-        shutdown_command = [ m.script "--stop" ];
-        env = vllmEnv // (m.extra_env or { });
-        idle_timeout = "60m";
-        # vLLM cold-start is multi-minute (see `health.timeout` below), so
-        # losing one to an eviction contest with a default-priority llama.cpp
-        # model is expensive — the next vLLM request pays the full warm-up
-        # tax again. Bumping above the default 50 keeps the llama.cpp herd
-        # from displacing a resident vLLM service. Anything that genuinely
-        # should preempt vLLM (a hand-tagged high-priority model) can still
-        # set a higher value.
-        priority = 70;
-        allocation = {
-          mode = "static";
-          vram_gb = m.vram_gb;
-        };
-        devices = {
-          placement = "gpu-only";
-          placement_override = placementOverride;
-        };
-        # vLLM cold start is in the multi-minute range: docker image
-        # bring-up, NCCL init, two weight loads (target + drafter), and
-        # torch.compile graph load. Default 3-minute timeout is tight; bump
-        # to 10 to leave headroom for cache misses (fresh torch.compile
-        # cache, evicted page cache, …).
-        health = {
-          http = "/health";
-          timeout = "10m";
-        };
-        openai_proxy = {
-          upstream_model = m.upstream_model;
-        };
-      };
-    in base // modalityAttrs;
+  mkVllmService = index: m: anankeLib.mkVllmService {
+    name = m.name;
+    port = llmBasePort + index;
+    script = m.script;
+    upstreamModel = m.upstream_model;
+    vramGb = m.vram_gb;
+    perGpuMib = m.per_gpu_mib;
+    gpuIndices = m.gpu_indices or [ 0 1 ];
+    env = vllmEnv;
+    extraEnv = m.extra_env or { };
+    description = m.description;
+    modality = m.modality or null;
+  };
 
   mkService = index: m:
     if (m.kind or "llama-cpp") == "vllm"
@@ -656,27 +599,16 @@ in
     description = "Cgroup parent for ananke's ComfyUI container";
   };
 
-  systemd.services.ananke = {
-    description = "Ananke";
+  systemd.services.ananke = anankeLib.mkAnankeSystemdService {
+    inherit anankeDir configFile;
+    user = "ai";
+    group = "ai";
     after = [ "docker.service" "network.target" ];
     requires = [ "docker.service" ];
-    wantedBy = [ "multi-user.target" ];
     path = [ config.ai.llamaCppCuda pkgs.docker pkgs.curl pkgs.bash ];
-
-    environment = {
-      # nvml-wrapper dlopen()s libnvidia-ml from the driver lib dir; without
-      # this the daemon logs "NVML init failed" and falls back to CPU-only.
-      LD_LIBRARY_PATH = "/run/opengl-driver/lib";
-    };
-
-    serviceConfig = {
-      User = "ai";
-      Group = "ai";
-      WorkingDirectory = anankeDir;
-      ExecStart = "${anankeDir}/target/debug/ananke --config ${configFile}";
-      Restart = "always";
-      RestartSec = "10s";
-    };
+    # nvml-wrapper dlopen()s libnvidia-ml from the driver lib dir; without
+    # this the daemon logs "NVML init failed" and falls back to CPU-only.
+    environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
   };
 
   networking.firewall.allowedTCPPorts = firewallPorts;
