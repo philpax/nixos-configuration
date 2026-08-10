@@ -1235,6 +1235,7 @@ class TestSkillSymlinksRepoIntegration:
             "github-issue",
             "github-issue-simple",
             "plain-technical-prose",
+            "pr-propose",
         }
         for _, source in symlinks:
             assert source.parent == sync.SHARED_SKILLS_SOURCE
@@ -1264,6 +1265,7 @@ class TestWorkSkillSymlinksRepoIntegration:
             "github-issue",
             "github-issue-simple",
             "plain-technical-prose",
+            "pr-propose",
         }
 
     def test_targets_under_claude_work_dir(self):
