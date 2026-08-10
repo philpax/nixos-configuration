@@ -25,8 +25,8 @@ rec {
 
   tailscaleIface = "tailscale0";
 
-  # An external resolver rather than the host's, which would require opening a
-  # host service to the guest.
+  # External resolver: the host's would require opening a host service to
+  # the guest.
   resolver = "1.1.1.1";
 
   dashboardPort = 9119;

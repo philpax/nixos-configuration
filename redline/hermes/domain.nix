@@ -1,6 +1,5 @@
 # libvirt domain for the Hermes VM, generated from ./net.nix.
-#
-# A oneshot unit in ./default.nix runs `virsh define` on every rebuild. A
+# A oneshot unit in ./default.nix runs `virsh define` on every rebuild; a
 # running domain keeps its current definition until next boot.
 { folders, net }:
 
@@ -15,8 +14,7 @@ in
 ''
 <domain type='kvm'>
   <name>${net.name}</name>
-  <!-- Without a fixed UUID, libvirt generates one per define and then fails
-       because the name is already taken. -->
+  <!-- Fixed UUID makes `virsh define` idempotent. -->
   <uuid>${net.uuid}</uuid>
   <memory unit='MiB'>${toString net.memoryMiB}</memory>
   <currentMemory unit='MiB'>${toString net.memoryMiB}</currentMemory>

@@ -7,12 +7,9 @@
 # which reach ananke.
 
 [llm]
-# ananke does not check bearer tokens; the OpenAI transport requires the
-# variable to be set.
 OPENAI_API_KEY = "sk-ananke-local"
 
 [embedding]
-# Must match the embedder, or pgvector rejects every insert.
 VECTOR_DIMENSIONS = {{ embedding_dimensions }}
 MAX_INPUT_TOKENS = 8192
 MAX_TOKENS_PER_REQUEST = 300000
