@@ -11,18 +11,6 @@ import pytest
 
 import sync
 
-
-def _cogs_checked_out() -> bool:
-    """True if the steel-cogs submodules are populated (have their cog.scm).
-
-    A fresh clone without `git submodule update --init` leaves them as empty
-    directories, in which case the repo-integration tests below can't run.
-    """
-    if not sync.STEEL_COGS_SOURCE.is_dir():
-        return False
-    return any((d / "cog.scm").is_file() for d in sync.STEEL_COGS_SOURCE.iterdir() if d.is_dir())
-
-
 # ---------------------------------------------------------------------------
 # parse_imported_layers — pure function, no I/O
 # ---------------------------------------------------------------------------
@@ -667,22 +655,110 @@ class TestShortenPath:
 
 
 # ---------------------------------------------------------------------------
-# Integration: build_symlink_list with real repo structure
+# build_symlink_list with a synthetic mirror of the repo's target-first
+# structure (monkeypatched TARGETS_ROOT) — no real repo state is read
 # ---------------------------------------------------------------------------
 
 
-class TestRepoIntegration:
-    """Smoke tests against the real repo to catch structural regressions."""
+def _make_synthetic_repo(root: Path) -> None:
+    """Build a tmp_path mirror of the repo's target-first layout.
 
-    def test_redline_gets_common_all_and_dev_dotfiles(self):
+    Mirrors the structural facts TestRepoIntegration previously read from the
+    real repo: redline imports common-all directly in configuration.nix and
+    common-dev transitively via programs/development.nix; paprika imports all
+    four layers; the four machines each have a configuration.nix importing at
+    least one common-* layer; and the dotfiles/ subdirs hold representative
+    files. Decoys (`.agents`, `steel-cogs`, a stray file) exist at the root to
+    keep the layout guard non-vacuous.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    for name in TARGETS:
+        (root / name).mkdir(parents=True, exist_ok=True)
+
+    (root / "redline" / "configuration.nix").write_text(
+        "{ imports = [ ../common-all/configuration.nix ]; }"
+    )
+    (root / "redline" / "programs").mkdir(exist_ok=True)
+    (root / "redline" / "programs" / "development.nix").write_text(
+        "{ imports = [ ../../common-dev/programs/development.nix ]; }"
+    )
+    (root / "paprika" / "configuration.nix").write_text(
+        "{ imports = [ "
+        "../common-all/configuration.nix "
+        "../common-desktop/configuration.nix "
+        "../common-dev/programs/development.nix "
+        "../common-dev-desktop/configuration.nix "
+        "]; }"
+    )
+    (root / "common-all" / "configuration.nix").write_text("{ imports = []; }")
+    (root / "common-desktop" / "configuration.nix").write_text("{ imports = []; }")
+    (root / "common-dev" / "configuration.nix").write_text("{ imports = []; }")
+    (root / "common-dev-desktop" / "configuration.nix").write_text("{ imports = []; }")
+    (root / "jinroh" / "configuration.nix").write_text(
+        "{ imports = [ ../common-all/configuration.nix ]; }"
+    )
+    (root / "mindgame" / "configuration.nix").write_text(
+        "{ imports = [ "
+        "../common-all/configuration.nix "
+        "../common-desktop/configuration.nix "
+        "../common-dev/programs/development.nix "
+        "../common-dev-desktop/configuration.nix "
+        "]; }"
+    )
+
+    dotfiles = {
+        "common-all": {
+            ".gitconfig": "# git",
+            ".config/fish/config.fish": "set -gx EDITOR helix",
+        },
+        "common-desktop": {".config/sddm/theme.conf": "# sddm"},
+        "common-dev": {
+            ".config/fish/functions/vrchat-transcode.fish": "function vrchat-transcode; end",
+            ".config/helix/config.toml": "theme = 'catppuccin_frappe'",
+        },
+        "common-dev-desktop": {
+            ".config/niri/config.kdl": "layout { columns 1 }",
+            ".config/alacritty/alacritty.toml": "[general]\nlive_config_reload = true",
+            ".config/quickshell/panel.qml": "import QtQuick\n",
+        },
+        "mindgame": {".config/docker/daemon.json": '{"experimental": true}'},
+        "redline": {".config/immich/config.env": "DB_HOST=localhost"},
+    }
+    for layer, files in dotfiles.items():
+        for rel, content in files.items():
+            p = root / layer / "dotfiles" / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+
+    # Decoys at the synthetic root — non-target entries that a broken target
+    # filter (e.g. "any dir" or "anything not a file") would wrongly pick up:
+    # .agents (plain dir), steel-cogs (plain dir — the real one is an
+    # un-checked-out submodule root), and a stray file. None has a
+    # configuration.nix or dotfiles/ subdir, so discover_targets excludes
+    # them by the current configuration.nix/dotfiles rule.
+    (root / ".agents").mkdir(exist_ok=True)
+    (root / "steel-cogs").mkdir(exist_ok=True)
+    (root / "stray.txt").write_text("not a target")
+
+
+class TestRepoIntegration:
+    """Transitive-import and layer-allow-list behavior against a synthetic
+    mirror of the repo layout (monkeypatched into TARGETS_ROOT). Fails on
+    regression of the import/layering contract, without reading real files."""
+
+    def test_redline_gets_common_all_and_dev_dotfiles(self, tmp_path, monkeypatch):
         """redline imports common-all directly and common-dev transitively
         (via programs/development.nix) — but not common-desktop or common-dev-desktop."""
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
+
         config = sync.target_dir("redline") / "configuration.nix"
         layers = sync.get_imported_layers(config)
         assert layers == ["common-all", "common-dev"]
 
         dotfiles = sync.build_symlink_list(
-            sync.TARGETS_ROOT,
+            root,
             sync.DOTFILES_TARGET,
             "redline",
             allowed_layers=layers,
@@ -699,8 +775,12 @@ class TestRepoIntegration:
         assert not any("alacritty" in t for t in targets)
         assert not any("quickshell" in t for t in targets)
 
-    def test_paprika_gets_all_layers(self):
+    def test_paprika_gets_all_layers(self, tmp_path, monkeypatch):
         """paprika imports all four layers — should get common-dev-desktop dotfiles."""
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
+
         config = sync.target_dir("paprika") / "configuration.nix"
         layers = sync.get_imported_layers(config)
         assert "common-all" in layers
@@ -709,7 +789,7 @@ class TestRepoIntegration:
         assert "common-dev-desktop" in layers
 
         dotfiles = sync.build_symlink_list(
-            sync.TARGETS_ROOT,
+            root,
             sync.DOTFILES_TARGET,
             "paprika",
             allowed_layers=layers,
@@ -719,8 +799,12 @@ class TestRepoIntegration:
         assert any("niri/config.kdl" in t for t in targets)
         assert any("alacritty" in t for t in targets)
 
-    def test_all_machines_parse_successfully(self):
+    def test_all_machines_parse_successfully(self, tmp_path, monkeypatch):
         """Every machine directory should have a parseable configuration.nix."""
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
+
         for entry in sync.discover_targets():
             if entry.name.startswith("common"):
                 continue
@@ -1039,6 +1123,30 @@ class TestBuildLayeredSkillSymlinks:
         )
         assert symlinks == []
 
+    def test_work_skills_subset_of_cc_skills(self, tmp_path):
+        """The work-account set (marked skills from the shared dev skills
+        tree) must be a subset of the personal/CC set a machine syncs. Ported
+        from the deleted TestWorkSkillSymlinksRepoIntegration."""
+        targets_root = tmp_path / "source"
+        skills_dir = targets_root / "common-dev" / "dotfiles" / ".agents" / "skills"
+        for name in ("committing", "github-issue", "editorial"):
+            skill = skills_dir / name
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(f"# {name}")
+        for name in ("committing", "github-issue"):
+            (skills_dir / name / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
+
+        cc_symlinks = sync.build_layered_skill_symlinks(
+            targets_root, tmp_path / "target", "redline", ["common-dev"]
+        )
+        cc_names = {t.name for t, s in cc_symlinks}
+        work_symlinks = sync.build_work_skill_symlinks(skills_dir, tmp_path / "work")
+        work_names = {t.name for t, s in work_symlinks}
+        assert work_names <= cc_names
+        # Non-empty: the work set is the marked subset, the CC set has it all.
+        assert work_names == {"committing", "github-issue"}
+        assert cc_names == {"committing", "github-issue", "editorial"}
+
 
 # ---------------------------------------------------------------------------
 # skills sync mode — personal skills are symlinked into ~/.agents/skills
@@ -1108,12 +1216,16 @@ class TestSkillsSyncMode:
 
 
 class TestCcPersonalWiring:
-    def test_returns_single_dir_symlink(self):
+    def test_returns_single_dir_symlink(self, tmp_path, monkeypatch):
         """CC personal wiring is exactly one directory symlink:
         ~/.claude/skills -> ~/.agents/skills."""
-        agents_target = Path.home() / ".agents" / "skills"
-        wiring = sync.build_cc_personal_wiring(agents_target)
-        assert wiring == [(Path.home() / ".claude" / "skills", agents_target)]
+        claude_skills = tmp_path / ".claude" / "skills"
+        agents_skills = tmp_path / ".agents" / "skills"
+        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", claude_skills)
+        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", agents_skills)
+
+        wiring = sync.build_cc_personal_wiring(agents_skills)
+        assert wiring == [(claude_skills, agents_skills)]
 
     def test_created_link_points_at_agents_skills(self, tmp_path):
         """Creating the wiring symlink via create_or_update_symlinks produces
@@ -1128,16 +1240,20 @@ class TestCcPersonalWiring:
         assert cc_target.is_symlink()
         assert os.readlink(cc_target) == str(agents_target)
 
-    def test_included_in_main_flow_created_set(self):
+    def test_included_in_main_flow_created_set(self, tmp_path, monkeypatch):
         """The dir symlink must be part of the combined new-symlink set that
         main() passes to apply_sync_changes (and hence the created set)."""
-        agents_target = Path.home() / ".agents" / "skills"
-        wiring = sync.build_cc_personal_wiring(agents_target)
+        claude_skills = tmp_path / ".claude" / "skills"
+        agents_skills = tmp_path / ".agents" / "skills"
+        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", claude_skills)
+        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", agents_skills)
+
+        wiring = sync.build_cc_personal_wiring(agents_skills)
         all_new = [
-            (Path.home() / ".claude" / "skills" / "committing", Path("/src") / "committing"),
+            (claude_skills / "committing", tmp_path / "src" / "committing"),
         ]
         all_new += wiring
-        assert (Path.home() / ".claude" / "skills", agents_target) in all_new
+        assert (claude_skills, agents_skills) in all_new
 
 
 # ---------------------------------------------------------------------------
@@ -1207,94 +1323,18 @@ class TestClassifyStale:
 
 
 # ---------------------------------------------------------------------------
-# build_skill_symlinks — integration with real repo
+# build_skill_symlinks — fully covered by TestBuildSkillSymlinks above.
+# The real-repo integration class was deleted: it duplicated the synthetic
+# coverage and depended on the repo's shared skills tree being present.
 # ---------------------------------------------------------------------------
 
 
-class TestSkillSymlinksRepoIntegration:
-    """Smoke tests against the real repo's shared skills directory."""
-
-    def test_finds_real_skills(self):
-        symlinks = sync.build_skill_symlinks(sync.SHARED_SKILLS_SOURCE, sync.AGENTS_SKILLS_TARGET)
-        names = {t.name for t, s in symlinks}
-        assert "committing" in names
-        assert "github-issue" in names
-
-    def test_targets_under_agents_skills_dir(self):
-        symlinks = sync.build_skill_symlinks(sync.SHARED_SKILLS_SOURCE, sync.AGENTS_SKILLS_TARGET)
-        for target, _ in symlinks:
-            assert target.parent == sync.AGENTS_SKILLS_TARGET
-
-    def test_sources_point_to_shared_skills(self):
-        symlinks = sync.build_skill_symlinks(sync.SHARED_SKILLS_SOURCE, sync.AGENTS_SKILLS_TARGET)
-        names = {t.name for t, s in symlinks}
-        assert names == {
-            "committing",
-            "contributing-init",
-            "contributing-update",
-            "github-issue",
-            "github-issue-simple",
-            "plain-technical-prose",
-            "pr-propose",
-        }
-        for _, source in symlinks:
-            assert source.parent == sync.SHARED_SKILLS_SOURCE
-            assert (source / "SKILL.md").is_file()
-
-
 # ---------------------------------------------------------------------------
-# build_work_skill_symlinks — integration with real repo
+# build_work_skill_symlinks — fully covered by TestBuildWorkSkillSymlinks
+# above (the marked-only subset + the .work-compatible marker contract).
+# The work⊆personal invariant is ported to
+# TestBuildLayeredSkillSymlinks.test_work_skills_subset_of_cc_skills.
 # ---------------------------------------------------------------------------
-
-
-class TestWorkSkillSymlinksRepoIntegration:
-    """Smoke tests for the work-account Claude Code sync — skills present in
-    the real repo that carry the .work-compatible marker, synced into
-    ~/.claude-work/skills/."""
-
-    def test_finds_marked_skills(self):
-        symlinks = sync.build_work_skill_symlinks(
-            sync.SHARED_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
-        )
-        marked = {t.name for t, s in symlinks}
-        # Pinned: these four skills carry the .work-compatible marker in the
-        # shared dev skills tree. Pinning guards against an accidentally-empty
-        # or accidentally-different work set.
-        assert marked == {
-            "committing",
-            "github-issue",
-            "github-issue-simple",
-            "plain-technical-prose",
-            "pr-propose",
-        }
-
-    def test_targets_under_claude_work_dir(self):
-        symlinks = sync.build_work_skill_symlinks(
-            sync.SHARED_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
-        )
-        for target, _ in symlinks:
-            assert target.parent == sync.CLAUDE_WORK_SKILLS_TARGET
-
-    def test_sources_have_marker_and_skill_md(self):
-        symlinks = sync.build_work_skill_symlinks(
-            sync.SHARED_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
-        )
-        for _, source in symlinks:
-            assert (source / "SKILL.md").is_file()
-            assert (source / sync.WORK_COMPATIBLE_MARKER).is_file()
-
-    def test_marked_skills_are_subset_of_cc_skills(self):
-        # Personal skills are built layer-aware; redline imports common-dev
-        # (via programs/development.nix), so it gets the shared dev skills.
-        cc_symlinks = sync.build_layered_skill_symlinks(
-            sync.TARGETS_ROOT, sync.AGENTS_SKILLS_TARGET, "redline", ["common-dev"]
-        )
-        cc_names = {t.name for t, s in cc_symlinks}
-        work_symlinks = sync.build_work_skill_symlinks(
-            sync.SHARED_SKILLS_SOURCE, sync.CLAUDE_WORK_SKILLS_TARGET
-        )
-        work_names = {t.name for t, s in work_symlinks}
-        assert work_names <= cc_names
 
 
 # ---------------------------------------------------------------------------
@@ -1363,34 +1403,11 @@ class TestBuildCogSymlinks:
 
 
 # ---------------------------------------------------------------------------
-# build_cog_symlinks — integration with real repo
+# build_cog_symlinks — fully covered by TestBuildCogSymlinks above (incl. the
+# empty-submodule directory case). The real-repo integration class was
+# deleted: it duplicated that coverage, added a skipif gate on the steel-cogs
+# submodule checkout state, and pinned the exact cog names.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(
-    not _cogs_checked_out(),
-    reason="steel-cogs submodules not checked out (run `git submodule update --init`)",
-)
-class TestCogSymlinksRepoIntegration:
-    """Smoke tests against the real repo's steel-cogs submodules."""
-
-    def test_finds_real_cogs(self):
-        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
-        names = {t.name for t, s in symlinks}
-        # forest.hx's dependencies resolve by cog package-name, so the dirs are
-        # named forest/notify/glyph regardless of repo name.
-        assert names == {"forest", "notify", "glyph"}
-
-    def test_targets_under_steel_cogs_dir(self):
-        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
-        for target, _ in symlinks:
-            assert target.parent == sync.STEEL_COGS_TARGET
-
-    def test_sources_have_cog_scm(self):
-        symlinks = sync.build_cog_symlinks(sync.STEEL_COGS_SOURCE, sync.STEEL_COGS_TARGET)
-        for _, source in symlinks:
-            assert source.parent == sync.STEEL_COGS_SOURCE
-            assert (source / "cog.scm").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -1531,43 +1548,53 @@ TARGETS_WITH_DOTFILES = [
 class TestRepoLayout:
     """The repository is target-first: no top-level nixos/ or dotfiles/ dirs,
     the 8 targets live at the repo root, and the 6 expected dotfiles/ subdirs
-    exist. Fails on regression of the layout."""
+    exist. Runs against the synthetic mirror (monkeypatched into TARGETS_ROOT)
+    so it exercises the discover/layout contract without reading real files."""
 
-    def test_no_top_level_grouping_dirs(self):
-        assert not (sync.TARGETS_ROOT / "nixos").exists()
-        assert not (sync.TARGETS_ROOT / "dotfiles").exists()
+    def test_no_top_level_grouping_dirs(self, tmp_path, monkeypatch):
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
+        assert not (root / "nixos").exists()
+        assert not (root / "dotfiles").exists()
 
-    def test_all_targets_exist_at_root(self):
+    def test_all_targets_exist_at_root(self, tmp_path, monkeypatch):
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
         for name in TARGETS:
-            assert (sync.TARGETS_ROOT / name).is_dir(), f"missing target {name}"
+            assert (root / name).is_dir(), f"missing target {name}"
 
-    def test_dotfiles_subdirs_exist(self):
+    def test_dotfiles_subdirs_exist(self, tmp_path, monkeypatch):
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
         for name in TARGETS_WITH_DOTFILES:
-            assert (sync.TARGETS_ROOT / name / "dotfiles").is_dir(), (
-                f"{name} should have a dotfiles/ subdir"
-            )
+            assert (root / name / "dotfiles").is_dir(), f"{name} should have a dotfiles/ subdir"
 
-    def test_discover_targets_matches_expected(self):
+    def test_discover_targets_matches_expected(self, tmp_path, monkeypatch):
+        """discovers exactly the target dirs, excluding .agents, steel-cogs
+        and stray files that share the root."""
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
         names = {d.name for d in sync.discover_targets()}
         assert names == set(TARGETS)
 
-    def test_machines_have_configuration_nix(self):
+    def test_machines_have_configuration_nix(self, tmp_path, monkeypatch):
+        root = tmp_path / "repo"
+        _make_synthetic_repo(root)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
         for name in ["jinroh", "mindgame", "paprika", "redline"]:
-            assert (sync.TARGETS_ROOT / name / "configuration.nix").is_file()
+            assert (root / name / "configuration.nix").is_file()
 
 
 # ---------------------------------------------------------------------------
-# Docs/skills — no stale nixos/<target> or dotfiles/<layer> paths (AC.6)
+# Docs/skills content — STALE_PATH_RE flags pre-move path forms and allows
+# the post-move forms. This is a pure regex contract test on inline fixture
+# texts; it does not read the repo's current docs.
 # ---------------------------------------------------------------------------
 
-
-DOCS_AND_SKILLS = [
-    "CONTRIBUTING.md",
-    ".agents/skills/new-skill/SKILL.md",
-    "redline/dotfiles/.agents/skills/llama-cpp-model-tuning/SKILL.md",
-    "redline/hermes/README.md",
-    "redline/services/MINECRAFT_UPGRADE.md",
-]
 
 # Pre-move path forms only. The post-move forms (redline/dotfiles/...,
 # common-dev/dotfiles/...) are correct and must NOT be flagged.
@@ -1578,14 +1605,54 @@ STALE_PATH_RE = re.compile(
     r"|nixos-configuration/nixos/"
 )
 
+# Representative doc/skill texts: correct post-move forms (allowed) interleaved
+# with stale pre-move forms (must be flagged). Mirrors what the repo's docs and
+# skills previously asserted against the real files.
+STALE_PATH_DOC_FIXTURES = [
+    # (text, expected_stale)
+    (
+        "The sync lives in redline/dotfiles/.config/fish/config.fish and is "
+        "applied by ./sync.sh redline.",
+        False,
+    ),
+    (
+        "Common skills ship from common-dev/dotfiles/.agents/skills/committing.",
+        False,
+    ),
+    (
+        "Reverted to nixos/redline (pre-move) in the old layout.",
+        True,
+    ),
+    (
+        "Layered renders at dotfiles/common-dev/.config/helix/config.toml (pre-move).",
+        True,
+    ),
+    (
+        "A skill doc explaining dotfiles/<layer> is a placeholder form.",
+        True,
+    ),
+    (
+        "A stale absolute path: ~/nixos-configuration/nixos/paprika/configuration.nix.",
+        True,
+    ),
+]
 
-class TestRepoDocsNoStalePaths:
-    """Docs and skills must not reference pre-move paths (nixos/<target>,
-    dotfiles/<layer>, ~/nixos-configuration/nixos/...)."""
 
-    @pytest.mark.parametrize("relpath", DOCS_AND_SKILLS)
-    def test_no_stale_paths(self, relpath):
-        f = sync.TARGETS_ROOT / relpath
-        assert f.is_file(), f"missing doc/skill file {relpath}"
-        text = f.read_text()
-        assert not STALE_PATH_RE.search(text), f"{relpath} contains a stale pre-move path"
+class TestStalePathRegex:
+    """STALE_PATH_RE flags stale pre-move path forms and allows the correct
+    post-move (target-first) forms — exercised over inline fixtures."""
+
+    @pytest.mark.parametrize(
+        "text,expected_stale",
+        STALE_PATH_DOC_FIXTURES,
+        ids=[
+            "allows-layered-dotfiles",
+            "allows-layer-skills",
+            "flags-nixos",
+            "flags-dotfiles",
+            "flags-placeholder",
+            "flags-abs-nixos",
+        ],
+    )
+    def test_stale_path_regex(self, text, expected_stale):
+        assert bool(STALE_PATH_RE.search(text)) is expected_stale

@@ -43,8 +43,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # Steel cogs are git submodules; the repo-integration tests in test_sync.py
-      # need them checked out to find the real forest/notify/glyph cog dirs.
+      # Steel cogs are git submodules. test_sync.py now builds synthetic
+      # tmp_path trees and no longer reads the real steel-cogs checkout, so
+      # the tests pass without the submodules; the checkout is kept for a
+      # complete working tree, not for the tests.
       - uses: actions/checkout@v4
         with:
           submodules: true
