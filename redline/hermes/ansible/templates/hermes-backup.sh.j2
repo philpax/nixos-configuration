@@ -21,7 +21,6 @@ set -euo pipefail
 DROP={{ drop_dir }}
 STAGE={{ state_root }}/.backup-stage
 HERMES_HOME={{ hermes_home }}
-COMPOSE="{{ honcho_dir }}/src/docker-compose.yml"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 KEEP_DAYS=14
 
@@ -67,31 +66,16 @@ PY
 
 tar --zstd -cf "$STAGE/snapshot.tar.zst" -C "$STAGE" snapshot
 
-# --format=custom so that pg_restore can be selective, and so that a truncated
-# dump fails to parse rather than restoring silently incomplete.
-docker compose -f "$COMPOSE" exec -T database \
-  pg_dump -U honcho -d honcho --format=custom \
-  > "$STAGE/honcho.tmp"
-
-# pg_restore reads stdin when given no file argument. Naming /dev/stdin instead
-# fails inside the container with "did not find magic string in file header".
-docker compose -f "$COMPOSE" exec -T database \
-  pg_restore --list < "$STAGE/honcho.tmp" > /dev/null
-
-# Verify the tar before publishing the pair. `-d` on a streaming archive is
+# Verify the tar before publishing. `-d` on a streaming archive is
 # destructive, so copy to a temp file first.
 zstd -d -c "$STAGE/snapshot.tar.zst" > "$STAGE/snapshot-noverify.tar"
 tar -tf "$STAGE/snapshot-noverify.tar" > /dev/null
 rm -f "$STAGE/snapshot-noverify.tar"
 
-# Both artefacts are verified before either is published, so the drop never
-# holds a matched pair where only one side is good.
-mv "$STAGE/honcho.tmp" "$DROP/honcho-$STAMP.dump"
 mv "$STAGE/snapshot.tar.zst" "$DROP/hermes-home-$STAMP.tar.zst"
 
 # Local retention is short because /storage holds the long tail under ZFS
 # snapshots.
-find "$DROP" -type f -name '*.dump' -mtime +$KEEP_DAYS -delete
 find "$DROP" -type f -name '*.tar.zst' -mtime +$KEEP_DAYS -delete
 
-echo "backup complete: honcho-$STAMP.dump, hermes-home-$STAMP.tar.zst"
+echo "backup complete: hermes-home-$STAMP.tar.zst"

@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }:
 
-# Host side of the sandboxed Hermes Agent and its Honcho memory backend. See
-# ./README.md for the enrolment and recovery procedures.
+# Host side of the sandboxed Hermes Agent. See ./README.md for the enrolment
+# and recovery procedures.
 #
 # The guest side is imperative and lives in ./cloud-init and ./ansible.
 
@@ -18,9 +18,7 @@ let
   # the inventory) and are deliberately not included.
   ansibleVars = pkgs.writeText "hermes-ansible-vars.yml" (builtins.toJSON {
     ananke_base_url = anankeBaseUrl;
-    deriver_model = ananke.defaultModel;
     dashboard_port = net.dashboardPort;
-    honcho_port = net.honchoPort;
   });
 
   # The ansible inventory is derived from net.nix so the guest address and
@@ -86,12 +84,6 @@ let
       ${pkgs.findutils}/bin/find "$drop" -type f -name "$1" -mmin -180 -size +1c \
         | ${pkgs.gnugrep}/bin/grep -q .
     }
-
-    if ! fresh '*.dump'; then
-      echo "no Honcho database dump written to $drop in the last 3 hours" >&2
-      ${pkgs.coreutils}/bin/ls -la "$drop" >&2 || true
-      exit 1
-    fi
 
     if ! fresh '*.tar.zst'; then
       echo "no HERMES_HOME archive written to $drop in the last 3 hours" >&2

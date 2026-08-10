@@ -1,6 +1,6 @@
 # Sandboxed Hermes Agent
 
-A [Hermes Agent](https://github.com/NousResearch/hermes-agent) instance with a self-hosted [Honcho](https://github.com/plastic-labs/honcho) memory backend runs in an Ubuntu VM under libvirt. The agent uses ananke for inference and Signal for input.
+A [Hermes Agent](https://github.com/NousResearch/hermes-agent) instance runs in an Ubuntu VM under libvirt. The agent uses ananke for inference, Signal for input, and Hermes' built-in memory (MEMORY.md / USER.md) for persistence.
 
 The VM runs as a single root account, reachable only from redline over a host-only bridge. Concrete addresses, ports, sizes and refs live in `net.nix`, `domain.nix` and `ansible/hermes.yml`; this README states decisions and procedures, and points at those files rather than restating values.
 
@@ -50,8 +50,6 @@ Enrolment runs once, by hand.
 hermes-ssh
 # HERMES_HOME is exported by /etc/profile.d/hermes.sh on the guest.
 
-hermes memory setup honcho     # baseUrl is Honcho on localhost; local URLs
-                               # auto-skip API key auth
 hermes config set model ...    # the provider/base URL are in
                                # /etc/hermes/ansible-vars.yml
 ```
@@ -81,7 +79,7 @@ ssh-keygen -R "$(sed -n 's/^  guestAddr = "\([^"]*\)";/\1/p' net.nix)"
 ansible-playbook -i /etc/hermes/inventory.ini hermes.yml
 ```
 
-The state disk is untouched, so memory, config and Honcho's database survive. The procedure takes about 20 minutes.
+The state disk is untouched, so memory and config survive. The procedure takes about 20 minutes.
 
 ### State is lost or corrupt
 
@@ -92,20 +90,13 @@ Copy the pair into `/mnt/ssd0/hermes/drop` on the host so they appear at `/srv/d
 ```bash
 # in the guest
 systemctl stop hermes-gateway hermes-dashboard
-cd /srv/hermes/honcho/src
-docker compose stop api deriver
-
 tar --zstd -xf /srv/drop/hermes-home-<stamp>.tar.zst -C /srv/hermes
-docker compose exec -T database \
-  pg_restore -U honcho -d honcho --clean --if-exists < /srv/drop/honcho-<stamp>.dump
-
-docker compose start api deriver
 systemctl start hermes-gateway hermes-dashboard
 ```
 
-The restore commands assume the host drop and guest drop paths used by `default.nix` and the backup service. `--if-exists` is required: without it `--clean` errors on a database that does not already hold the objects. `api` and `deriver` must be stopped, or their open connections block the drops.
+The `hermes-home-*.tar.zst` archive holds `state.db`, `sessions/` and `config.yaml`, which carry the memory and enrolment. The `honcho-*.dump` artefacts are legacy: Honcho is no longer provisioned, and the database it produced is not used.
 
-The enrolment returns with `config.yaml`, which carries the model provider and the Honcho connection. The `SIGNAL_*` env vars live in the agent `.env`, captured in the same backup. The wizards do not need to be re-run.
+The enrolment returns with `config.yaml`, which carries the model provider. The `SIGNAL_*` env vars live in the agent `.env`, captured in the same backup. The wizards do not need to be re-run.
 
 ### Memory is poisoned and the damage is noticed late
 
@@ -117,7 +108,7 @@ Restore with restic from the external drive, then follow the two procedures abov
 
 ## Operational notes
 
-The backup contains secrets. `config.yaml` and `.env` carry the model provider, the Honcho connection and the `SIGNAL_*` vars. The Honcho database password is on the state disk. The `/storage` copy is plaintext on a pool readable only by the owner. The restic copy to the external drive is encrypted. This trade is deliberate: it is what allows a restore to return the enrolment.
+The backup contains secrets. `config.yaml` and `.env` carry the model provider, the approval config and the `SIGNAL_*` vars. The `/storage` copy is plaintext on a pool readable only by the owner. The restic copy to the external drive is encrypted. This trade is deliberate: it is what allows a restore to return the enrolment.
 
 The backup is not trustworthy without the freshness check. `hermes-backup-check` (in `default.nix`) fails if nothing has been written to the drop for the window defined there, and is wired into `unit-alerts.nix`. A drop directory that stops updating is indistinguishable from a healthy one from rsync's perspective. This is the failure mode that most often defeats a backup.
 
@@ -127,17 +118,15 @@ The backup path was verified on the same date: `hermes-backup.service` produced 
 
 A restore drill has not been performed. The recovery section is design rather than evidence. Until the VM has been destroyed once and returned with its memory intact, the accurate description of confidence is "should work".
 
-Honcho's cost falls on the GPUs, not on VM memory. The deriver performs multi-pass dialectic reasoning per message, so one Signal turn can produce several ananke calls beyond the agent's own. These contend with AudioMuse, whisper-lyrics and ComfyUI on the same two 3090s. If contention is a problem, point the deriver and the lower dialectic levels at a small resident model in `ansible/templates/honcho-config.toml.j2`.
+The agent uses Hermes' built-in memory (`MEMORY.md` / `USER.md`), which makes no LLM calls in the background. Honcho was previously the external memory provider; its per-message deriver and dialectic pipeline issued several model calls beyond the agent's own. It is removed from provisioning, and the remaining `honcho-*.dump` backup artefacts are retained but unused.
 
 The agent's working directory is defined by `workspace` in `ansible/hermes.yml`, on the state disk. In `$HOME` it would sit on the disk that is designed to be deleted and rebuilt.
-
-Both upstreams move quickly, and both refs are pinned in `ansible/hermes.yml`. When `honcho_ref` is bumped, diff their `docker-compose.yml.example` against `templates/honcho-compose.yml.j2`. The template removes the Postgres and Redis port mappings and sets real credentials, so upstream's example will drift from it.
 
 The FORWARD chain position is contested. tailscaled and dockerd both insert at position 1 when they restart or reconcile, and `ts-forward` ends with `-o tailscale0 -j ACCEPT`, which would let the guest reach the tailnet. `iptables -S FORWARD` should show both `HERMES-FWD` jumps first; re-run `systemctl restart firewall` if it does not.
 
 The off-host copy schedule is defined in the host's backup module; hourly dumps sit in the host drop directory until the weekly sync reaches `/storage`. The latency to the ZFS copy is not hourly.
 
-The agent is in the guest's `docker` group, which is root-equivalent inside the VM. The unpublished Postgres port and the drop directory raise the cost of tampering rather than preventing it; the VM boundary and the ZFS snapshots are what actually hold.
+The agent is in the guest's `docker` group, which is root-equivalent inside the VM. The drop directory raises the cost of tampering rather than preventing it; the VM boundary and the ZFS snapshots are what actually hold.
 
 Signal is the messaging channel. The Ansible playbook installs the bridge and its daemon unit; the daemon stays disabled until the phone completes device linking. The linking procedure and secret-handling are described in the playbook's Signal section. The gateway enables Signal when `SIGNAL_HTTP_URL` and `SIGNAL_ACCOUNT` are set in the agent `.env`; `SIGNAL_ALLOWED_USERS` lists the numbers allowed to DM, and should be set to the account number. Groups default to off; opt in with `SIGNAL_GROUP_ALLOWED_USERS`.
 
