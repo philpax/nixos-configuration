@@ -12,21 +12,45 @@ providers:
     auth:
       type: static_key
       key: $(cat ~/.tokens/umans-token)
-  llama-local:
+  ananke-redline:
     kind:
       type: custom_open_ai_compatible
     url: http://redline:7070/v1
     auth:
       type: no_auth
+  ananke-mindgame:
+    kind:
+      type: custom_open_ai_compatible
+    url: http://mindgame:7070/v1
+    auth:
+      type: no_auth
 models:
-  llama-local/gemma-4-31b-it-qat:
+  ananke-redline/gemma-4-31b-it-qat:
     provider_name: gemma-4-31b-it-qat
     variant: other
     class: mini
-    provider: llama-local
+    provider: ananke-redline
     reasoning:
       type: no_reasoning
     context_window: 200000
+  ananke-mindgame/diffusiongemma-26b-a4b-2x128k:
+    provider_name: diffusiongemma-26b-a4b-2x128k
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 131072
+  ananke-mindgame/diffusiongemma-26b-a4b-256k:
+    provider_name: diffusiongemma-26b-a4b-256k
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 262144
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
