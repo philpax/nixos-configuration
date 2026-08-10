@@ -13,15 +13,29 @@ let
   anankeBaseUrl = "http://${net.hostAddr}:${toString ananke.openaiPort}/v1";
 
   # Loaded by ansible/hermes.yml via vars_files, so the playbook does not repeat
-  # values Nix already holds.
+  # values Nix already holds. Only the keys the playbook consumes are emitted;
+  # host_addr/guest_addr are dead (the bridge addresses come from net.nix and
+  # the inventory) and are deliberately not included.
   ansibleVars = pkgs.writeText "hermes-ansible-vars.yml" (builtins.toJSON {
     ananke_base_url = anankeBaseUrl;
     deriver_model = ananke.defaultModel;
-    host_addr = net.hostAddr;
-    guest_addr = net.guestAddr;
     dashboard_port = net.dashboardPort;
     honcho_port = net.honchoPort;
   });
+
+  # The ansible inventory is derived from net.nix so the guest address and
+  # SSH user have a single source of truth. The host writes it to
+  # /etc/hermes/inventory.ini; there is no inventory in git.
+  hermesInventory = pkgs.writeText "inventory.ini" ''
+    ; Generated from net.nix. Do not edit; the canonical source is
+    ; redline/hermes/net.nix (guestAddr) and redline/hermes/ansible/hermes.yml.
+    [hermes]
+    ${net.guestAddr}
+
+    [hermes:vars]
+    ansible_user=root
+    ansible_python_interpreter=/usr/bin/python3
+  '';
 
   # The floating `release/` symlink is rebuilt for point releases, which would
   # break the hash at an arbitrary time rather than at a chosen one.
@@ -95,6 +109,7 @@ lib.mkIf config.redline.ssd0.enable {
   # ── Storage ───────────────────────────────────────────────────────────────
 
   environment.etc."hermes/ansible-vars.yml".source = ansibleVars;
+  environment.etc."hermes/inventory.ini".source = hermesInventory;
 
   systemd.services.hermes-vm-provision = {
     description = "Create the Hermes VM disks and define the libvirt domain";
