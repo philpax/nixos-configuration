@@ -5,10 +5,10 @@ let
 in {
   services.syncthing = {
     enable = true;
-    user = "philpax";
+    user = config.mainUser;
     group = "users";
-    dataDir = "/home/philpax";
-    configDir = "/home/philpax/.config/syncthing";
+    dataDir = config.users.users.${config.mainUser}.home;
+    configDir = "${config.users.users.${config.mainUser}.home}/.config/syncthing";
     overrideDevices = true;
     overrideFolders = true;
     settings = {
@@ -18,7 +18,7 @@ in {
       };
       folders = {
         "Main" = {
-          path = "/home/philpax/notes/Main";
+          path = "${config.users.users.${config.mainUser}.home}/notes/Main";
           devices = [ "redline" "paprika" ];
         };
       };

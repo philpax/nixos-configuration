@@ -10,14 +10,14 @@
         "server role" = "standalone server";
         "map to guest" = "Bad User";
         "security" = "user";
-        "force user" = "philpax";
+        "force user" = config.mainUser;
         "force group" = "users";
         "load printers" = "no";
         "printing" = "bsd";
         "printcap name" = "/dev/null";
       };
       biome = {
-        path = "/home/philpax/work/owl/Biome";
+        path = "${config.users.users.${config.mainUser}.home}/work/owl/Biome";
         comment = "Biome";
         browsable = true;
         "read only" = false;

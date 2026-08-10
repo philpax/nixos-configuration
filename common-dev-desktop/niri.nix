@@ -35,7 +35,7 @@ let
         version = "26.04-fork-2026-04-28";
         vendorHash = "sha256-gfnalA3qI3a9h3PvsxgQLCrzapfjLLkxhTMJpwRh+ro=";
       };
-      configFile = "${config.users.users.philpax.home}/.config/niri/config.kdl";
+      configFile = "${config.users.users.${config.mainUser}.home}/.config/niri/config.kdl";
     };
 
     # philpax/niriad — sway-style recursive window tree on top of the 2D layouting.
@@ -49,7 +49,7 @@ let
         version = "26.04-niriad-2026-07-07";
         vendorHash = "sha256-SqJX/T3VJPg5nmG9GN1T6hDP+YjkV8spj4AY5HybWgg=";
       };
-      configFile = "${config.users.users.philpax.home}/.config/niri/config-niriad.kdl";
+      configFile = "${config.users.users.${config.mainUser}.home}/.config/niri/config-niriad.kdl";
     };
   };
   selected = variants.${cfg.variant};

@@ -1,5 +1,11 @@
 { config, pkgs, lib, ... }:
 {
+  options.mainUser = lib.mkOption {
+    type = lib.types.str;
+    default = "philpax";
+    description = "The primary human user account: the one with sudo, the interactive desktop session, and the personal files under /home/<name>. Modules derive home paths from this rather than hardcoding them.";
+  };
+
   imports =
     [
       /etc/nixos/hardware-configuration.nix
@@ -7,45 +13,47 @@
       (import ./programs { inherit config pkgs; })
     ];
 
-  system.autoUpgrade.enable = true;
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
-  nixpkgs.overlays = [ (import ./overlays/helix-steel.nix) ];
+  config = {
+    system.autoUpgrade.enable = true;
+    nix.settings.experimental-features = [ "nix-command" "flakes" ];
+    nixpkgs.config.allowUnfree = true;
+    nixpkgs.overlays = [ (import ./overlays/helix-steel.nix) ];
 
-  boot.kernelPackages =
-    if config.boot.zfs.enabled
-    then pkgs.linuxPackages
-    else pkgs.linuxPackages_latest;
+    boot.kernelPackages =
+      if config.boot.zfs.enabled
+      then pkgs.linuxPackages
+      else pkgs.linuxPackages_latest;
 
-  time.timeZone = lib.mkDefault "Europe/Stockholm";
-  i18n.defaultLocale = "en_AU.UTF-8";
-  i18n.supportedLocales = ["en_AU.UTF-8/UTF-8"];
-  i18n.extraLocaleSettings = {
-    LC_ALL = "en_AU.UTF-8";
-    LC_CTYPE = "en_AU.UTF-8";
-    LC_ADDRESS = "en_AU.UTF-8";
-    LC_IDENTIFICATION = "en_AU.UTF-8";
-    LC_MEASUREMENT = "en_AU.UTF-8";
-    LC_MONETARY = "en_AU.UTF-8";
-    LC_NAME = "en_AU.UTF-8";
-    LC_NUMERIC = "en_AU.UTF-8";
-    LC_PAPER = "en_AU.UTF-8";
-    LC_TELEPHONE = "en_AU.UTF-8";
-    LC_TIME = "en_AU.UTF-8";
-  };
+    time.timeZone = lib.mkDefault "Europe/Stockholm";
+    i18n.defaultLocale = "en_AU.UTF-8";
+    i18n.supportedLocales = ["en_AU.UTF-8/UTF-8"];
+    i18n.extraLocaleSettings = {
+      LC_ALL = "en_AU.UTF-8";
+      LC_CTYPE = "en_AU.UTF-8";
+      LC_ADDRESS = "en_AU.UTF-8";
+      LC_IDENTIFICATION = "en_AU.UTF-8";
+      LC_MEASUREMENT = "en_AU.UTF-8";
+      LC_MONETARY = "en_AU.UTF-8";
+      LC_NAME = "en_AU.UTF-8";
+      LC_NUMERIC = "en_AU.UTF-8";
+      LC_PAPER = "en_AU.UTF-8";
+      LC_TELEPHONE = "en_AU.UTF-8";
+      LC_TIME = "en_AU.UTF-8";
+    };
 
-  networking.nameservers = [ "1.1.1.1" "1.0.0.1" "8.8.8.8" "8.8.4.4" ];
+    networking.nameservers = [ "1.1.1.1" "1.0.0.1" "8.8.8.8" "8.8.4.4" ];
 
-  users.groups.editabledata = {};
+    users.groups.editabledata = {};
 
-  users.users.philpax = {
-    isNormalUser = true;
-    description = "philpax";
-    shell = pkgs.fish;
-    extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" "ai" "editabledata" "input" "uinput" ];
-    packages = with pkgs; [];
-    openssh.authorizedKeys.keys = [
-      "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDwvEVMGi643L4ufnpEPLHgSIBs2pN1BMG7Z2SGlKPf8N/SjpjKmyUE9NJw1ACb/wQ7D83c+r1QSbW4PUgq1uIuLdOteNj6+QeTiXKW3rmDIQQy0TzV0v/KP5YxK2EXCtr1Bv7Ca/WVLcUzIkvp8xzvXXgB58FbrveRzBYMIiieQYXMvd70HkliccrczyIc0x2mE8KqXy3/TFnZHAw96AenIPcifLenQgSIDsds1JTJoyNWHNa1ac/UKrlzKqNzX2apdL8vX2W+FeR/IZ+Mi86coGR42LJvktYWexqs+876UhMvha4L5toKkqVMf/JH7E3YUt/TbXBykR2rRyxrzYpFUWrk/wL+si30YWK+6a4jD8RDtGzKy+sWM7xitJPaamE9k3bSmexBu3wSc8UCvWyOmHs/YAoFeJIKUET7b3sRKMZbt2tmR//JJdL+PdUsxX7T1JJt/z0wbFK+ENYJVPYUE/B/o8isBkpBdy0pJs7SVjT52wM0JrMqaqAN8HrfUzKt9N8HTaztCGjv86y/avH9it1gERDMTef6HaXROiQngdrChOjQ0nysfIxnsh48usD+p8VbXb54VZM0wRmPUgoUKZbro7AsHvtCNfNI1oBHYFTTIZsGHML5Ho8OlZ8XVTgaIufZc+ZkYN2lRXZPwhQwiIg3Kz0kMP5Uo4onMJOIJw== me@philpax.me"
-    ];
+    users.users.philpax = {
+      isNormalUser = true;
+      description = "philpax";
+      shell = pkgs.fish;
+      extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" "ai" "editabledata" "input" "uinput" ];
+      packages = with pkgs; [];
+      openssh.authorizedKeys.keys = [
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDwvEVMGi643L4ufnpEPLHgSIBs2pN1BMG7Z2SGlKPf8N/SjpjKmyUE9NJw1ACb/wQ7D83c+r1QSbW4PUgq1uIuLdOteNj6+QeTiXKW3rmDIQQy0TzV0v/KP5YxK2EXCtr1Bv7Ca/WVLcUzIkvp8xzvXXgB58FbrveRzBYMIiieQYXMvd70HkliccrczyIc0x2mE8KqXy3/TFnZHAw96AenIPcifLenQgSIDsds1JTJoyNWHNa1ac/UKrlzKqNzX2apdL8vX2W+FeR/IZ+Mi86coGR42LJvktYWexqs+876UhMvha4L5toKkqVMf/JH7E3YUt/TbXBykR2rRyxrzYpFUWrk/wL+si30YWK+6a4jD8RDtGzKy+sWM7xitJPaamE9k3bSmexBu3wSc8UCvWyOmHs/YAoFeJIKUET7b3sRKMZbt2tmR//JJdL+PdUsxX7T1JJt/z0wbFK+ENYJVPYUE/B/o8isBkpBdy0pJs7SVjT52wM0JrMqaqAN8HrfUzKt9N8HTaztCGjv86y/avH9it1gERDMTef6HaXROiQngdrChOjQ0nysfIxnsh48usD+p8VbXb54VZM0wRmPUgoUKZbro7AsHvtCNfNI1oBHYFTTIZsGHML5Ho8OlZ8XVTgaIufZc+ZkYN2lRXZPwhQwiIg3Kz0kMP5Uo4onMJOIJw== me@philpax.me"
+      ];
+    };
   };
 }

@@ -34,7 +34,7 @@ cd redline/hermes/ansible
 ansible-playbook -i /etc/hermes/inventory.ini hermes.yml
 ```
 
-The VM is reachable only from redline, over the host-only bridge. `hermes-ssh` (redline's fish dotfiles, `redline/dotfiles/.config/fish/functions/hermes-ssh.fish`) connects as root with redline's own key, which the seed pulls from `users.users.philpax` and installs for root. There is no other route into the guest and no other account.
+The VM is reachable only from redline, over the host-only bridge. `hermes-ssh` (redline's fish dotfiles, `redline/dotfiles/.config/fish/functions/hermes-ssh.fish`) connects as root with redline's own key, which the seed pulls from the primary user account (`config.mainUser`) and installs for root. There is no other route into the guest and no other account.
 
 The agent runs as root. The sandbox is the libvirt VM boundary, the host egress firewall (`HERMES-FWD`), the ZFS snapshots and the backup-freshness check, not the guest UID. Root login is key-only. The gateway, dashboard and signal-cli daemon run as root, so the agent can restart its own gateway with `systemctl restart hermes-gateway` and no extra grant.
 

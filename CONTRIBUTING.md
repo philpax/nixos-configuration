@@ -51,6 +51,12 @@ common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent ski
 common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
 ```
 
+The primary user account is centralised in `common-all/configuration.nix`
+(`users.users.philpax`) and exposed as the `options.mainUser` option (default
+`"philpax"`). Modules must never hardcode the username or `/home/<name>`:
+read `config.mainUser` for the name and
+`config.users.users.${config.mainUser}.home` for the home path instead.
+
 **Machine import patterns:**
 - **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
 - **paprika**: all four layers + ThinkPad T480s hardware

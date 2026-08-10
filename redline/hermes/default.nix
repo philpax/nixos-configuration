@@ -42,7 +42,7 @@ let
     sha256 = "0533b0655c32e68b31d792ecd6ccfca95abdbc536c4446874fe0513bd4140ffe";
   };
 
-  adminKeys = config.users.users.philpax.openssh.authorizedKeys.keys;
+  adminKeys = config.users.users.${config.mainUser}.openssh.authorizedKeys.keys;
 
   cloudInit = import ./cloud-init { inherit pkgs lib net adminKeys; };
 

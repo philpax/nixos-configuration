@@ -22,11 +22,11 @@
     pkg-config
   ];
 
-  users.users.philpax.packages = with pkgs; [
+  users.users.${config.mainUser}.packages = with pkgs; [
     kdePackages.kate
   ];
 
   # Enable automatic login for the user.
   services.displayManager.autoLogin.enable = true;
-  services.displayManager.autoLogin.user = "philpax";
+  services.displayManager.autoLogin.user = config.mainUser;
 }

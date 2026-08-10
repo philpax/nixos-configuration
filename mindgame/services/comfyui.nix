@@ -1,8 +1,8 @@
-{ config, pkgs }:
+{ config, pkgs, ... }:
 let
   shared = import ../../common-all/comfyui.nix {
     inherit pkgs;
-    comfyuiDir = "/home/philpax/comfyui";
+    comfyuiDir = "${config.users.users.${config.mainUser}.home}/comfyui";
     port = 8188;
   };
 in

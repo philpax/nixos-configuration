@@ -1,11 +1,11 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 let
   # Moonshine (github.com/hgaiser/moonshine): a headless Moonlight/GameStream
   # server. Each stream runs in its own isolated Wayland/Vulkan compositor, and a
   # Vulkan WSI layer (registered below) routes each game's frames into it.
   moonshine = pkgs.callPackage ../moonshine/package.nix { };
 
-  user = "philpax";
+  user = config.mainUser;
   configFile = "/home/${user}/.config/moonshine/config.toml";
 
   # The unit runs as `user` via User=, but Moonshine launches game sessions

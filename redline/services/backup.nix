@@ -54,7 +54,7 @@ let
 
     # Configuration
     LOCK_FILE="/var/run/backup-sync.lock"
-    USER_TO_NOTIFY="philpax"
+    USER_TO_NOTIFY="${config.mainUser}"
 
     # Error notification function
     notify_error() {
