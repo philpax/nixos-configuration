@@ -1,9 +1,7 @@
 # Managed by ansible. Edit ../hermes.yml, not this file.
 #
 # The auth gate engages on any non-loopback bind and start_server fails closed
-# without a registered provider, so the basic-auth credentials are mandatory
-# here. The agent shares localhost with this service and can reach the API
-# regardless of the bind address.
+# without a registered provider, so the basic-auth credentials are mandatory.
 [Unit]
 Description=Hermes Agent web dashboard
 After=network-online.target
@@ -11,11 +9,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User={{ agent_user }}
-Group={{ agent_user }}
+User=root
+Group=root
 WorkingDirectory={{ workspace }}
 Environment=HERMES_HOME={{ hermes_home }}
-Environment=HERMES_DASHBOARD_BASIC_AUTH_USERNAME={{ agent_user }}
+Environment=HERMES_DASHBOARD_BASIC_AUTH_USERNAME=hermes
 Environment=HERMES_DASHBOARD_BASIC_AUTH_PASSWORD={{ dashboard_password }}
 ExecStart={{ state_root }}/hermes-agent/venv/bin/hermes dashboard \
   --host 0.0.0.0 --port {{ dashboard_port }} --no-open

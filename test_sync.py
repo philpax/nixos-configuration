@@ -1564,7 +1564,6 @@ DOCS_AND_SKILLS = [
     ".agents/skills/new-skill/SKILL.md",
     "redline/dotfiles/.agents/skills/llama-cpp-model-tuning/SKILL.md",
     "redline/hermes/README.md",
-    "redline/hermes/ansible/inventory.ini",
     "redline/services/MINECRAFT_UPGRADE.md",
 ]
 

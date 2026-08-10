@@ -1,8 +1,8 @@
 { pkgs, lib, net, adminKeys }:
 
 # cloud-init NoCloud seed for the Hermes VM. Read once, on first boot, so
-# changes here apply only to the next VM built. Everything above the base system
-# is Ansible's, which can converge an existing VM.
+# changes here apply only to the next VM built. Everything above the base
+# system is Ansible's, which can converge an existing VM.
 
 let
   userData = pkgs.writeText "user-data" ''
@@ -11,16 +11,16 @@ let
     fqdn: ${net.name}.local
     preserve_hostname: false
 
+    # The agent runs as root. The libvirt VM boundary and the host egress
+    # firewall are the sandbox; a named user would add no capability limit.
+    # Root login is key-only (redline's key).
     users:
-      - name: philpax
-        groups: [adm, sudo]
-        shell: /bin/bash
-        sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+      - name: root
         lock_passwd: true
         ssh_authorized_keys:
-    ${lib.concatMapStrings (k: "      - ${k}\n") adminKeys}
+    ${lib.concatMapStrings (k: "          - ${k}\n") adminKeys}
     ssh_pwauth: false
-    disable_root: true
+    disable_root: false
 
     packages:
       - qemu-guest-agent
@@ -43,9 +43,8 @@ let
         label: hermes-state
         overwrite: false
 
-    # The virtiofs drop is mounted by Ansible instead: cc_mounts discards any
-    # entry whose device is neither a block device nor a host:/export spec, and
-    # skips a bare tag such as `hermes-drop` silently.
+    # The virtiofs drop is mounted by Ansible: cc_mounts discards any device that
+    # is neither a block device nor a host:/export spec.
     mounts:
       - [/dev/vdb1, /srv/hermes, ext4, "defaults,noatime,nofail", "0", "2"]
 
