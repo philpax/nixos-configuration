@@ -9,9 +9,8 @@ let
   vllmDir = folders.ai.vllm;
   anankeDir = folders.ai.ananke;
 
-  # Public ports.
-  openaiPort = 7070;
-  managementPort = 7071;
+  openaiPort = anankeLib.ports.openai;
+  managementPort = anankeLib.ports.management;
   comfyuiPort = 8188;
   llmBasePort = 8200;
 
@@ -24,15 +23,9 @@ let
     port = comfyuiContainerPort;
   };
 
-  # Model list. Order determines port: llmBasePort + index. Only fields
-  # the model actually needs are set; mkService folds them into a
-  # well-formed ananke [[service]] block.
-  #
-  # Each entry has an optional `kind` discriminator that picks the right
-  # mkXService builder. `kind` is missing or "llama-cpp" for the local
-  # llama.cpp serving path; `kind = "vllm"` defers to mkVllmService and
-  # generates a `template = "command"` service that fronts a vLLM
-  # container via the OpenAI proxy.
+  # Order determines port (llmBasePort + index). `kind` is missing or
+  # "llama-cpp" for local serving; `kind = "vllm"` fronts a vLLM
+  # container instead via a `template = "command"` service.
   #
   # `extras` holds ad-hoc ananke service keys (sampling, extra_args,
   # override_tensor, threads, flash_attn, cache_type_*, lifecycle,
@@ -330,7 +323,7 @@ let
       extras = { context = 2048; } // discordVisible;
     }
 
-    # vLLM-served models. `kind = "vllm"` routes through mkVllmService,
+    # vLLM-served models. `kind = "vllm"` routes through buildVllm,
     # which emits a `template = "command"` service that wraps the
     # corresponding shell script and registers an `openai_proxy` block
     # so the model shows up in /v1/models alongside the llama.cpp ones.
@@ -435,109 +428,74 @@ let
     }
   ];
 
-  mkLlmService = index: m:
-    let
-      base = {
-        template = "llama-cpp";
-        name = m.name;
-        port = llmBasePort + index;
+  # Bind per-service reverse proxies on 0.0.0.0 too, so clients can reach
+  # a model directly via `<host>:<port>` instead of just the multiplexer.
+  inherit (anankeLib.mkAnankeConfig {
+    inherit pkgs openaiPort managementPort anankeDir;
+    allowExternalServices = true;
+    services = anankeLib.mkIndexedServices {
+      basePort = llmBasePort;
+      inherit models;
+      buildLlamaCpp = port: m: anankeLib.mkLlmService {
+        inherit (m) name;
+        inherit port;
         model = "${llmDir}/${m.file}";
-        jinja = true;
+        mmproj = if m ? mmproj then "${llmDir}/${m.mmproj}" else null;
+        extra = { jinja = true; } // (m.extras or { });
       };
-      mmprojAttrs = lib.optionalAttrs (m ? mmproj) {
-        mmproj = "${llmDir}/${m.mmproj}";
+      # No `--cgroup-parent`, so the snapshotter can't observe these
+      # containers — the pledge is the source of truth for them.
+      buildVllm = port: m: anankeLib.mkVllmService {
+        inherit (m) name script;
+        inherit port;
+        upstreamModel = m.upstream_model;
+        vramGb = m.vram_gb;
+        perGpuMib = m.per_gpu_mib;
+        gpuIndices = m.gpu_indices or [ 0 1 ];
+        env = {
+          PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
+          HOME = "/home/ai";
+        };
+        extraEnv = m.extra_env or { };
+        inherit (m) description;
+        modality = m.modality or null;
       };
-    in base // mmprojAttrs // (m.extras or { });
-
-  # Static per-GPU allocation because the containers run without
-  # `--cgroup-parent`, so the snapshotter can't observe them — the pledge
-  # is the source of truth for VRAM accounting. `env.PATH` is required
-  # because ananke's spawner env_clear()s before exec, and these are
-  # user-authored scripts that use bare `mkdir`/`docker`.
-  vllmEnv = {
-    PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
-    HOME = "/home/ai";
-  };
-  mkVllmService = index: m: anankeLib.mkVllmService {
-    name = m.name;
-    port = llmBasePort + index;
-    script = m.script;
-    upstreamModel = m.upstream_model;
-    vramGb = m.vram_gb;
-    perGpuMib = m.per_gpu_mib;
-    gpuIndices = m.gpu_indices or [ 0 1 ];
-    env = vllmEnv;
-    extraEnv = m.extra_env or { };
-    description = m.description;
-    modality = m.modality or null;
-  };
-
-  mkService = index: m:
-    if (m.kind or "llama-cpp") == "vllm"
-    then mkVllmService index m
-    else mkLlmService index m;
-
-  llmServices = lib.imap0 mkService models;
-
-  # ComfyUI is an external command; ananke starts/stops the host-side
-  # docker wrapper. `{port}` resolves to the private loopback port ananke
-  # allocates, which the start script passes through to `docker run -p`
-  # to map onto the container's fixed 8188. Dynamic VRAM so other models
-  # can share the pool while ComfyUI is loaded but idle.
-  comfyuiService = {
-    template = "command";
-    name = "comfyui";
-    port = comfyuiPort;
-    command = [
-      "${comfyuiShared.comfyuiStartScript}/bin/comfyui-start"
-      "--foreground"
-      "--port"
-      "{port}"
+    } ++ [
+      # `{port}` is the loopback port ananke allocates, passed through
+      # to `docker run -p` onto the container's fixed 8188. Dynamic VRAM
+      # so other models can share the pool while ComfyUI is idle.
+      {
+        template = "command";
+        name = "comfyui";
+        port = comfyuiPort;
+        command = [
+          "${comfyuiShared.comfyuiStartScript}/bin/comfyui-start"
+          "--foreground"
+          "--port"
+          "{port}"
+        ];
+        shutdown_command = [
+          "${comfyuiShared.comfyuiStopScript}/bin/comfyui-stop"
+        ];
+        idle_timeout = "30m";
+        allocation = {
+          mode = "dynamic";
+          min_vram_gb = 2.0;
+          max_vram_gb = 20.0;
+        };
+        # Without this the container's cgroup is invisible to the
+        # snapshotter and the dynamic pledge stays frozen at
+        # `min_vram_gb`. Matches the `--cgroup-parent` the wrapper
+        # script passes to `docker run`.
+        tracking = {
+          cgroup_parent = "/ananke.slice/ananke-comfyui.slice";
+        };
+        health = {
+          http = "/system_stats";
+        };
+      }
     ];
-    shutdown_command = [
-      "${comfyuiShared.comfyuiStopScript}/bin/comfyui-stop"
-    ];
-    idle_timeout = "30m";
-    allocation = {
-      mode = "dynamic";
-      min_vram_gb = 2.0;
-      max_vram_gb = 20.0;
-    };
-    # ComfyUI runs inside Docker, so its container is reparented out of
-    # ananke's process tree. Without this hint the snapshotter can't see
-    # the workload's VRAM and the dynamic pledge stays frozen at
-    # `min_vram_gb`. The wrapper script passes `--cgroup-parent
-    # ananke-comfyui.slice` to `docker run`; systemd treats `-` as a
-    # path separator in slice names, so `ananke-comfyui.slice` lives at
-    # `/ananke.slice/ananke-comfyui.slice/` (NOT under `/system.slice/`).
-    # ananke matches by prefix on the v2 cgroup path.
-    tracking = {
-      cgroup_parent = "/ananke.slice/ananke-comfyui.slice";
-    };
-    health = {
-      http = "/system_stats";
-    };
-  };
-
-  ananke_config = {
-    daemon = {
-      management_listen = "0.0.0.0:${toString managementPort}";
-      allow_external_management = true;
-      # Bind per-service reverse proxies on 0.0.0.0 too — we open the
-      # LLM port range in the firewall, so clients can reach an
-      # individual model via `<host>:<port>` without routing through
-      # the OpenAI multiplexer on 7070.
-      allow_external_services = true;
-      data_dir = "${anankeDir}/data";
-    };
-    openai_api = {
-      listen = "0.0.0.0:${toString openaiPort}";
-    };
-    service = llmServices ++ [ comfyuiService ];
-  };
-
-  tomlFormat = pkgs.formats.toml { };
-  configFile = tomlFormat.generate "ananke-config.toml" ananke_config;
+  }) configFile;
 
   firewallPorts =
     [ openaiPort managementPort comfyuiPort ]

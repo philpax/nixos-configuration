@@ -51,6 +51,14 @@ models:
       type: thinking
       can_disable: true
     context_window: 262144
+  ananke-mindgame/muse-glimmer:
+    provider_name: muse-glimmer
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: no_reasoning
+    context_window: 262144
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
