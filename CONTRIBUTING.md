@@ -24,6 +24,7 @@ directory at the repo root, containing its Nix files directly (incl.
 
 ```
 common-all/          → Base: users, SSH, packages, locale
+common-ai/           → CUDA-enabled llama.cpp/ik_llama.cpp packages (redline, mindgame only)
 common-desktop/      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
 common-dev/          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
 common-dev-desktop/  → Niri compositor, Waybar, Alacritty, Steam, Wine
@@ -46,6 +47,7 @@ own config likewise lives at `<machine>/...` with dotfiles at
 
 ```
 common-all          → Base: users, SSH, packages, locale
+common-ai           → CUDA-enabled llama.cpp/ik_llama.cpp packages (redline, mindgame only)
 common-desktop      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
 common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
 common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
@@ -59,9 +61,9 @@ read `config.mainUser` for the name and
 
 **Machine import patterns:**
 - **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
-- **paprika**: all four layers + ThinkPad T480s hardware
-- **mindgame**: all four layers + NVIDIA/Docker/ML
-- **redline**: common-all + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
+- **paprika**: common-all + common-desktop + common-dev + common-dev-desktop + ThinkPad T480s hardware
+- **mindgame**: common-all + common-ai + common-desktop + common-dev + common-dev-desktop + NVIDIA/Docker/ML
+- **redline**: common-all + common-ai + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
 
 ### Auto-importing Modules
 

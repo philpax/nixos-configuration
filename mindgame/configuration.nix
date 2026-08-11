@@ -5,6 +5,7 @@
     [
       # <nixos-hardware/...>          # add when hardware is known
       ../common-all/configuration.nix
+      ../common-ai/configuration.nix
       ../common-desktop/configuration.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
@@ -72,6 +73,9 @@
 
   virtualisation.docker.enable = true;
   hardware.nvidia-container-toolkit.enable = true;
+
+  # RTX 5090 (Blackwell, sm_120).
+  ai.cudaCapabilities = [ "12.0" ];
 
   swapDevices = [{
     device = "/swapfile";

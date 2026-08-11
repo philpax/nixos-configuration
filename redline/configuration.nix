@@ -6,6 +6,7 @@ in {
   imports =
     [
       ../common-all/configuration.nix
+      ../common-ai/configuration.nix
       ./ssd0.nix
       (import ./ai { inherit config pkgs; })
       ./hermes
