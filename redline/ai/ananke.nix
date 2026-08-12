@@ -445,7 +445,7 @@ let
       };
       # No `--cgroup-parent`, so the snapshotter can't observe these
       # containers — the pledge is the source of truth for them.
-      buildVllm = port: m: anankeLib.mkVllmService {
+      buildVllm = port: m: anankeLib.mkCommandService {
         inherit (m) name script;
         inherit port;
         upstreamModel = m.upstream_model;

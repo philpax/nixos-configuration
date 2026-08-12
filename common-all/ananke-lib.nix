@@ -24,19 +24,19 @@
     // extra;
 
   # Assigns each `models` entry a port (`basePort + index`) and builds it
-  # with `buildVllm` or `buildLlamaCpp`, picked by `kind` (`"vllm"`,
-  # else llama-cpp).
+  # with `buildVllm`, `buildNinfer`, or `buildLlamaCpp`, picked by `kind`.
   mkIndexedServices =
     { basePort
     , models
     , buildVllm
     , buildLlamaCpp
+    , buildNinfer ? null
     }:
     lib.imap0
       (index: m:
         let port = basePort + index; in
-        if (m.kind or "llama-cpp") == "vllm"
-        then buildVllm port m
+        if (m.kind or "llama-cpp") == "vllm" then buildVllm port m
+        else if (m.kind or "llama-cpp") == "ninfer" then buildNinfer port m
         else buildLlamaCpp port m)
       models;
 
@@ -69,10 +69,12 @@
       configFile = (pkgs.formats.toml { }).generate "ananke-config.toml" ananke_config;
     };
 
-  # `script` must accept the allocated port as its last positional arg
-  # and support `--stop` for teardown. `env` has no default — ananke's
-  # spawner env_clear()s before exec.
-  mkVllmService =
+  # Generic `template = "command"` service for any docker-wrapped
+  # OpenAI-compatible backend (vLLM, ninfer, ...). `script` must accept the
+  # allocated port as its last positional arg and support `--stop` for
+  # teardown. `env` has no default — ananke's spawner env_clear()s before
+  # exec.
+  mkCommandService =
     { name
     , port
     , script
@@ -86,7 +88,7 @@
     , modality ? null
     , extraEnv ? { }
     , idleTimeout ? "60m"
-    # Above ananke's default priority (50) — vLLM's cold start is
+    # Above ananke's default priority (50) — these backends' cold start is
     # expensive enough to be worth protecting from eviction.
     , priority ? 70
     , healthTimeout ? "10m"
