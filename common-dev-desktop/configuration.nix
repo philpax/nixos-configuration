@@ -47,6 +47,7 @@ in
     # If it sticks, drop alacritty here and its dotfiles/blur rules.
     alacritty
     ghostty
+    kdePackages.ocean-sound-theme  # Ghostty and GTK audible bell sound
     fuzzel
     polkit_gnome
     swaylock

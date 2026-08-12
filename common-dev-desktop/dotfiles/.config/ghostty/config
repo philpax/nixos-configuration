@@ -27,3 +27,9 @@ keybind = ctrl+shift+enter=new_window
 keybind = shift+enter=text:\n
 
 shell-integration-features = ssh-env,ssh-terminfo
+
+# Use the shared Ocean desktop sound for terminal BEL characters.
+# Keep the visual indicators as well, so bells remain noticeable when muted.
+bell-features = audio,title,attention
+bell-audio-path = /run/current-system/sw/share/sounds/ocean/stereo/bell-window-system.oga
+bell-audio-volume = 1
