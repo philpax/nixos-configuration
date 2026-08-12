@@ -17,6 +17,8 @@ let
   museGlimmerRoot = "${home}/ai/muse-glimmer";
   museGlimmerModelsDir = "${museGlimmerRoot}/models";
 
+  ninferRoot = "${home}/ai/ninfer";
+
   inherit (anankeLib.mkAnankeConfig {
     inherit pkgs anankeDir;
     openaiPort = anankeLib.ports.openai;
@@ -72,8 +74,48 @@ let
             description = "Muse Glimmer 30B served by llama.cpp in Docker (dflash speculative decoding).";
           };
         }
+        # Vision freezes at startup, so each model has a separate
+        # text/vision pair; DFlash is 35B-A3B-only and text-only, so its
+        # vision pair uses MTP instead. Context/vram figures are from
+        # empirical --max-concurrency 1 sizing trials on this GPU.
+        {
+          kind = "ninfer";
+          name = "qwen3.6-27b-ninfer-mtp3";
+          upstreamModel = "qwen3.6-27b";
+          vramGb = 25;
+          perGpuMib = 25500;
+          extraEnv = { NINFER_MODE = "27b-nvfp4"; };
+          description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 196608 ctx, text-only).";
+        }
+        {
+          kind = "ninfer";
+          name = "qwen3.6-27b-ninfer-mtp3-vision";
+          upstreamModel = "qwen3.6-27b";
+          vramGb = 26;
+          perGpuMib = 26500;
+          extraEnv = { NINFER_MODE = "27b-nvfp4-vision"; };
+          description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 147456 ctx, vision).";
+        }
+        {
+          kind = "ninfer";
+          name = "qwen3.6-35b-a3b-ninfer-dflash7";
+          upstreamModel = "qwen3.6-35b-a3b";
+          vramGb = 26;
+          perGpuMib = 26500;
+          extraEnv = { NINFER_MODE = "35b-a3b"; };
+          description = "Qwen3.6-35B-A3B served by ninfer (DFlash=7, 262144 ctx, text-only).";
+        }
+        {
+          kind = "ninfer";
+          name = "qwen3.6-35b-a3b-ninfer-mtp3-vision";
+          upstreamModel = "qwen3.6-35b-a3b";
+          vramGb = 26;
+          perGpuMib = 26500;
+          extraEnv = { NINFER_MODE = "35b-a3b-vision"; };
+          description = "Qwen3.6-35B-A3B served by ninfer (MTP=3, 163840 ctx, vision).";
+        }
       ];
-      buildVllm = port: m: anankeLib.mkVllmService {
+      buildVllm = port: m: anankeLib.mkCommandService {
         inherit (m) name vramGb perGpuMib description;
         inherit port;
         script = "${home}/ai/diffusiongemma/diffusiongemma.sh";
@@ -88,6 +130,13 @@ let
         inherit port;
         mmproj = m.mmproj or null;
         extra = m.extra or { };
+      };
+      buildNinfer = port: m: anankeLib.mkCommandService {
+        inherit (m) name vramGb perGpuMib description upstreamModel extraEnv;
+        inherit port;
+        script = "${ninferRoot}/ninfer-serve.sh";
+        gpuIndices = [ 0 ];
+        env = vllmEnv;
       };
     };
   }) configFile;

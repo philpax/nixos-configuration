@@ -1,9 +1,9 @@
-version: 2
+version: 3
 config_command_substitution: true
 defaults:
-  full: umans/umans-deepseek-v4-flash-0731(max)
-  mini: umans/umans-deepseek-v4-flash-0731(high)
-  nano: umans/umans-deepseek-v4-flash-0731(low)
+  full: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
+  mini: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
+  nano: ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7
 providers:
   umans:
     kind:
@@ -24,6 +24,13 @@ providers:
     url: http://mindgame:7070/v1
     auth:
       type: no_auth
+  codex:
+    kind:
+      type: catalog
+      name: codex
+    auth:
+      type: codex_device
+      profile: codex
 models:
   ananke-redline/gemma-4-31b-it-qat:
     provider_name: gemma-4-31b-it-qat
@@ -33,6 +40,7 @@ models:
     reasoning:
       type: no_reasoning
     context_window: 200000
+    supports_vision: true
   ananke-mindgame/diffusiongemma-26b-a4b-2x128k:
     provider_name: diffusiongemma-26b-a4b-2x128k
     variant: other
@@ -43,6 +51,7 @@ models:
       can_disable: true
     context_window: 131072
     max_output_tokens_per_turn: 32768
+    supports_vision: true
   ananke-mindgame/diffusiongemma-26b-a4b-256k:
     provider_name: diffusiongemma-26b-a4b-256k
     variant: other
@@ -53,6 +62,7 @@ models:
       can_disable: true
     context_window: 262144
     max_output_tokens_per_turn: 32768
+    supports_vision: true
   ananke-mindgame/muse-glimmer:
     provider_name: muse-glimmer
     variant: other
@@ -62,6 +72,60 @@ models:
       type: no_reasoning
     context_window: 262144
     max_output_tokens_per_turn: 32768
+    supports_vision: true
+  ananke-mindgame/qwen3.6-27b-ninfer-mtp3:
+    provider_name: qwen3.6-27b-ninfer-mtp3
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 196608
+    max_output_tokens_per_turn: 32768
+    supports_vision: false
+  ananke-mindgame/qwen3.6-27b-ninfer-mtp3-vision:
+    provider_name: qwen3.6-27b-ninfer-mtp3-vision
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 147456
+    max_output_tokens_per_turn: 32768
+    supports_vision: true
+  ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7:
+    provider_name: qwen3.6-35b-a3b-ninfer-dflash7
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 262144
+    max_output_tokens_per_turn: 32768
+    supports_vision: false
+  ananke-mindgame/qwen3.6-35b-a3b-ninfer-mtp3-vision:
+    provider_name: qwen3.6-35b-a3b-ninfer-mtp3-vision
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 163840
+    max_output_tokens_per_turn: 32768
+    supports_vision: true
+  ananke-redline/qwen3.6-27b:
+    provider_name: qwen3.6-27b
+    variant: other
+    class: mini
+    provider: ananke-redline
+    reasoning:
+      type: no_reasoning
+    context_window: 180000
+    supports_vision: true
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
