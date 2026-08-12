@@ -42,6 +42,7 @@ models:
       type: thinking
       can_disable: true
     context_window: 131072
+    max_output_tokens_per_turn: 32768
   ananke-mindgame/diffusiongemma-26b-a4b-256k:
     provider_name: diffusiongemma-26b-a4b-256k
     variant: other
@@ -51,6 +52,7 @@ models:
       type: thinking
       can_disable: true
     context_window: 262144
+    max_output_tokens_per_turn: 32768
   ananke-mindgame/muse-glimmer:
     provider_name: muse-glimmer
     variant: other
@@ -59,6 +61,7 @@ models:
     reasoning:
       type: no_reasoning
     context_window: 262144
+    max_output_tokens_per_turn: 32768
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
