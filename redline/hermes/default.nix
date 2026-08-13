@@ -12,6 +12,10 @@ let
   ananke = config.ai.ananke;
   anankeBaseUrl = "http://${net.hostAddr}:${toString ananke.openaiPort}/v1";
 
+  # redlib listens on 0.0.0.0, so it is already bound on the bridge address;
+  # only the guest-to-host DROP stands between the agent and it.
+  redlibPort = config.services.redlib.port;
+
   # Loaded by ansible/hermes.yml via vars_files, so the playbook does not repeat
   # values Nix already holds. Only the keys the playbook consumes are emitted;
   # host_addr/guest_addr are dead (the bridge addresses come from net.nix and
@@ -175,15 +179,18 @@ lib.mkIf config.redline.ssd0.enable {
     # interface predicate, emitted before extraCommands. Guest-to-host traffic
     # is INPUT, so an appended rule cannot subtract from them; these are
     # inserted above them instead. Repeated insertion at 1 reverses the order,
-    # so they are written back to front and end up: established, ananke, drop.
+    # so they are written back to front and end up: established, ananke,
+    # redlib, drop.
     #
     # The established accept cannot be left to the firewall's own global rule,
     # which sits below position 1.
     iptables -D nixos-fw -i ${net.bridge} -j DROP 2>/dev/null || true
+    iptables -D nixos-fw -i ${net.bridge} -p tcp --dport ${toString redlibPort} -j nixos-fw-accept 2>/dev/null || true
     iptables -D nixos-fw -i ${net.bridge} -p tcp --dport ${toString ananke.openaiPort} -j nixos-fw-accept 2>/dev/null || true
     iptables -D nixos-fw -i ${net.bridge} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept 2>/dev/null || true
 
     iptables -I nixos-fw 1 -i ${net.bridge} -j DROP
+    iptables -I nixos-fw 1 -i ${net.bridge} -p tcp --dport ${toString redlibPort} -j nixos-fw-accept
     iptables -I nixos-fw 1 -i ${net.bridge} -p tcp --dport ${toString ananke.openaiPort} -j nixos-fw-accept
     iptables -I nixos-fw 1 -i ${net.bridge} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept
 
@@ -223,6 +230,7 @@ lib.mkIf config.redline.ssd0.enable {
   networking.firewall.extraStopCommands = ''
     iptables -D nixos-fw -i ${net.bridge} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept 2>/dev/null || true
     iptables -D nixos-fw -i ${net.bridge} -p tcp --dport ${toString ananke.openaiPort} -j nixos-fw-accept 2>/dev/null || true
+    iptables -D nixos-fw -i ${net.bridge} -p tcp --dport ${toString redlibPort} -j nixos-fw-accept 2>/dev/null || true
     iptables -D nixos-fw -i ${net.bridge} -j DROP 2>/dev/null || true
     iptables -t nat -D PREROUTING -i ${net.tailscaleIface} -p tcp \
       --dport ${toString net.dashboardPort} -j DNAT \
