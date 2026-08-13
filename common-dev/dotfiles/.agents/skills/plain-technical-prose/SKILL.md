@@ -28,6 +28,12 @@ Headings. Name the subject, not the reading experience. "How a click reaches an 
 
 Emphasis. Emphasis carried by typography or by a catchy line is carried by plain prose instead. State the fact and its consequence in order. "Dead handles go inert. Ugly. Less ugly than a race taking down your desktop." becomes "Dead handles go inert rather than raising errors. This is a compromise, made because it is less disruptive than a race condition taking down the session."
 
+Generated-sounding phrasing. Avoid formulaic contrasts, staged candour, and generic signposting when they add no information. Phrases such as "not X, but Y", "the honest take", "the important thing to understand", "let's unpack this", and "the bottom line" often announce a point instead of stating it. Replace them with the claim, action, or consequence directly. Prefer concrete verbs over abstract management or assistant phrasing such as "synthesize", "surface", "navigate", "operationalize", "land", and "align" when a simpler verb is available.
+
+Use technical terms and punctuation when they describe something precise. Terms such as "synthesize", "seam", "shape", and "load-bearing", along with em dashes and parentheticals, become a problem when they are repeated mechanically, used as vague abstractions, or substituted for a concrete mechanism. Judge the wording by its context and density. A component can be "load-bearing" when a specific dependency relies on it; an integration boundary can be a "seam".
+
+Do not simulate personal experience that the writer does not have. Avoid claims about memories, feelings, recurring observations, or physical experiences, such as "What I often feel" or "I can't tell you how many times I've...". State the observation and its evidence directly.
+
 Judgements. Keep every judgement, and state it as a claim with a reason. Drop the attitude, not the position. "which is a debugging surface we don't need" becomes "would add a debugging surface with no offsetting benefit". "exactly backwards" becomes "counterproductive".
 
 Characters. Use ASCII where a Unicode character adds nothing: `1920x1080`, not `1920×1080`; `2 to 4 buffers`, not `2–4 buffers`. Keep Unicode in proper nouns and in code.
