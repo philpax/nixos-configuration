@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import termios
@@ -559,7 +560,10 @@ def create_or_update_symlinks(
                 target.unlink()
             elif exists:
                 if force:
-                    target.unlink()
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                    else:
+                        target.unlink()
                 else:
                     print(f"  {yellow('skip')} {shorten_path(target)}")
                     skipped += 1
