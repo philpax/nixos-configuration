@@ -421,7 +421,7 @@ def telemetry(seconds):
 # --- modes -------------------------------------------------------------------
 
 
-def mode_index():
+def mode_index(no_wayvr=False):
     stop("vr-quiesce.service", "wivrn.service")
     stop_extras()
     write_env()  # no overrides: use monado.service's own environment
@@ -431,17 +431,18 @@ def mode_index():
         say("monado could not bring up the Index.", err=True)
         say("  check: journalctl --user -u monado.service -e", err=True)
         return 1
-    start_wayvr()
+    if not no_wayvr:
+        start_wayvr()
     # IPD heads-up overlay. Index-only: it surfaces changes in the motorised
     # IPD, and the Beyond's is a fixed mechanical setting with nothing to report.
     run_transient("vr-ipd-overlay", shlex.split(IPD_LAUNCHER))
     index_audio_on()
     set_fan(FAN_IDLE)  # Beyond idle, if it is attached at all
-    say("index (monado) active, WayVR + IPD overlay launched")
+    say(f"index (monado) active{'' if no_wayvr else ', WayVR + IPD overlay launched'}")
     return 0
 
 
-def mode_beyond():
+def mode_beyond(no_wayvr=False):
     stop("vr-quiesce.service", "wivrn.service")
     stop_extras()
     connector = beyond_connector()
@@ -463,10 +464,11 @@ def mode_beyond():
         say("monado could not bring up the Beyond.", err=True)
         say("  check: journalctl --user -u monado.service -e", err=True)
         return 1
-    start_wayvr()
+    if not no_wayvr:
+        start_wayvr()
     beyond_audio_on()
     set_fan(FAN_ACTIVE)
-    say("beyond (monado) active, WayVR launched")
+    say(f"beyond (monado) active{'' if no_wayvr else ', WayVR launched'}")
     return 0
 
 
@@ -564,8 +566,10 @@ def main():
         prog="vr-mode", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = ap.add_subparsers(dest="mode")
-    sub.add_parser("index", help="Valve Index via Monado (+ WayVR)")
-    sub.add_parser("beyond", help="Bigscreen Beyond 2e via Monado (+ WayVR)")
+    idx = sub.add_parser("index", help="Valve Index via Monado (+ WayVR)")
+    idx.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
+    bdy = sub.add_parser("beyond", help="Bigscreen Beyond 2e via Monado (+ WayVR)")
+    bdy.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
     sub.add_parser("wivrn", help="Quest via WiVRn")
     sub.add_parser("off", help="stop everything, no runtime active")
     sub.add_parser("quiesce", help="wake headsets just long enough to sleep")
@@ -581,9 +585,10 @@ def main():
         return 0
     if args.mode == "telemetry":
         return telemetry(args.seconds)
+    no_wayvr = getattr(args, "no_wayvr", False)
     return {
-        "index": mode_index,
-        "beyond": mode_beyond,
+        "index": lambda: mode_index(no_wayvr),
+        "beyond": lambda: mode_beyond(no_wayvr),
         "wivrn": mode_wivrn,
         "off": mode_off,
         "quiesce": mode_quiesce,
