@@ -1,0 +1,96 @@
+[ananke-mindgame]
+display_name = "Custom (ananke-mindgame)"
+protocol = "openai"
+base_url = "http://mindgame:7070/v1"
+api_key_env = "ANANKE_MINDGAME_API_KEY"
+discover_models = true
+
+[[ananke-mindgame.models]]
+id = "diffusiongemma-26b-a4b-2x128k"
+tier = "medium"
+context_window = 131072
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = true
+
+[[ananke-mindgame.models]]
+id = "diffusiongemma-26b-a4b-256k"
+tier = "medium"
+context_window = 262144
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = true
+
+[[ananke-mindgame.models]]
+id = "muse-glimmer"
+tier = "medium"
+context_window = 262144
+max_output_tokens = 32768
+supports_vision = true
+
+[[ananke-mindgame.models]]
+id = "qwen3.6-27b-ninfer-mtp3"
+tier = "medium"
+context_window = 196608
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
+id = "qwen3.6-27b-ninfer-mtp3-vision"
+tier = "medium"
+context_window = 147456
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = true
+
+[[ananke-mindgame.models]]
+id = "qwen3.6-35b-a3b-ninfer-dflash7"
+tier = "medium"
+context_window = 262144
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
+id = "qwen3.6-35b-a3b-ninfer-mtp3-vision"
+tier = "medium"
+context_window = 163840
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = true
+
+[[ananke-mindgame.models]]
+id = "qwen3.8-27b-ninfer-mtp3"
+tier = "medium"
+context_window = 221184
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
+id = "qwen3.8-27b-ninfer-mtp3-vision"
+tier = "medium"
+context_window = 147456
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = true
+
+[ananke-redline]
+display_name = "Custom (ananke-redline)"
+protocol = "openai"
+base_url = "http://redline:7070/v1"
+api_key_env = "ANANKE_REDLINE_API_KEY"
+discover_models = true
+
+[[ananke-redline.models]]
+id = "gemma-4-31b-it-qat"
+tier = "medium"
+context_window = 200000
+supports_vision = true
+
+[[ananke-redline.models]]
+id = "qwen3.6-27b"
+tier = "medium"
+context_window = 180000
+supports_vision = true
