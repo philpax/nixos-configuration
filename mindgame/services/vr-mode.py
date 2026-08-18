@@ -421,7 +421,7 @@ def telemetry(seconds):
 # --- modes -------------------------------------------------------------------
 
 
-def mode_index(no_wayvr=False):
+def mode_index(no_wayvr=False, no_audio=False):
     stop("vr-quiesce.service", "wivrn.service")
     stop_extras()
     write_env()  # no overrides: use monado.service's own environment
@@ -436,13 +436,14 @@ def mode_index(no_wayvr=False):
     # IPD heads-up overlay. Index-only: it surfaces changes in the motorised
     # IPD, and the Beyond's is a fixed mechanical setting with nothing to report.
     run_transient("vr-ipd-overlay", shlex.split(IPD_LAUNCHER))
-    index_audio_on()
+    if not no_audio:
+        index_audio_on()
     set_fan(FAN_IDLE)  # Beyond idle, if it is attached at all
     say(f"index (monado) active{'' if no_wayvr else ', WayVR + IPD overlay launched'}")
     return 0
 
 
-def mode_beyond(no_wayvr=False):
+def mode_beyond(no_wayvr=False, no_audio=False):
     stop("vr-quiesce.service", "wivrn.service")
     stop_extras()
     connector = beyond_connector()
@@ -466,17 +467,19 @@ def mode_beyond(no_wayvr=False):
         return 1
     if not no_wayvr:
         start_wayvr()
-    beyond_audio_on()
+    if not no_audio:
+        beyond_audio_on()
     set_fan(FAN_ACTIVE)
     say(f"beyond (monado) active{'' if no_wayvr else ', WayVR launched'}")
     return 0
 
 
-def mode_wivrn():
+def mode_wivrn(no_audio=False):
     stop("vr-quiesce.service")
     stop_monado()
     stop_extras()  # WiVRn launches its own WayVR on session start
-    audio_off()  # Quest uses its own audio; give the desktop sink back
+    if not no_audio:
+        audio_off()  # Quest uses its own audio; give the desktop sink back
     set_active_runtime(WIVRN_JSON)
     write_openvrpaths()
     sysctl("start", "wivrn.service")
@@ -484,11 +487,12 @@ def mode_wivrn():
     return 0
 
 
-def mode_off():
+def mode_off(no_audio=False):
     stop("vr-quiesce.service", "wivrn.service")
     stop_monado()
     stop_extras()
-    audio_off()
+    if not no_audio:
+        audio_off()
     for path in (ACTIVE_RUNTIME, ENV_FILE):
         try:
             os.unlink(path)
@@ -568,10 +572,14 @@ def main():
     sub = ap.add_subparsers(dest="mode")
     idx = sub.add_parser("index", help="Valve Index via Monado (+ WayVR)")
     idx.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
+    idx.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
     bdy = sub.add_parser("beyond", help="Bigscreen Beyond 2e via Monado (+ WayVR)")
     bdy.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
-    sub.add_parser("wivrn", help="Quest via WiVRn")
-    sub.add_parser("off", help="stop everything, no runtime active")
+    bdy.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    wiv = sub.add_parser("wivrn", help="Quest via WiVRn")
+    wiv.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    off = sub.add_parser("off", help="stop everything, no runtime active")
+    off.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
     sub.add_parser("quiesce", help="wake headsets just long enough to sleep")
     sub.add_parser("status", help="show current runtime + service state")
     fan = sub.add_parser("fan", help="set the Beyond's fan speed")
@@ -586,11 +594,12 @@ def main():
     if args.mode == "telemetry":
         return telemetry(args.seconds)
     no_wayvr = getattr(args, "no_wayvr", False)
+    no_audio = getattr(args, "no_audio", False)
     return {
-        "index": lambda: mode_index(no_wayvr),
-        "beyond": lambda: mode_beyond(no_wayvr),
-        "wivrn": mode_wivrn,
-        "off": mode_off,
+        "index": lambda: mode_index(no_wayvr, no_audio),
+        "beyond": lambda: mode_beyond(no_wayvr, no_audio),
+        "wivrn": lambda: mode_wivrn(no_audio),
+        "off": lambda: mode_off(no_audio),
         "quiesce": mode_quiesce,
         "status": mode_status,
         None: mode_status,
