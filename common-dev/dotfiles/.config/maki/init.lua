@@ -1,35 +1,40 @@
--- Personal splash: a matrix rain background with the stock text block (logo,
--- tagline, help line, tip, version) painted on top. Replaces the bundled
--- splash.render slot. Stateless: the frame is a pure function of (w, h, t),
--- so a new splash session restarts the same rain with no cleanup.
+-- Personal splash: a matrix rain spiralling out from the centre, with the
+-- stock text block (logo, tagline, help line, tip, version) painted on top.
+-- Replaces the bundled splash.render slot. Stateless: the frame is a pure
+-- function of (w, h, t), so a new splash session restarts the same rain with
+-- no cleanup.
 
 local RAIN_SEED = 161803398
 local LCG_MOD = 2147483647 -- 2^31 - 1, Park-Minimal standard LCG
 local LCG_MULT = 48271
 local BRIGHT_LEVELS = 5
 -- Three rain depths, near to far: faster and brighter up close, slower and
--- dimmer in the back, for a parallax feel. Each layer's idle_max is a random
--- idle stretch (in multiples of the fall distance), so only a fraction of
--- each layer rains at any moment and the back layers are the sparsest.
--- flicker is the per-cell glyph mutation rate (re-rolls per second), higher
--- up close so the near rain shimmers and the far rain holds steady.
+-- dimmer in the back. speed is the outward speed in cells/sec along the
+-- spiral, trail the fading tail length in cells. All layers ride the same
+-- arms (see strands_for), so depth comes from speed and brightness on a
+-- shared trajectory, the way the fall rain shared its columns. Each layer's
+-- idle_max is a random idle stretch (in multiples of the run distance) after
+-- a bead retires at the edge, so only a fraction of each layer flows at any
+-- moment and the back layers are the sparsest. flicker is the per-cell glyph
+-- mutation rate (re-rolls per second), higher up close so the near rain
+-- shimmers and the far rain holds steady.
 local LAYERS = {
   {
-    speed = { 8.0, 15.0 },
-    trail = { 8, 22 },
+    speed = { 5.0, 9.0 },
+    trail = { 6, 16 },
     idle_max = 1.0,
     bright = 1.0,
-    head_alpha = 1.0,
+    head_alpha = 0.9,
     head_bold = true,
     head_fg = true,
-    flicker = 1.5,
+    flicker = 0.8,
   },
   {
-    speed = { 4.0, 8.0 },
+    speed = { 3.0, 6.0 },
     trail = { 5, 12 },
     idle_max = 1.4,
     bright = 0.55,
-    head_alpha = 0.7,
+    head_alpha = 0.6,
     head_bold = false,
     head_fg = true,
     flicker = 1.0,
@@ -39,18 +44,24 @@ local LAYERS = {
     trail = { 3, 7 },
     idle_max = 1.0,
     bright = 0.3,
-    head_alpha = 0.5,
+    head_alpha = 0.45,
     head_bold = false,
     head_fg = false,
     flicker = 0.5,
   },
 }
--- Brightness cap: trails top out well below the full accent so the rain
--- stays a subtle backdrop to the text. Sparkles are a near-layer flourish
--- just above the trails.
-local RAIN_BRIGHT = 0.55
-local SPARKLE_ALPHA = 0.6
+-- Brightness cap: the entry fade settles at full strength, so the steady
+-- state tops out well below the accent to keep the same subtlety as the
+-- fade-in. Sparkles are a near-layer flourish just above the trails.
+local RAIN_BRIGHT = 0.42
+local SPARKLE_ALPHA = 0.35
 local SPARKLE_EVERY = 7
+-- Each arm winds TURNS full turns from the hole to the outer radius, and the
+-- hole keeps a clear circle under the centred text. ARMS is the shared arm
+-- count per unit radius, so density holds across sizes.
+local SPIRAL_TURNS = 2.0
+local SPIRAL_HOLE = 3
+local SPIRAL_ARMS = 1.1
 
 local LOGO = "luna-maki"
 local TAGLINE = "luna's fucked up efficient coder"
@@ -191,38 +202,57 @@ local function glyph_for(c, k, t, rate)
   return GLYPHS[(x % #GLYPHS) + 1]
 end
 
--- Per-column lifecycle: the head falls `wrap` rows (screen height plus the
--- trail), then sits idle for a random per-column stretch before restarting at
--- the top. Deriving the phase from t alone keeps the frame a pure function of
--- (w, h, t), so no state is cleared on SplashShown.
-local columns = {}
-local function columns_for(w, h)
+-- Per-strand lifecycle: a bead runs `span` cells from the hole to the outer
+-- radius, trails off for a while, then sits idle for a random per-strand
+-- stretch before restarting at the hole. Deriving the phase from t alone
+-- keeps the frame a pure function of (w, h, t), so no state is cleared on
+-- SplashShown.
+--
+-- The arm set (base angles) is shared by every layer: parallax in the fall
+-- rain came from near and far beads sharing the same columns and differing
+-- only in speed and brightness. Separate arm families per layer read as
+-- three overlapping lattices whose crossings moiré, not as depth.
+local strands = {}
+local function strands_for(w, h)
   local key = w * 10000 + h
-  local cols = columns[key]
-  if cols then
-    return cols
+  local st = strands[key]
+  if st then
+    return st
   end
-  cols = {}
-  for c = 1, w do
-    local rng = make_rng(RAIN_SEED + (c - 1) * 7919)
-    local li = 1 + math.floor(rng() * #LAYERS)
+  st = { arms = {}, layers = {} }
+  local cx = (w + 1) / 2
+  local cy = (h + 1) / 2
+  st.cx = cx
+  st.cy = cy
+  st.span = math.max(2.0, math.sqrt(cx * cx + cy * cy) - SPIRAL_HOLE)
+  st.twist = SPIRAL_TURNS * 2 * math.pi / st.span
+  local count = math.max(2, math.floor(st.span * SPIRAL_ARMS + 0.5))
+  for j = 1, count do
+    local rng = make_rng(RAIN_SEED + (j - 1) * 7919)
+    st.arms[j] = { base = ((j - 1) / count + (rng() - 0.5) / count) * 2 * math.pi }
+  end
+  for li = 1, #LAYERS do
     local layer = LAYERS[li]
-    local speed = layer.speed[1] + (layer.speed[2] - layer.speed[1]) * rng()
-    local trail = layer.trail[1] + math.floor(rng() * (layer.trail[2] - layer.trail[1] + 1))
-    local wrap = h + trail
-    local idle = math.floor(wrap * (layer.idle_max * rng()))
-    local cycle = wrap + idle
-    cols[c] = {
-      layer = li,
-      speed = speed,
-      trail = trail,
-      wrap = wrap,
-      cycle = cycle,
-      offset = math.floor(rng() * cycle),
-    }
+    local arr = {}
+    for j = 1, count do
+      local rng = make_rng(RAIN_SEED + 1000003 + (li - 1) * 7919 * 1000 + (j - 1) * 7919)
+      local speed = layer.speed[1] + (layer.speed[2] - layer.speed[1]) * rng()
+      local trail = layer.trail[1] + math.floor(rng() * (layer.trail[2] - layer.trail[1] + 1))
+      local wrap = st.span + trail
+      local idle = math.floor(wrap * (layer.idle_max * rng()))
+      local cycle = wrap + idle
+      arr[j] = {
+        speed = speed,
+        trail = trail,
+        wrap = wrap,
+        cycle = cycle,
+        offset = math.floor(rng() * cycle),
+      }
+    end
+    st.layers[li] = arr
   end
-  columns[key] = cols
-  return cols
+  strands[key] = st
+  return st
 end
 
 -- Every row comes out exactly w cells wide: the blitter walks the segments
@@ -251,32 +281,47 @@ local function build_frame(w, h, t, fade, bg, fg, accent, tip)
     styles[r] = {}
   end
 
-  local cols = columns_for(w, h)
-  for c = 1, w do
-    local col = cols[c]
-    local head = math.floor(t * col.speed) + col.offset
-    local hp = head % col.cycle
-    if hp < col.wrap then
-      local head_row = hp + 1
-      local r0 = head_row - col.trail + 1
-      if r0 < 1 then
-        r0 = 1
-      end
-      local r1 = math.min(h, head_row)
-      local levels = layer_levels[col.layer]
-      local head_style = layer_head[col.layer]
-      local sparkly = col.layer == 1
-      local rate = LAYERS[col.layer].flicker
-      for r = r0, r1 do
-        local d = head_row - r
-        local k = head - d
-        cells[r][c] = glyph_for(c, k, t, rate)
-        if d == 0 then
-          styles[r][c] = head_style
-        elseif sparkly and k % SPARKLE_EVERY == 3 then
-          styles[r][c] = sparkle_hex
-        else
-          styles[r][c] = levels[math.floor((d / col.trail) * BRIGHT_LEVELS) + 1]
+  local st = strands_for(w, h)
+  local cstep = math.cos(st.twist)
+  local sstep = math.sin(st.twist)
+  -- Far layers first, so near beads win any cell conflict.
+  for li = #LAYERS, 1, -1 do
+    local layer = LAYERS[li]
+    local levels = layer_levels[li]
+    local head_style = layer_head[li]
+    local sparkly = li == 1
+    local rate = layer.flicker
+    for j = 1, #st.arms do
+      local s = st.layers[li][j]
+      local head = math.floor(t * s.speed) + s.offset
+      local hp = head % s.cycle
+      if hp < s.wrap then
+        local r_head = SPIRAL_HOLE + hp
+        local th = st.arms[j].base + st.twist * (r_head - SPIRAL_HOLE)
+        local ux, uy = math.cos(th), math.sin(th)
+        local key = j + (li - 1) * 500
+        for d = 0, s.trail do
+          local rd = r_head - d
+          if rd >= SPIRAL_HOLE then
+            local px = st.cx + rd * ux
+            local py = st.cy + rd * uy
+            local col = math.floor(px) + 1
+            local row = math.floor(py) + 1
+            if col >= 1 and col <= w and row >= 1 and row <= h then
+              local k = head - d
+              cells[row][col] = glyph_for(key, k, t, rate)
+              if d == 0 then
+                styles[row][col] = head_style
+              elseif sparkly and k % SPARKLE_EVERY == 3 then
+                styles[row][col] = sparkle_hex
+              else
+                styles[row][col] = levels[math.floor((d / s.trail) * BRIGHT_LEVELS) + 1]
+              end
+            end
+          end
+          local nx = ux * cstep + uy * sstep
+          local ny = uy * cstep - ux * sstep
+          ux, uy = nx, ny
         end
       end
     end
