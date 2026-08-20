@@ -139,6 +139,28 @@ models:
     context_window: 147456
     max_output_tokens_per_turn: 32768
     supports_vision: true
+  ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3:
+    provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 180224
+    max_output_tokens_per_turn: 32768
+    supports_vision: false
+  ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3-vision:
+    provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3-vision
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 122880
+    max_output_tokens_per_turn: 32768
+    supports_vision: true
   ananke-redline/qwen3.6-27b:
     provider_name: qwen3.6-27b
     variant: other

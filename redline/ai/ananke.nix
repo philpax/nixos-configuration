@@ -4,6 +4,9 @@ let
   folders = import ../folders.nix;
   lib = pkgs.lib;
   anankeLib = import ../../common-all/ananke-lib.nix { inherit lib; };
+  inherit (anankeLib) flagArgs;
+  inherit (import ../../common-all/container-images.nix { inherit pkgs lib; })
+    mkOverlayImage mkImageService;
 
   llmDir = folders.ai.llm;
   vllmDir = folders.ai.vllm;
@@ -13,6 +16,158 @@ let
   managementPort = anankeLib.ports.management;
   comfyuiPort = 8188;
   llmBasePort = 8200;
+
+  # Overlay source for every patched vLLM image. Pinned to club-3090's
+  # 2026-05-31 v0.22.0 cut, which is the commit each overlay was rebased
+  # against; bumping it means re-checking that all of them still apply.
+  club3090 = pkgs.fetchFromGitHub {
+    owner = "noonghunna";
+    repo = "club-3090";
+    rev = "b2d7d8fb7f1d04584ef5ff5376723478d6851f9a";
+    hash = "sha256-FD7to76mRZBWgNbmHjZsaiZI8zTnWNDJ8a7XsKmsyuk=";
+  };
+  club3090Patch = model: patch: "${club3090}/models/${model}/vllm/patches/${patch}";
+
+  # Every vLLM overlay is a patch directory whose install.sh detects an
+  # already-patched image and no-ops, and fails loud on a rejected hunk. A
+  # patch that stops applying breaks the build rather than yielding a
+  # quietly unpatched image.
+  installPatch = src: dest: { inherit src dest; install = true; };
+
+  # Gemma 4 MTP streaming multi-tool-call fix (vLLM PR #42006). Stock
+  # v0.22.0 drops the arguments of every tool call but the last when
+  # streaming. Both 31B duals carry it.
+  gemma4Pr42006 = installPatch
+    (club3090Patch "gemma-4-31b" "vllm-pr42006-v0.22.0")
+    "/etc/club3090/pr42006";
+
+  vllmImages = {
+    # No overlays; the AWQ build runs on stock v0.20.0.
+    gemma4_26b = mkOverlayImage {
+      name = "vllm_gemma4_26b";
+      base = "vllm/vllm-openai:v0.20.0";
+    };
+
+    # Adds the froggeric chat template (fixes seven default-template bugs)
+    # and PR #37750, which gives every torch.cuda.Event an explicit
+    # `device=`. Without the latter, TP=2 deterministically kills rank 1
+    # mid-decode on this rig — upstream vllm-project/vllm#41190.
+    qwen36_27b = mkOverlayImage {
+      name = "vllm_qwen36_27b";
+      base = "vllm/vllm-openai:v0.22.0";
+      overlays = [
+        {
+          src = "${club3090Patch "qwen3.6-27b" "froggeric-chat-template"}/chat_template.jinja";
+          dest = "/etc/qwen-froggeric-chat-template.jinja";
+        }
+        (installPatch ./vllm-patches/vllm-pr37750-v0.22.0 "/etc/club3090/pr37750")
+      ];
+    };
+
+    # BF16 KV: ~131K default context, ~196K pool ceiling.
+    gemma4_31b_mtp = mkOverlayImage {
+      name = "vllm_gemma4_31b_mtp";
+      base = "vllm/vllm-openai:v0.22.0";
+      overlays = [ gemma4Pr42006 ];
+    };
+
+    # INT8 per-token-head KV via PR #40391, which pads Gemma 4's global-layer
+    # KV spec so page sizes unify across its two head_dims. Roughly twice the
+    # BF16 pool, so 262K native context fits.
+    gemma4_31b_int8 = mkOverlayImage {
+      name = "vllm_gemma4_31b_int8";
+      base = "vllm/vllm-openai:v0.22.0";
+      overlays = [
+        (installPatch
+          (club3090Patch "gemma-4-31b" "vllm-pr40391-v0.22.0")
+          "/etc/club3090/pr40391")
+        gemma4Pr42006
+      ];
+    };
+
+    # v0.22.0 serves this natively via `--runner pooling`; no overlays.
+    jina_embed_v5_small = mkOverlayImage {
+      name = "vllm_jina_embed_v5_small";
+      base = "vllm/vllm-openai:v0.22.0";
+    };
+  };
+
+  # vLLM writes model downloads and compile caches back to these, so they
+  # are read-write. tmpfiles creates them: ananke does not create mount
+  # sources, and Docker makes a missing one root-owned.
+  hfCache = "${vllmDir}/huggingface";
+  vllmCache = name: "${vllmDir}/cache/${name}";
+  vllmMounts = name: [
+    { source = hfCache; target = "/root/.cache/huggingface"; }
+    {
+      source = "${vllmCache name}/torch_compile";
+      target = "/root/.cache/vllm/torch_compile_cache";
+    }
+    { source = "${vllmCache name}/triton"; target = "/root/.triton/cache"; }
+  ];
+
+  # Shared by every vLLM service bar the 26B, which ran without any of it.
+  # `--ipc=host` is set on the container, so they use the host's /dev/shm
+  # and need no shm sizing of their own.
+  vllmBaseEnv = {
+    VLLM_WORKER_MULTIPROC_METHOD = "spawn";
+    VLLM_NO_USAGE_STATS = "1";
+    OMP_NUM_THREADS = "1";
+  };
+
+  # Google's recommended sampling for Gemma 4, and Qwen's for Qwen 3.6.
+  # Baked in so clients that send no sampling params still get sane values.
+  gemma4Sampling = builtins.toJSON {
+    temperature = 1.0;
+    top_p = 0.95;
+    top_k = 64;
+    min_p = 0.0;
+    repetition_penalty = 1.0;
+  };
+  qwen36Sampling = builtins.toJSON {
+    temperature = 0.6;
+    top_p = 0.95;
+    top_k = 20;
+    min_p = 0.0;
+    repetition_penalty = 1.0;
+  };
+
+  # Shared by both Gemma 4 31B duals: same weights, same drafter, same
+  # parsers. They differ only in KV dtype and the context that buys.
+  gemma4_31bArgs = flagArgs {
+    "--model" = "Intel/gemma-4-31B-it-int4-AutoRound";
+    "--served-model-name" = "gemma-4-31b-autoround";
+    "--tensor-parallel-size" = 2;
+    # PCIe-only rig, so the custom all-reduce path is off.
+    "--disable-custom-all-reduce" = true;
+    "--gpu-memory-utilization" = "0.95";
+    "--max-num-seqs" = 4;
+    "--max-num-batched-tokens" = 4096;
+    "--trust-remote-code" = true;
+    "--enable-auto-tool-choice" = true;
+    "--tool-call-parser" = "gemma4";
+    # Routes Gemma 4's thought trace into `reasoning_content` rather than
+    # letting it leak into `content`. No-ops when thinking is off.
+    "--reasoning-parser" = "gemma4";
+    "--chat-template" = "/vllm-workspace/examples/tool_chat_template_gemma4.jinja";
+    "--speculative-config" = builtins.toJSON {
+      model = "google/gemma-4-31B-it-assistant";
+      num_speculative_tokens = 4;
+    };
+    "--override-generation-config" = gemma4Sampling;
+  };
+
+  gemma4_31bEnv = vllmBaseEnv // {
+    TRITON_CACHE_DIR = "/root/.triton/cache";
+    NCCL_CUMEM_ENABLE = "0";
+    NCCL_P2P_DISABLE = "1";
+    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True,max_split_size_mb:512";
+    VLLM_ALLOW_LONG_MAX_MODEL_LEN = "1";
+  };
+
+  # Every vLLM container binds this inside its own network namespace;
+  # ananke publishes the loopback port it allocated onto it.
+  vllmContainerPort = 8000;
 
   # ComfyUI docker container always listens on 8188; ananke proxies the
   # public port to a loopback port the start script binds for it.
@@ -323,29 +478,83 @@ let
       extras = { context = 2048; } // discordVisible;
     }
 
-    # vLLM-served models. `kind = "vllm"` routes through buildVllm,
-    # which emits a `template = "command"` service that wraps the
-    # corresponding shell script and registers an `openai_proxy` block
-    # so the model shows up in /v1/models alongside the llama.cpp ones.
-    # The exposed (`-vllm` suffixed) name is what clients address; the
-    # script's `--served-model-name` is the upstream rewrite target.
+    # vLLM-served models. `kind = "vllm"` emits a `template = "command"`
+    # service whose workload is a container ananke drives itself, plus an
+    # `openai_proxy` block so the model shows up in /v1/models alongside
+    # the llama.cpp ones. The exposed (`-vllm` suffixed) name is what
+    # clients address; `--served-model-name` is the upstream rewrite
+    # target.
+    #
+    # `image` comes from `vllmImages` above, tagged with the hash of its
+    # own definition, so a service can only ever reference an image built
+    # from the config that describes it.
     {
       kind = "vllm";
       name = "qwen3.6-27b-vllm";
-      script = "${vllmDir}/qwen36_27b.sh";
+      image = vllmImages.qwen36_27b;
+      cacheName = "qwen36_27b";
       upstream_model = "qwen3.6-27b-autoround";
       vram_gb = 44;
       per_gpu_mib = 22000;
       description = "Qwen 3.6 27B served by vLLM (TP=2, AutoRound int4).";
+      env = vllmBaseEnv // {
+        NCCL_CUMEM_ENABLE = "1";
+        NCCL_P2P_DISABLE = "1";
+        VLLM_USE_FLASHINFER_SAMPLER = "1";
+        PYTORCH_CUDA_ALLOC_CONF = "max_split_size_mb:512";
+      };
+      args = flagArgs {
+        "--model" = "Lorbus/Qwen3.6-27B-int4-AutoRound";
+        "--served-model-name" = "qwen3.6-27b-autoround";
+        "--quantization" = "auto_round";
+        "--dtype" = "float16";
+        "--tensor-parallel-size" = 2;
+        "--disable-custom-all-reduce" = true;
+        "--max-model-len" = 262144;
+        "--gpu-memory-utilization" = "0.92";
+        "--max-num-seqs" = 2;
+        "--max-num-batched-tokens" = 8192;
+        "--kv-cache-dtype" = "fp8_e5m2";
+        "--trust-remote-code" = true;
+        "--chat-template" = "/etc/qwen-froggeric-chat-template.jinja";
+        "--default-chat-template-kwargs" = builtins.toJSON { enable_thinking = false; };
+        "--reasoning-parser" = "qwen3";
+        "--enable-auto-tool-choice" = true;
+        "--tool-call-parser" = "qwen3_coder";
+        "--enable-prefix-caching" = true;
+        "--enable-chunked-prefill" = true;
+        "--safetensors-load-strategy" = "lazy";
+        "--speculative-config" = builtins.toJSON {
+          method = "mtp";
+          num_speculative_tokens = 3;
+        };
+        "--override-generation-config" = qwen36Sampling;
+      };
     }
     {
       kind = "vllm";
       name = "gemma-4-26b-a4b-it-vllm";
-      script = "${vllmDir}/gemma4_26b.sh";
+      image = vllmImages.gemma4_26b;
+      cacheName = "gemma4_26b";
       upstream_model = "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit";
       vram_gb = 46;
       per_gpu_mib = 23000;
       description = "Gemma 4 26B (A4B) served by vLLM (TP=2, AWQ 4-bit).";
+      # Ran with no environment of its own, and Triton's default cache dir
+      # is already the mounted /root/.triton/cache.
+      env = { };
+      # This one takes the model positionally rather than through `--model`.
+      args = [ "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit" ] ++ flagArgs {
+        "--tensor-parallel-size" = 2;
+        "--max-model-len" = 32768;
+        "--limit-mm-per-prompt" = builtins.toJSON { image = 0; audio = 0; };
+        "--enable-prefix-caching" = true;
+        "--max-num-batched-tokens" = 4096;
+        "--gpu-memory-utilization" = "0.9";
+        "--max-num-seqs" = 128;
+        "--safetensors-load-strategy" = "lazy";
+        "--default-chat-template-kwargs" = builtins.toJSON { enable_thinking = false; };
+      };
     }
     # Gemma 4 31B has two vLLM variants (after club-3090's 2026-05-31
     # v0.22.0 cut at commit b2d7d8f) — both AutoRound INT4 weights +
@@ -358,28 +567,46 @@ let
     #   int8: INT8 per-token-head KV via vendored PR #40391 (lean
     #         ~240-line diff-apply, not 7-file copy), 262K native
     #         default (INT8 PTH pool ~354K-455K tok). Long-ctx path.
+    #
+    # BF16 KV is pinned on the `mtp` variant because the alternatives don't
+    # work here: fp8_e5m2 fails an allowlist assert in gemma4_mm.py, fp8_e4m3
+    # needs a Triton kernel that wants sm_89+ (these are Ampere sm_86), and
+    # int8_per_token_head is exactly what the `int8` sibling's PR #40391
+    # overlay exists to enable.
     {
       kind = "vllm";
       name = "gemma-4-31b-it-mtp-vllm";
-      script = "${vllmDir}/gemma4_31b_mtp.sh";
+      image = vllmImages.gemma4_31b_mtp;
+      cacheName = "gemma4_31b_mtp";
       upstream_model = "gemma-4-31b-autoround";
       vram_gb = 45;
       per_gpu_mib = 22500;
       description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=4, BF16 KV).";
+      env = gemma4_31bEnv;
+      # 131K leaves ~65K of pool headroom against the ~196K BF16 ceiling.
+      args = gemma4_31bArgs ++ [ "--max-model-len" "131072" ];
     }
     {
       kind = "vllm";
       name = "gemma-4-31b-it-int8-vllm";
-      script = "${vllmDir}/gemma4_31b_int8.sh";
+      image = vllmImages.gemma4_31b_int8;
+      cacheName = "gemma4_31b_int8";
       upstream_model = "gemma-4-31b-autoround";
       vram_gb = 45;
       per_gpu_mib = 22500;
       description = "Gemma 4 31B served by vLLM (TP=2, AutoRound int4, MTP drafter n=4, INT8 PTH KV — long-context variant).";
+      env = gemma4_31bEnv;
+      # The INT8 PTH pool is roughly twice the BF16 one, so the model's
+      # native 262144 fits with room for short-request concurrency.
+      args = gemma4_31bArgs ++ flagArgs {
+        "--max-model-len" = 262144;
+        "--kv-cache-dtype" = "int8_per_token_head";
+      };
     }
     # Embedding service. Pinned to GPU 1 alone (gpu_indices = [ 1 ]);
-    # the script's --device nvidia.com/gpu=1 enforces the same on the
-    # container side, so ananke's pledge and the container's reality
-    # agree. modality = "embedding" is a first-class field in ananke's
+    # ananke injects `--device nvidia.com/gpu=1` from that same list, so
+    # its pledge and the container's reality cannot disagree.
+    # modality = "embedding" is a first-class field in ananke's
     # config (parsed into ananke_api::Modality, propagated through
     # /v1/models + /api/services, rendered as a badge in the
     # ServicesTable + ServiceDetail).
@@ -400,17 +627,29 @@ let
     {
       kind = "vllm";
       name = "jina-embeddings-v5-text-small-retrieval-vllm";
-      script = "${vllmDir}/jina_embed_v5_small.sh";
+      image = vllmImages.jina_embed_v5_small;
+      cacheName = "jina_embed_v5_small";
       upstream_model = "jina-embeddings-v5-text-small-retrieval";
       vram_gb = 4;
       per_gpu_mib = 4000;
       gpu_indices = [ 1 ];
       modality = "embedding";
-      extra_env = {
-        MAX_MODEL_LEN = "16384";
-        GPU_MEMORY_UTILIZATION = "0.16";
-      };
       description = "Jina v5 text-small (retrieval merged adapter) served by vLLM (pooling runner, 1024-dim, 16K ctx — sized to co-run with qwen 200K). GPU 1 only.";
+      env = vllmBaseEnv // {
+        TRITON_CACHE_DIR = "/root/.triton/cache";
+        PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True,max_split_size_mb:512";
+      };
+      # `--runner pooling` loads the model in embedding mode; without it
+      # vLLM tries the Qwen3-0.6B backbone as a generation model.
+      args = flagArgs {
+        "--model" = "jinaai/jina-embeddings-v5-text-small-retrieval";
+        "--served-model-name" = "jina-embeddings-v5-text-small-retrieval";
+        "--runner" = "pooling";
+        "--dtype" = "bfloat16";
+        "--max-model-len" = 16384;
+        "--gpu-memory-utilization" = "0.16";
+        "--trust-remote-code" = true;
+      };
     }
 
     # LFM2.5 embedder (llama.cpp-served, 1024-dim). The model's trained
@@ -436,32 +675,44 @@ let
     services = anankeLib.mkIndexedServices {
       basePort = llmBasePort;
       inherit models;
-      buildLlamaCpp = port: m: anankeLib.mkLlmService {
+      builders.llama-cpp = port: m: anankeLib.mkLlmService {
         inherit (m) name;
         inherit port;
         model = "${llmDir}/${m.file}";
         mmproj = if m ? mmproj then "${llmDir}/${m.mmproj}" else null;
         extra = { jinja = true; } // (m.extras or { });
       };
-      # No `--cgroup-parent`, so the snapshotter can't observe these
-      # containers — the pledge is the source of truth for them.
-      buildVllm = port: m: anankeLib.mkCommandService {
-        inherit (m) name script;
+      # ananke drives the container itself, so the lifecycle, logs,
+      # cleanup, and crash recovery are its rather than a shell script's.
+      #
+      # Bridge networking with a fixed container port: every vLLM image's
+      # entrypoint binds `${listen_host}:${listen_port}`, which resolves to
+      # `0.0.0.0:8000` inside, and ananke publishes the allocated loopback
+      # port onto it.
+      builders.vllm = port: m: anankeLib.mkContainerCommandService {
+        inherit (m) name description;
         inherit port;
+        image = m.image.tag;
+        # The image declares its own ENTRYPOINT, so the argv is flags only.
+        command = m.args ++ flagArgs {
+          "--host" = "\${listen_host}";
+          "--port" = "\${listen_port}";
+        };
+        network = "bridge";
+        containerPort = vllmContainerPort;
+        # vLLM's workers communicate through shared memory, which needs the
+        # host's /dev/shm rather than the 64 MB default.
+        ipc = "host";
+        mounts = vllmMounts m.cacheName;
+        inherit (m) env;
         upstreamModel = m.upstream_model;
         vramGb = m.vram_gb;
         perGpuMib = m.per_gpu_mib;
         gpuIndices = m.gpu_indices or [ 0 1 ];
-        env = {
-          PATH = lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.bash ];
-          HOME = "/home/ai";
-        };
-        extraEnv = m.extra_env or { };
-        inherit (m) description;
         modality = m.modality or null;
       };
     } ++ [
-      # `{port}` is the loopback port ananke allocates, passed through
+      # `${port}` is the loopback port ananke allocates, passed through
       # to `docker run -p` onto the container's fixed 8188. Dynamic VRAM
       # so other models can share the pool while ComfyUI is idle.
       {
@@ -472,7 +723,7 @@ let
           "${comfyuiShared.comfyuiStartScript}/bin/comfyui-start"
           "--foreground"
           "--port"
-          "{port}"
+          "\${port}"
         ];
         shutdown_command = [
           "${comfyuiShared.comfyuiStopScript}/bin/comfyui-stop"
@@ -555,6 +806,23 @@ in
   # `comfyui-start` invocation on some cgroup-driver setups.
   systemd.slices."ananke-comfyui" = {
     description = "Cgroup parent for ananke's ComfyUI container";
+  };
+
+  # The mount sources every vLLM service shares. ananke does not create
+  # them, and Docker makes a missing bind source root-owned, which the
+  # container then cannot write its compile caches into.
+  systemd.tmpfiles.rules =
+    [ "d ${hfCache} 0755 ai ai - -" ]
+    ++ lib.concatMap
+      (m: [
+        "d ${vllmCache m.cacheName} 0755 ai ai - -"
+        "d ${vllmCache m.cacheName}/torch_compile 0755 ai ai - -"
+        "d ${vllmCache m.cacheName}/triton 0755 ai ai - -"
+      ])
+      (lib.filter (m: (m.kind or "") == "vllm") models);
+
+  systemd.services.container-images = mkImageService {
+    images = lib.attrValues vllmImages;
   };
 
   systemd.services.ananke = anankeLib.mkAnankeSystemdService {

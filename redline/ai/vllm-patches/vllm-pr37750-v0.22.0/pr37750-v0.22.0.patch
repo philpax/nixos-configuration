@@ -1,0 +1,83 @@
+From: rebased from vllm-project/vllm PR #37750
+Subject: fix: specify device for torch.Event to prevent multi-GPU issues
+
+Rebased from PR #37750 (closed unmerged 2026-03-25) onto v0.22.0 line numbers.
+The pooling-path hunk uses `async_output_copy_stream.device` instead of
+`raw_pooler_output.device` per gemini-code-assist's review comment on the PR
+(PoolerOutput = Tensor | list[Tensor] | list[Tensor|None], so `.device`
+attribute access is unsafe on the union; the stream's device is always present).
+
+diff --git a/vllm/v1/worker/gpu_model_runner.py b/vllm/v1/worker/gpu_model_runner.py
+--- a/vllm/v1/worker/gpu_model_runner.py
++++ b/vllm/v1/worker/gpu_model_runner.py
+@@ -248,7 +248,7 @@
+         self._invalid_req_indices = invalid_req_indices
+
+         # Event on the copy stream so we can synchronize the non-blocking copy.
+-        self.async_copy_ready_event = torch.Event()
++        self.async_copy_ready_event = torch.Event(device=sampled_token_ids.device)
+
+         # Keep a reference to the device tensor to avoid it being
+         # deallocated until we finish copying it to the host.
+@@ -369,7 +369,7 @@
+         self._model_runner_output = model_runner_output
+
+         # Event on the copy stream so we can synchronize the non-blocking copy.
+-        self.async_copy_ready_event = torch.Event()
++        self.async_copy_ready_event = torch.Event(device=async_output_copy_stream.device)
+
+         # Keep a reference to the device tensors to avoid them being
+         # deallocated until we finish copying it to the host.
+@@ -685,7 +685,7 @@
+         self.prepare_inputs_event: torch.Event | None = None
+         if self.use_async_scheduling:
+             self.async_output_copy_stream = torch.cuda.Stream()
+-            self.prepare_inputs_event = torch.Event()
++            self.prepare_inputs_event = torch.Event(device=self.device)
+
+         # self.cudagraph_batch_sizes sorts in ascending order.
+         if (
+@@ -840,7 +840,7 @@
+             self._num_valid_draft_tokens_copy_stream = torch.cuda.Stream()
+
+         self._draft_token_req_ids: list[str] | None = None
+-        self.transfer_event = torch.Event()
++        self.transfer_event = torch.Event(device=self.device)
+         self.sampled_token_ids_pinned_cpu = torch.empty(
+             (self.max_num_reqs, 1),
+             dtype=torch.int64,
+@@ -860,8 +860,8 @@
+         self.draft_token_ids_cpu: torch.Tensor | None = None
+         self.num_accepted_tokens_event: torch.Event | None = None
+         if self.num_spec_tokens:
+-            self.draft_token_ids_event = torch.Event()
+-            self.num_accepted_tokens_event = torch.Event()
++            self.draft_token_ids_event = torch.Event(device=self.device)
++            self.num_accepted_tokens_event = torch.Event(device=self.device)
+             self.draft_token_ids_copy_stream = torch.cuda.Stream()
+             self.draft_token_ids_cpu = torch.empty(
+                 (self.max_num_reqs, self.num_spec_tokens),
+@@ -870,7 +870,7 @@
+                 pin_memory=self.pin_memory,
+             )
+             if self.use_async_scheduling:
+-                self.valid_sampled_token_count_event = torch.Event()
++                self.valid_sampled_token_count_event = torch.Event(device=self.device)
+                 self.valid_sampled_token_count_copy_stream = torch.cuda.Stream()
+                 self.valid_sampled_token_count_cpu = torch.empty(
+                     self.max_num_reqs,
+diff --git a/vllm/v1/worker/ubatching.py b/vllm/v1/worker/ubatching.py
+--- a/vllm/v1/worker/ubatching.py
++++ b/vllm/v1/worker/ubatching.py
+@@ -219,8 +219,9 @@
+     Create a context manager for micro-batching synchronization.
+     """
+     cpu_events = [threading.Event() for _ in range(num_micro_batches)]
+-    gpu_comm_done_events = [torch.Event() for _ in range(num_micro_batches)]
+-    gpu_compute_done_events = [torch.Event() for _ in range(num_micro_batches)]
++    device = compute_stream.device
++    gpu_comm_done_events = [torch.Event(device=device) for _ in range(num_micro_batches)]
++    gpu_compute_done_events = [torch.Event(device=device) for _ in range(num_micro_batches)]
+
+     ctxs = []
+     for i in range(num_micro_batches):

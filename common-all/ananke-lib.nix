@@ -2,16 +2,44 @@
 # (https://github.com/philpax/ananke). Used by redline/ai/ananke.nix and
 # mindgame/services/ananke.nix.
 { lib }:
+let
+  # The `[service.container]` block, shared by `mkContainerCommandService`
+  # and by `llama-cpp` services passing one through `extra`.
+  mkContainerBlock =
+    { image
+    , network ? "host"
+    , containerPort ? null
+    , ipc ? null
+    , mounts ? [ ]
+    , envPassthrough ? [ ]
+      # Expanded once per GPU ananke's placement picks, so the container
+      # sees exactly the devices the allocator reserved for it.
+    , gpuDevice ? "nvidia.com/gpu=\${id}"
+    , runtime ? "docker"
+    }:
+    { inherit image network runtime; }
+    // lib.optionalAttrs (gpuDevice != null) { gpu_device = gpuDevice; }
+    // lib.optionalAttrs (containerPort != null) { container_port = containerPort; }
+    // lib.optionalAttrs (ipc != null) { inherit ipc; }
+    // lib.optionalAttrs (mounts != [ ]) { inherit mounts; }
+    // lib.optionalAttrs (envPassthrough != [ ]) { env_passthrough = envPassthrough; };
+
+  # A read-only bind mount, the shape model and artifact mounts want.
+  roMount = source: target: { inherit source target; read_only = true; };
+in
 {
+  # `llama-cpp` services build their container block directly, since theirs
+  # goes through `extra`.
+  inherit mkContainerBlock roMount;
+
   ports = {
     openai = 7070;
     management = 7071;
   };
 
   # A `template = "llama-cpp"` service. Fields besides model/mmproj vary
-  # too much per model to name here, so they go through `extra` —
-  # including `launcher`, which fronts llama-server with a Docker/podman
-  # wrapper instead of running it natively.
+  # too much per model to name here, so they go through `extra` — including
+  # `launcher` and `container`, which are mutually exclusive.
   mkLlmService =
     { name
     , port
@@ -24,21 +52,32 @@
     // extra;
 
   # Assigns each `models` entry a port (`basePort + index`) and builds it
-  # with `buildVllm`, `buildNinfer`, or `buildLlamaCpp`, picked by `kind`.
+  # with the entry in `builders` named by its `kind`, defaulting to
+  # `llama-cpp`.
   mkIndexedServices =
     { basePort
     , models
-    , buildVllm
-    , buildLlamaCpp
-    , buildNinfer ? null
+    , builders
     }:
     lib.imap0
       (index: m:
-        let port = basePort + index; in
-        if (m.kind or "llama-cpp") == "vllm" then buildVllm port m
-        else if (m.kind or "llama-cpp") == "ninfer" then buildNinfer port m
-        else buildLlamaCpp port m)
+        let kind = m.kind or "llama-cpp"; in
+        (builders.${kind} or (throw "no builder for kind `${kind}`"))
+          (basePort + index)
+          m)
       models;
+
+  # Projects `{ "--flag" = value; }` into argv. `true` emits a bare flag,
+  # `false`/`null` omits it, anything else emits flag then value. Attribute
+  # order is alphabetical, which is why this suits named flags rather than
+  # positional arguments.
+  flagArgs = attrs:
+    lib.concatLists (lib.mapAttrsToList
+      (flag: value:
+        if value == null || value == false then [ ]
+        else if value == true then [ flag ]
+        else [ flag (toString value) ])
+      attrs);
 
   # `allowExternalServices` defaults to `false` (loopback-only per-service
   # reverse proxies): the openai_api multiplexer already routes by
@@ -69,24 +108,35 @@
       configFile = (pkgs.formats.toml { }).generate "ananke-config.toml" ananke_config;
     };
 
-  # Generic `template = "command"` service for any docker-wrapped
-  # OpenAI-compatible backend (vLLM, ninfer, ...). `script` must accept the
-  # allocated port as its last positional arg and support `--stop` for
-  # teardown. `env` has no default — ananke's spawner env_clear()s before
-  # exec.
-  mkCommandService =
+  # `template = "command"` service whose workload runs in a container
+  # ananke drives itself. ananke owns the lifecycle, so there is no script,
+  # no `shutdown_command`, and no shell to hand a `PATH` — `env` is only
+  # what the workload itself reads.
+  #
+  # `command` is the in-container argv, and should bind `${listen_host}` and
+  # `${listen_port}`. Under `network = "host"` those resolve to `127.0.0.1`
+  # and the allocated port; under `bridge` to `0.0.0.0` and
+  # `containerPort`, with ananke publishing
+  # `127.0.0.1:<allocated>:<containerPort>`. Bridge requires both.
+  mkContainerCommandService =
     { name
     , port
-    , script
+    , image
+    , command
     , upstreamModel
     , vramGb
     , perGpuMib
-    , env
-    , gpuIndices ? [ 0 1 ]
-    , scriptArgs ? [ ]
+    , gpuIndices ? [ 0 ]
+    , network ? "host"
+    , containerPort ? null
+    , ipc ? null
+    , mounts ? [ ]
+    , env ? { }
+    , envPassthrough ? [ ]
+    , gpuDevice ? "nvidia.com/gpu=\${id}"
+    , runtime ? "docker"
     , description ? null
     , modality ? null
-    , extraEnv ? { }
     , idleTimeout ? "60m"
     # Above ananke's default priority (50) — these backends' cold start is
     # expensive enough to be worth protecting from eviction.
@@ -99,15 +149,12 @@
     in
     {
       template = "command";
-      inherit name port;
-      command = [ script ] ++ scriptArgs ++ [ "{port}" ];
-      shutdown_command = [ script "--stop" ];
-      env = env // extraEnv;
+      inherit name port command;
       idle_timeout = idleTimeout;
       inherit priority;
       allocation = {
         mode = "static";
-        vram_gb = vramGb;
+        reserve_gb = vramGb;
       };
       devices = {
         placement = "gpu-only";
@@ -120,7 +167,12 @@
       openai_proxy = {
         upstream_model = upstreamModel;
       };
+      container = mkContainerBlock {
+        inherit image network containerPort ipc mounts envPassthrough gpuDevice runtime;
+      };
     }
+    # Elided when empty rather than emitted as a bare `[service.env]`.
+    // lib.optionalAttrs (env != { }) { inherit env; }
     // lib.optionalAttrs (description != null) { inherit description; }
     // lib.optionalAttrs (modality != null) { inherit modality; };
 

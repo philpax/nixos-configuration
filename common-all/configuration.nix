@@ -49,6 +49,8 @@
       isNormalUser = true;
       description = "philpax";
       shell = pkgs.fish;
+      # Rootless Podman maps container uids into this range.
+      autoSubUidGidRange = true;
       extraGroups = [ "networkmanager" "wheel" "docker" "libvirtd" "kvm" "dialout" "plugdev" "uucp" "ai" "editabledata" "input" "uinput" ];
       packages = with pkgs; [];
       openssh.authorizedKeys.keys = [
