@@ -17,7 +17,10 @@
 
   system.stateVersion = "25.11";
 
-  nixpkgs.overlays = [ (import ./overlays/bs-manager.nix) ];
+  nixpkgs.overlays = [
+    (import ./overlays/bs-manager.nix)
+    (import ./overlays/igpu-offload.nix)
+  ];
 
   time.timeZone = "Europe/Stockholm";
   networking.hostName = "mindgame";
