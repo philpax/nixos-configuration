@@ -79,6 +79,48 @@ in
         else [ flag (toString value) ])
       attrs);
 
+  # Projects an ananke model entry into the client-facing shape consumed by
+  # `update-ai.py`. A model is exposed to clients (Maki/Polytoken) iff its
+  # entry carries a `client` attr; this helper derives `context_window` and
+  # `supports_vision` from the runtime fields rather than duplicating them,
+  # then merges the per-model `client` overrides (class, roles, reasoning,
+  # max_output_tokens).
+  #
+  # `context_window` derivation, by runtime kind:
+  #   ninfer         → `maxContext` (the reservation is exact).
+  #   diffusiongemma → `maxModelLen` (vLLM `--max-model-len`).
+  #   llama-cpp      → `context / parallel`, unless `kv_unified` (the slots
+  #                   share one KV pool, so the full context survives).
+  # `supports_vision` derivation:
+  #   ninfer         → the `vision` flag.
+  #   diffusiongemma → always true (the builder serves `--limit-mm-per-prompt
+  #                   image=7`).
+  #   llama-cpp      → an `mmproj` is present.
+  mkClientModel = m:
+    let
+      kind = m.kind or "llama-cpp";
+      extras = m.extra or m.extras or { };
+      totalContext =
+        if kind == "ninfer" then m.maxContext
+        else if kind == "diffusiongemma" then m.maxModelLen
+        else if kind == "vllm" then
+          throw "mkClientModel: vLLM model `${m.name}` carries a client block, but context_window derivation for vLLM is not implemented"
+        else extras.context or (throw "mkClientModel: llama-cpp model `${m.name}` needs extras.context");
+      parallel = extras.parallel or 1;
+      kvUnified = extras.kv_unified or false;
+      context_window =
+        if kind == "llama-cpp" && !kvUnified then totalContext / parallel
+        else totalContext;
+      supports_vision =
+        if kind == "ninfer" then m ? vision && m.vision
+        else if kind == "diffusiongemma" then true
+        else m ? mmproj && m.mmproj != null;
+    in
+    {
+      inherit (m) name;
+      inherit context_window supports_vision;
+    } // m.client;
+
   # `allowExternalServices` defaults to `false` (loopback-only per-service
   # reverse proxies): the openai_api multiplexer already routes by
   # `model` name internally, and those proxies carry no auth of their own.

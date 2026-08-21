@@ -1,0 +1,20 @@
+{% for provider_name, info in providers -%}
+[{{ provider_name }}]
+display_name = "{{ info.display_name }}"
+protocol = "openai"
+base_url = "{{ info.base_url }}"
+api_key_env = "{{ info.api_key_env }}"
+discover_models = true
+{% for model in info.models %}
+
+[[{{ provider_name }}.models]]
+id = "{{ model.name }}"
+tier = "{{ maki_tier[model.class] }}"
+context_window = {{ model.context_window }}
+{% if "max_output_tokens" in model %}max_output_tokens = {{ model.max_output_tokens }}
+{% endif %}{% if model.reasoning.type == "thinking" %}supports_thinking = true
+{% endif %}supports_vision = {{ model.supports_vision | lower }}
+{% endfor %}
+{% if not loop.last %}
+
+{% endif %}{% endfor %}

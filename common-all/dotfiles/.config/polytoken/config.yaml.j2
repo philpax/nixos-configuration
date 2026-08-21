@@ -1,0 +1,67 @@
+version: 3
+config_command_substitution: true
+defaults:
+{% for role in ["full", "mini", "nano"] %}
+{% if role in defaults %}  {{ role }}: {{ defaults[role] }}
+{% endif %}{% endfor %}providers:
+  umans:
+    kind:
+      type: catalog
+      name: umans
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/umans-token)
+{% for provider_name, info in providers %}  {{ provider_name }}:
+    kind:
+      type: custom_open_ai_compatible
+    url: {{ info.base_url }}
+    auth:
+      type: no_auth
+{% endfor %}  codex:
+    kind:
+      type: catalog
+      name: codex
+    auth:
+      type: codex_device
+      profile: codex
+models:
+{% for provider_name, info in providers %}
+{% for model in info.models %}  {{ provider_name }}/{{ model.name }}:
+    provider_name: {{ model.name }}
+    variant: other
+    class: {{ pt_class[model.class] }}
+    provider: {{ provider_name }}
+    reasoning:
+{% if model.reasoning.type == "thinking" %}      type: thinking
+      can_disable: {{ model.reasoning.get("can_disable", true) | lower }}
+{% else %}      type: no_reasoning
+{% endif %}    context_window: {{ model.context_window }}
+{% if "max_output_tokens" in model %}    max_output_tokens_per_turn: {{ model.max_output_tokens }}
+{% endif %}    supports_vision: {{ model.supports_vision | lower }}
+{% endfor %}{% endfor %}default_permission_matcher: bypass_plus
+mcp_servers:
+  ida-pro-mcp:
+    transport: stdio
+    command: /run/current-system/sw/bin/ida-mcp
+    args:
+    - '--stdio'
+    env: {}
+    pass_env:
+    - HOME
+    - PATH
+    log_stderr: true
+    log_stdout: false
+    block_list: []
+integrations:
+  search:
+    providers:
+      tavily:
+        enabled: true
+        key: $(cat ~/.tokens/tavily-token)
+tui:
+  theme: dark
+  theme-file: $USER_DIRECTORY/themes/catppuccin-mocha.yaml
+  alt-screen: auto
+  density: standard
+  show-all-thinking-blocks: false
+  show-system-reminders: false

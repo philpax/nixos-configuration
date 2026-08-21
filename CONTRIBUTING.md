@@ -107,12 +107,19 @@ work account.
 
 ## Development
 
-Python scripts (`sync.py`) are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Configuration lives in `pyproject.toml`.
+Python scripts are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Configuration lives in `pyproject.toml`; dependencies are pinned in `uv.lock`. Run everything through [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uvx ruff check           # lint
-uvx ruff format --check  # format check
-uvx pytest -v            # run tests
+uv run ruff check           # lint
+uv run ruff format --check  # format check
+uv run pytest -v            # run tests
 ```
 
-CI runs all three on push/PR. Run `uvx ruff format` to auto-format before committing.
+`update-ai.py` regenerates the Maki/Polytoken provider configs from the ananke model definitions (`mindgame/services/ananke.nix`, `redline/ai/ananke.nix`) via the colocated `.j2` templates; run it before `sync.sh` when the served models change:
+
+```bash
+uv run update-ai.py          # regenerate common-dev/.../maki/providers.toml + common-all/.../polytoken/config.yaml
+uv run update-ai.py --check  # exit non-zero if those files have drifted from their templates
+```
+
+CI runs lint + tests on push/PR. Run `uv run ruff format` to auto-format before committing.

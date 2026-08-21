@@ -1,3 +1,17 @@
+[project]
+name = "nixos-configuration"
+version = "0"
+requires-python = ">=3.12"
+dependencies = [
+    "jinja2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
 [tool.ruff]
 target-version = "py39"
 line-length = 100

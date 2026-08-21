@@ -260,6 +260,10 @@ let
       file = "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
       mmproj = "unsloth/Qwen3.6-27B-GGUF/mmproj-F16.gguf";
       extras = qwen36Extras // { context = 2*180*1000; } // discordVisible;
+      client = {
+        class = "medium";
+        reasoning = { type = "none"; };
+      };
     }
 
     # Gemma family.
@@ -322,6 +326,10 @@ let
           discord_visible = true;
           resident = true;
         };
+      };
+      client = {
+        class = "medium";
+        reasoning = { type = "none"; };
       };
     }
     {
@@ -759,6 +767,12 @@ let
       (throw "ananke: no model carries metadata.resident = true")
       (throw "ananke: multiple models carry metadata.resident = true")
       models).name;
+
+  # The subset of `models` exposed to Maki/Polytoken clients, projected into
+  # the client-facing shape by `anankeLib.mkClientModel` (which derives
+  # `context_window` and `supports_vision` from the runtime fields). Consumed
+  # by `update-ai.py` via `nix eval`.
+  clientModels = builtins.map anankeLib.mkClientModel (builtins.filter (m: m ? client) models);
 in
 {
   # Expose ananke's port constants as read-only options so other modules
@@ -793,6 +807,12 @@ in
       default = defaultModel;
       readOnly = true;
       description = "Name of the model carrying metadata.resident = true — the default LLM for services that don't pick one explicitly.";
+    };
+    clientModels = lib.mkOption {
+      type = lib.types.listOf lib.types.attrs;
+      readOnly = true;
+      default = clientModels;
+      description = "Models exposed to Maki/Polytoken clients, with context_window and supports_vision derived from the runtime config. Consumed by update-ai.py.";
     };
   };
 

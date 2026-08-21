@@ -12,16 +12,16 @@ providers:
     auth:
       type: static_key
       key: $(cat ~/.tokens/umans-token)
-  ananke-redline:
-    kind:
-      type: custom_open_ai_compatible
-    url: http://redline:7070/v1
-    auth:
-      type: no_auth
   ananke-mindgame:
     kind:
       type: custom_open_ai_compatible
     url: http://mindgame:7070/v1
+    auth:
+      type: no_auth
+  ananke-redline:
+    kind:
+      type: custom_open_ai_compatible
+    url: http://redline:7070/v1
     auth:
       type: no_auth
   codex:
@@ -32,15 +32,6 @@ providers:
       type: codex_device
       profile: codex
 models:
-  ananke-redline/gemma-4-31b-it-qat:
-    provider_name: gemma-4-31b-it-qat
-    variant: other
-    class: mini
-    provider: ananke-redline
-    reasoning:
-      type: no_reasoning
-    context_window: 200000
-    supports_vision: true
   ananke-mindgame/diffusiongemma-26b-a4b-2x128k:
     provider_name: diffusiongemma-26b-a4b-2x128k
     variant: other
@@ -70,7 +61,7 @@ models:
     provider: ananke-mindgame
     reasoning:
       type: no_reasoning
-    context_window: 262144
+    context_window: 131072
     max_output_tokens_per_turn: 32768
     supports_vision: true
   ananke-mindgame/qwen3.6-27b-ninfer-mtp3:
@@ -169,6 +160,15 @@ models:
     reasoning:
       type: no_reasoning
     context_window: 180000
+    supports_vision: true
+  ananke-redline/gemma-4-31b-it-qat:
+    provider_name: gemma-4-31b-it-qat
+    variant: other
+    class: mini
+    provider: ananke-redline
+    reasoning:
+      type: no_reasoning
+    context_window: 240000
     supports_vision: true
 default_permission_matcher: bypass_plus
 mcp_servers:

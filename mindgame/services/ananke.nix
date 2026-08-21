@@ -65,6 +65,236 @@ let
     };
   };
 
+  # The model roster, hoisted so both `mkAnankeConfig` (below) and
+  # `clientModels` (further below) can reference it.
+  models = [
+    # Two modes; only one is ever resident, each pledging most of the
+    # 5090's 32 GiB.
+    {
+      kind = "diffusiongemma";
+      name = "diffusiongemma-26b-a4b-2x128k";
+      vramGb = 23;
+      perGpuMib = 23500;
+      maxModelLen = 131072;
+      maxNumSeqs = 2;
+      gpuMemoryUtilization = "0.715";
+      description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 2x128k mode).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "diffusiongemma";
+      name = "diffusiongemma-26b-a4b-256k";
+      vramGb = 22;
+      perGpuMib = 23000;
+      maxModelLen = 262144;
+      maxNumSeqs = 1;
+      gpuMemoryUtilization = "0.70";
+      description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 1x256k mode).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    # `llama-cpp` rather than `command`: ananke's `--spec-type
+    # draft-dflash` support sizes the reservation, so there is no static
+    # reserve_gb to hand-pick. ananke generates the llama-server argv and
+    # runs it as the container's command.
+    {
+      name = "muse-glimmer";
+      # Host paths: the estimator reads these GGUFs off disk. ananke
+      # translates them through the mount when it generates the argv,
+      # so llama-server sees `/models/...`.
+      model = "${museGlimmerModels}/muse-glimmer-30B-kquant-dynamic.gguf";
+      mmproj = "${museGlimmerModels}/mmproj-kquant.gguf";
+      extra = {
+        draft_model = "${museGlimmerModels}/dflash-kquant.gguf";
+        spec_type = "draft-dflash";
+        context = 262144;
+        parallel = 2;
+        devices.gpu_allow = [ 0 ];
+        health = { http = "/health"; timeout = "5m"; };
+        description = "Muse Glimmer 30B served by llama.cpp in Docker (dflash speculative decoding).";
+        container = anankeLib.mkContainerBlock {
+          image = images.llamaCppServer.tag;
+          network = "host";
+          mounts = [ (roMount museGlimmerModels "/models") ];
+        };
+      };
+      client = {
+        class = "medium";
+        reasoning = { type = "none"; };
+        max_output_tokens = 32768;
+      };
+    }
+    # Vision freezes at startup, so each model has a separate text/vision
+    # pair; DFlash is 35B-A3B-only and text-only, so its vision pair uses
+    # MTP instead. Context and vram figures come from empirical
+    # --max-concurrency 1 sizing trials on this GPU.
+    {
+      kind = "ninfer";
+      name = "qwen3.6-27b-ninfer-mtp3";
+      upstreamModel = "qwen3.6-27b";
+      artifact = "qwen3_6_27b_nvfp4.ninfer";
+      vramGb = 25;
+      perGpuMib = 25500;
+      maxContext = 196608;
+      spec = "mtp";
+      draftTokens = 3;
+      description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 196608 ctx, text-only).";
+      client = {
+        class = "medium";
+        roles = [ "full" "mini" ];
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.6-27b-ninfer-mtp3-vision";
+      upstreamModel = "qwen3.6-27b";
+      artifact = "qwen3_6_27b_nvfp4.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 147456;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = true;
+      description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 147456 ctx, vision).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.6-35b-a3b-ninfer-dflash7";
+      upstreamModel = "qwen3.6-35b-a3b";
+      artifact = "qwen3_6_35b_a3b.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 262144;
+      spec = "dflash";
+      draftTokens = 7;
+      description = "Qwen3.6-35B-A3B served by ninfer (DFlash=7, 262144 ctx, text-only).";
+      client = {
+        class = "medium";
+        roles = [ "nano" ];
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.6-35b-a3b-ninfer-mtp3-vision";
+      upstreamModel = "qwen3.6-35b-a3b";
+      artifact = "qwen3_6_35b_a3b.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 163840;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = true;
+      description = "Qwen3.6-35B-A3B served by ninfer (MTP=3, 163840 ctx, vision).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    # Qwen3.8-27B: same architecture as the 3.6 pair and loaded by the
+    # same ninfer target, but groupwise-int rather than NVFP4. Its
+    # weights measure lighter (16.67/16.95 GiB vs 16.82/17.05), and the
+    # text mode spends the slack on context: 221184 tokens costs 7.95
+    # GiB of runtime against the vision mode's 7.32 GiB, so both reserve
+    # 26 GiB.
+    {
+      kind = "ninfer";
+      name = "qwen3.8-27b-ninfer-mtp3";
+      upstreamModel = "qwen3.8-27b";
+      artifact = "qwen3_8_27b.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 221184;
+      spec = "mtp";
+      draftTokens = 3;
+      description = "Qwen3.8-27B served by ninfer (MTP=3, 221184 ctx, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.8-27b-ninfer-mtp3-vision";
+      # The Podman canary. Its image has to be in Podman's own store,
+      # which does not share Docker's — see the README note on loading it.
+      runtime = "podman";
+      upstreamModel = "qwen3.8-27b";
+      artifact = "qwen3_8_27b.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 147456;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = true;
+      description = "Qwen3.8-27B served by ninfer (MTP=3, 147456 ctx, vision).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    # The NVFP4 weight profile of that same target: 20.02 GiB of weights
+    # against the groupwise-int build's 16.96, and 26 GiB is already the
+    # ceiling this desktop leaves, so the extra comes out of context.
+    #
+    # Both contexts are the largest that loaded against a ~4.3 GiB desktop
+    # baseline. ninfer sizes its reservation up front, so if the desktop
+    # grows these refuse to start rather than failing partway through.
+    {
+      kind = "ninfer";
+      name = "qwen3.8-27b-nvfp4-ninfer-mtp3";
+      upstreamModel = "qwen3.8-27b";
+      artifact = "qwen3_8_27b_nvfp4.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 180224;
+      spec = "mtp";
+      draftTokens = 3;
+      description = "Qwen3.8-27B (NVFP4) served by ninfer (MTP=3, 180224 ctx, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.8-27b-nvfp4-ninfer-mtp3-vision";
+      upstreamModel = "qwen3.8-27b";
+      artifact = "qwen3_8_27b_nvfp4.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 122880;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = true;
+      description = "Qwen3.8-27B (NVFP4) served by ninfer (MTP=3, 122880 ctx, vision).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+  ];
+
   inherit (anankeLib.mkAnankeConfig {
     inherit pkgs anankeDir;
     openaiPort = anankeLib.ports.openai;
@@ -155,178 +385,15 @@ let
           mounts = [ (roMount "${home}/ai/ninfer" artifactsIn) ];
         };
       };
-      models = [
-        # Two modes; only one is ever resident, each pledging most of the
-        # 5090's 32 GiB.
-        {
-          kind = "diffusiongemma";
-          name = "diffusiongemma-26b-a4b-2x128k";
-          vramGb = 23;
-          perGpuMib = 23500;
-          maxModelLen = 131072;
-          maxNumSeqs = 2;
-          gpuMemoryUtilization = "0.715";
-          description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 2x128k mode).";
-        }
-        {
-          kind = "diffusiongemma";
-          name = "diffusiongemma-26b-a4b-256k";
-          vramGb = 22;
-          perGpuMib = 23000;
-          maxModelLen = 262144;
-          maxNumSeqs = 1;
-          gpuMemoryUtilization = "0.70";
-          description = "DiffusionGemma 26B (A4B) served by vLLM (NVFP4, 1x256k mode).";
-        }
-        # `llama-cpp` rather than `command`: ananke's `--spec-type
-        # draft-dflash` support sizes the reservation, so there is no static
-        # reserve_gb to hand-pick. ananke generates the llama-server argv and
-        # runs it as the container's command.
-        {
-          name = "muse-glimmer";
-          # Host paths: the estimator reads these GGUFs off disk. ananke
-          # translates them through the mount when it generates the argv,
-          # so llama-server sees `/models/...`.
-          model = "${museGlimmerModels}/muse-glimmer-30B-kquant-dynamic.gguf";
-          mmproj = "${museGlimmerModels}/mmproj-kquant.gguf";
-          extra = {
-            draft_model = "${museGlimmerModels}/dflash-kquant.gguf";
-            spec_type = "draft-dflash";
-            context = 262144;
-            parallel = 2;
-            devices.gpu_allow = [ 0 ];
-            health = { http = "/health"; timeout = "5m"; };
-            description = "Muse Glimmer 30B served by llama.cpp in Docker (dflash speculative decoding).";
-            container = anankeLib.mkContainerBlock {
-              image = images.llamaCppServer.tag;
-              network = "host";
-              mounts = [ (roMount museGlimmerModels "/models") ];
-            };
-          };
-        }
-        # Vision freezes at startup, so each model has a separate text/vision
-        # pair; DFlash is 35B-A3B-only and text-only, so its vision pair uses
-        # MTP instead. Context and vram figures come from empirical
-        # --max-concurrency 1 sizing trials on this GPU.
-        {
-          kind = "ninfer";
-          name = "qwen3.6-27b-ninfer-mtp3";
-          upstreamModel = "qwen3.6-27b";
-          artifact = "qwen3_6_27b_nvfp4.ninfer";
-          vramGb = 25;
-          perGpuMib = 25500;
-          maxContext = 196608;
-          spec = "mtp";
-          draftTokens = 3;
-          description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 196608 ctx, text-only).";
-        }
-        {
-          kind = "ninfer";
-          name = "qwen3.6-27b-ninfer-mtp3-vision";
-          upstreamModel = "qwen3.6-27b";
-          artifact = "qwen3_6_27b_nvfp4.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 147456;
-          spec = "mtp";
-          draftTokens = 3;
-          vision = true;
-          description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 147456 ctx, vision).";
-        }
-        {
-          kind = "ninfer";
-          name = "qwen3.6-35b-a3b-ninfer-dflash7";
-          upstreamModel = "qwen3.6-35b-a3b";
-          artifact = "qwen3_6_35b_a3b.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 262144;
-          spec = "dflash";
-          draftTokens = 7;
-          description = "Qwen3.6-35B-A3B served by ninfer (DFlash=7, 262144 ctx, text-only).";
-        }
-        {
-          kind = "ninfer";
-          name = "qwen3.6-35b-a3b-ninfer-mtp3-vision";
-          upstreamModel = "qwen3.6-35b-a3b";
-          artifact = "qwen3_6_35b_a3b.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 163840;
-          spec = "mtp";
-          draftTokens = 3;
-          vision = true;
-          description = "Qwen3.6-35B-A3B served by ninfer (MTP=3, 163840 ctx, vision).";
-        }
-        # Qwen3.8-27B: same architecture as the 3.6 pair and loaded by the
-        # same ninfer target, but groupwise-int rather than NVFP4. Its
-        # weights measure lighter (16.67/16.95 GiB vs 16.82/17.05), and the
-        # text mode spends the slack on context: 221184 tokens costs 7.95
-        # GiB of runtime against the vision mode's 7.32 GiB, so both reserve
-        # 26 GiB.
-        {
-          kind = "ninfer";
-          name = "qwen3.8-27b-ninfer-mtp3";
-          upstreamModel = "qwen3.8-27b";
-          artifact = "qwen3_8_27b.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 221184;
-          spec = "mtp";
-          draftTokens = 3;
-          description = "Qwen3.8-27B served by ninfer (MTP=3, 221184 ctx, text-only).";
-        }
-        {
-          kind = "ninfer";
-          name = "qwen3.8-27b-ninfer-mtp3-vision";
-          # The Podman canary. Its image has to be in Podman's own store,
-          # which does not share Docker's — see the README note on loading it.
-          runtime = "podman";
-          upstreamModel = "qwen3.8-27b";
-          artifact = "qwen3_8_27b.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 147456;
-          spec = "mtp";
-          draftTokens = 3;
-          vision = true;
-          description = "Qwen3.8-27B served by ninfer (MTP=3, 147456 ctx, vision).";
-        }
-        # The NVFP4 weight profile of that same target: 20.02 GiB of weights
-        # against the groupwise-int build's 16.96, and 26 GiB is already the
-        # ceiling this desktop leaves, so the extra comes out of context.
-        #
-        # Both contexts are the largest that loaded against a ~4.3 GiB desktop
-        # baseline. ninfer sizes its reservation up front, so if the desktop
-        # grows these refuse to start rather than failing partway through.
-        {
-          kind = "ninfer";
-          name = "qwen3.8-27b-nvfp4-ninfer-mtp3";
-          upstreamModel = "qwen3.8-27b";
-          artifact = "qwen3_8_27b_nvfp4.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 180224;
-          spec = "mtp";
-          draftTokens = 3;
-          description = "Qwen3.8-27B (NVFP4) served by ninfer (MTP=3, 180224 ctx, text-only).";
-        }
-        {
-          kind = "ninfer";
-          name = "qwen3.8-27b-nvfp4-ninfer-mtp3-vision";
-          upstreamModel = "qwen3.8-27b";
-          artifact = "qwen3_8_27b_nvfp4.ninfer";
-          vramGb = 26;
-          perGpuMib = 26500;
-          maxContext = 122880;
-          spec = "mtp";
-          draftTokens = 3;
-          vision = true;
-          description = "Qwen3.8-27B (NVFP4) served by ninfer (MTP=3, 122880 ctx, vision).";
-        }
-      ];
+      inherit models;
     };
   }) configFile;
+
+  # The subset of `models` exposed to Maki/Polytoken clients, projected into
+  # the client-facing shape by `anankeLib.mkClientModel` (which derives
+  # `context_window` and `supports_vision` from the runtime fields). Consumed
+  # by `update-ai.py` via `nix eval`.
+  clientModels = builtins.map anankeLib.mkClientModel (builtins.filter (m: m ? client) models);
 in
 {
   options.ai.ananke = {
@@ -341,6 +408,12 @@ in
       default = anankeLib.ports.management;
       readOnly = true;
       description = "Port ananke's management API (including /metrics) listens on.";
+    };
+    clientModels = lib.mkOption {
+      type = lib.types.listOf lib.types.attrs;
+      readOnly = true;
+      default = clientModels;
+      description = "Models exposed to Maki/Polytoken clients, with context_window and supports_vision derived from the runtime config. Consumed by update-ai.py.";
     };
   };
 
