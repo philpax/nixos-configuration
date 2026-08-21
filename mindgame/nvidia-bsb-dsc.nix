@@ -14,6 +14,21 @@
 #   https://github.com/triple-groove/nvidia-bsb-dsc-fix
 let
   base = config.boot.kernelPackages.nvidiaPackages.latest;
+  kernelVersion = config.boot.kernelPackages.kernel.version;
+
+  # Linux 7.2 dropped `strncpy` from the kernel string API and renamed the
+  # DRM atomic state types (drm_atomic_state → drm_atomic_commit). nixpkgs's
+  # 595.71.05 production open modules ship no compat patches, so they fail to
+  # build against 7.2 (first error: os-interface.c implicit declaration of
+  # `strncpy`). This is nvidia-all's 610-branch kernel-7.2.patch; the hunks
+  # touch kernel-API churn rather than driver-version-specific code, so it
+  # applies cleanly to 595.71.05 (verified by dry-run). Guarded on 7.2+ so it
+  # stays inert on older kernels and doesn't need dropping when the driver
+  # grows native 7.2 support.
+  #   https://github.com/Frogging-Family/nvidia-all/blob/master/nvidia-all-patches/610/kernel-7.2.patch
+  kernel7_2Patch =
+    lib.optional (lib.versionAtLeast kernelVersion "7.2")
+      ./nvidia-bsb-dsc/kernel-7.2.patch;
 
   bsbPatches =
     [
@@ -47,7 +62,7 @@ in
   # the rest of the package set (bin, settings, persistenced) alone.
   hardware.nvidia.package = base // {
     open = base.open.overrideAttrs (old: {
-      patches = (old.patches or [ ]) ++ bsbPatches;
+      patches = (old.patches or [ ]) ++ kernel7_2Patch ++ bsbPatches;
     });
   };
 }
