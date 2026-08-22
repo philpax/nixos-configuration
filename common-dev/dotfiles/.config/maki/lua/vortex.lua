@@ -1,5 +1,5 @@
 -- Local vortex splash skin: a code tunnel. Drops of code fall toward the
--- viewer from a drifting vanishing point, winding in a slow vortex as they
+-- viewer from the screen center, winding in a slow vortex as they
 -- approach: dim glimmers at the heart, long bright curved streaks at the rim.
 -- Color sweeps from purple at the heart to lunared red at the rim. A faint
 -- breathing glow lights the eye, and a deeper, slower layer of dust crawls
@@ -233,9 +233,9 @@ function M.render(w, h, t, fade)
   end
   state.last_t = t
 
-  -- The vanishing point orbits slowly so the flight feels alive.
-  local cx = (w + 1) / 2 + w * 0.05 * math.sin(t * 0.11)
-  local cy = (h + 1) / 2 + h * 0.07 * math.sin(t * 0.17 + 1.3)
+  -- The vanishing point sits fixed at the screen center.
+  local cx = (w + 1) / 2
+  local cy = (h + 1) / 2
   local Rmax = w / 2
   local diag = math.sqrt((w / 2) ^ 2 + (h / 2) ^ 2)
 
@@ -372,9 +372,9 @@ function M.render(w, h, t, fade)
     end
   end
 
-  -- The signature and version sit at the eye of the vortex, following its
-  -- slow orbit. Quantize cx once and anchor all lines on that column so
-  -- they shift in lockstep instead of snapping independently.
+  -- The signature and version sit at the eye of the vortex. Quantize cx
+  -- once and anchor all lines on that column so they shift in lockstep
+  -- instead of snapping independently.
   local anchor = math.floor(cx + 0.5)
   local top_row = math.floor(cy - 0.5)
   local bot_row = math.floor(cy + 0.5)
