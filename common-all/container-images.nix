@@ -161,7 +161,11 @@ in
       inherit after requires;
       wantedBy = [ "multi-user.target" ];
       before = [ "ananke.service" ];
-      path = [ pkgs.docker ] ++ lib.optional (podmanImages != [ ]) pkgs.podman;
+      # Rootless Podman shells out to newuidmap/newgidmap, which only work as
+      # the setuid wrappers in /run/wrappers/bin — the shadow package's own
+      # binaries lack the capabilities.
+      path = [ pkgs.docker ]
+        ++ lib.optionals (podmanImages != [ ]) [ pkgs.podman "/run/wrappers/bin" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;

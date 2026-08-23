@@ -252,7 +252,8 @@ in
       requires = [ "docker.service" ];
       # ananke invokes the runtime CLIs directly, so both are on its own
       # PATH; the containers get no PATH from here.
-      path = [ pkgs.docker pkgs.podman pkgs.curl pkgs.bash ];
+      # wrapperDir for rootless Podman's setuid newuidmap/newgidmap.
+      path = [ pkgs.docker pkgs.podman pkgs.curl pkgs.bash config.security.wrapperDir ];
       environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
     };
 
