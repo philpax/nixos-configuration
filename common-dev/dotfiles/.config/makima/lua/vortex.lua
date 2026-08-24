@@ -53,7 +53,7 @@ local VER_STOPS = {
 }
 local SIGN_TOP = "phil"
 local SIGN_APOST = "'s"
-local SIGN_BOTTOM = "lunamaki"
+local SIGN_BOTTOM = "makima"
 local C_NAME = { 112, 80, 151 } -- purple, dimmed
 local C_APOST = { 147, 147, 147 } -- white, dimmed
 local C_LUNA = { 153, 41, 41 } -- lunared red, dimmed

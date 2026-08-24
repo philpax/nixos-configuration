@@ -201,7 +201,7 @@ let
     };
   }) configFile;
 
-  # The subset of `models` exposed to Maki/Polytoken clients, projected into
+  # The subset of `models` exposed to makima/Polytoken clients, projected into
   # the client-facing shape by `anankeLib.mkClientModel` (which derives
   # `context_window` and `supports_vision` from the runtime fields). Consumed
   # by `update-ai.py` via `nix eval`.
@@ -225,7 +225,7 @@ in
       type = lib.types.listOf lib.types.attrs;
       readOnly = true;
       default = clientModels;
-      description = "Models exposed to Maki/Polytoken clients, with context_window and supports_vision derived from the runtime config. Consumed by update-ai.py.";
+      description = "Models exposed to makima/Polytoken clients, with context_window and supports_vision derived from the runtime config. Consumed by update-ai.py.";
     };
   };
 

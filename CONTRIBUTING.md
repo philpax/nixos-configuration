@@ -115,10 +115,10 @@ uv run ruff format --check  # format check
 uv run pytest -v            # run tests
 ```
 
-`update-ai.py` regenerates the Maki/Polytoken provider configs from the ananke model definitions (`mindgame/services/ananke.nix`, `redline/ai/ananke.nix`) via the colocated `.j2` templates; run it before `sync.sh` when the served models change:
+`update-ai.py` regenerates the makima/Polytoken provider configs from the ananke model definitions (`mindgame/services/ananke.nix`, `redline/ai/ananke.nix`) via the colocated `.j2` templates; run it before `sync.sh` when the served models change:
 
 ```bash
-uv run update-ai.py          # regenerate common-dev/.../maki/providers.toml + common-all/.../polytoken/config.yaml
+uv run update-ai.py          # regenerate common-dev/.../makima/providers.toml + common-all/.../polytoken/config.yaml
 uv run update-ai.py --check  # exit non-zero if those files have drifted from their templates
 ```
 

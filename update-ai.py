@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate Maki and Polytoken provider configs from the ananke Nix configs.
+"""Regenerate makima and Polytoken provider configs from the ananke Nix configs.
 
 The ananke service definitions are the source of truth for which models are
 served and at what context length. Each machine's ananke module exposes
@@ -14,7 +14,7 @@ Sources:
   redline/ai/ananke.nix          -> ananke-redline provider
 
 Outputs:
-  common-dev/dotfiles/.config/maki/providers.toml
+  common-dev/dotfiles/.config/makima/providers.toml
   common-all/dotfiles/.config/polytoken/config.yaml
 """
 
@@ -34,7 +34,7 @@ REPO_DIR = Path(__file__).resolve().parent
 MACHINES = ["mindgame", "redline"]
 
 # Our canonical model classes, mapped to each consumer's vocabulary. These two
-# tables are the only place Maki/Polytoken tier vocabulary lives, so a rename on
+# tables are the only place makima/Polytoken tier vocabulary lives, so a rename on
 # either consumer's side is a one-line change here rather than a Nix sweep.
 MAKI_TIER = {"large": "strong", "medium": "medium", "small": "weak"}
 PT_CLASS = {"large": "full", "medium": "mini", "small": "nano"}

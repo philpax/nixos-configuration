@@ -80,7 +80,7 @@ in
       attrs);
 
   # Projects an ananke model entry into the client-facing shape consumed by
-  # `update-ai.py`. A model is exposed to clients (Maki/Polytoken) iff its
+  # `update-ai.py`. A model is exposed to clients (makima/Polytoken) iff its
   # entry carries a `client` attr; this helper derives `context_window` and
   # `supports_vision` from the runtime fields rather than duplicating them,
   # then merges the per-model `client` overrides (class, roles, reasoning,

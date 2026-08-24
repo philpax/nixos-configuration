@@ -99,7 +99,7 @@ def _render_pt(providers, defaults=None):
 
 
 # ---------------------------------------------------------------------------
-# maki template
+# makima template
 # ---------------------------------------------------------------------------
 
 
@@ -410,7 +410,7 @@ class TestCheckFile:
 
 
 # ---------------------------------------------------------------------------
-# end-to-end shape: full maki output for the fixture
+# end-to-end shape: full makima output for the fixture
 # ---------------------------------------------------------------------------
 
 
