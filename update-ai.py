@@ -39,7 +39,7 @@ MACHINES = ["mindgame", "redline"]
 MAKI_TIER = {"large": "strong", "medium": "medium", "small": "weak"}
 PT_CLASS = {"large": "full", "medium": "mini", "small": "nano"}
 
-MAKI_PATH = REPO_DIR / "common-dev" / "dotfiles" / ".config" / "maki" / "providers.toml"
+MAKI_PATH = REPO_DIR / "common-dev" / "dotfiles" / ".config" / "makima" / "providers.toml"
 PT_PATH = REPO_DIR / "common-all" / "dotfiles" / ".config" / "polytoken" / "config.yaml"
 
 # Templates live beside their targets as `<name>.j2` (e.g. providers.toml.j2),
