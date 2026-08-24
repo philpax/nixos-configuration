@@ -81,6 +81,77 @@ function gfp --description 'Force pull from origin (fetch + reset --hard)'
     git fetch origin && git reset --hard origin/(git branch --show-current)
 end
 
+# Git worktrees, kept in <repo root>/.worktrees/
+function _gwt_root --description 'Print the main worktree root, or fail'
+    set -l root (git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    or begin
+        echo "Not in a git repository" >&2
+        return 1
+    end
+    # .git dir of the main worktree; its parent is the main checkout
+    dirname $root
+end
+
+function gwti --description 'Initialise .worktrees/ (gitignored) in the current repo'
+    set -l root (_gwt_root); or return 1
+    mkdir -p $root/.worktrees
+    echo '*' >$root/.worktrees/.gitignore
+    echo "Initialised $root/.worktrees"
+end
+
+function gwta --argument-names name ref --description 'Add a worktree at .worktrees/<name> on a new branch <name>'
+    if test -z "$name"
+        echo "Usage: gwta <name> [ref]" >&2
+        return 1
+    end
+    set -l root (_gwt_root); or return 1
+    test -d $root/.worktrees; or gwti; or return 1
+    set -l path $root/.worktrees/$name
+    if test -d $path
+        echo "Worktree $name already exists" >&2
+        cd $path
+        return 0
+    end
+    if git show-ref --verify --quiet refs/heads/$name
+        git worktree add $path $name; or return 1
+    else
+        git worktree add -b $name $path (test -n "$ref"; and echo $ref; or echo HEAD); or return 1
+    end
+    cd $path
+end
+
+function gwtl --description 'List the worktrees of the current repo'
+    git worktree list $argv
+end
+
+function gwtc --argument-names name --description 'cd to .worktrees/<name>, or to the repo root if omitted'
+    set -l root (_gwt_root); or return 1
+    if test -z "$name"
+        cd $root
+    else if test -d $root/.worktrees/$name
+        cd $root/.worktrees/$name
+    else
+        echo "No worktree at $root/.worktrees/$name" >&2
+        return 1
+    end
+end
+
+function gwtr --argument-names name --description 'Remove the worktree at .worktrees/<name>'
+    if test -z "$name"
+        echo "Usage: gwtr <name> [git worktree remove options]" >&2
+        return 1
+    end
+    set -l root (_gwt_root); or return 1
+    set -l path $root/.worktrees/$name
+    # Can't remove the worktree we're standing in
+    string match -q "$path*" (pwd -P); and cd $root
+    git worktree remove $path $argv[2..]
+end
+
+function gwtp --description 'Prune worktree metadata for directories that are gone'
+    git worktree prune -v $argv
+end
+
 function dlretry --argument-names url filename
     if test -z "$url"
         echo "Usage: dlretry <url> [filename]" >&2
