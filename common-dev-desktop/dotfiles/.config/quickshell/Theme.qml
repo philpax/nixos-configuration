@@ -26,7 +26,7 @@ QtObject {
     readonly property color networkBg:      pillColor(3)
     readonly property color claude5hBg:     pillColor(4)
     readonly property color claudeWklyBg:   pillColor(5)
-    readonly property color umansUsageBg:   pillColor(6)
+    readonly property color openaiUsageBg:   pillColor(6)
     readonly property color cpuBg:          pillColor(7)
     readonly property color memoryBg:       pillColor(8)
     readonly property color diskBg:         pillColor(9)
