@@ -6,8 +6,6 @@ import importlib.util
 import textwrap
 from pathlib import Path
 
-import pytest
-
 # update-ai.py is hyphenated (a CLI script name), so it is not importable as a
 # normal module; load it from its path.
 _spec = importlib.util.spec_from_file_location(
@@ -17,9 +15,9 @@ update_ai = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(update_ai)
 
 
-# A representative slice of `nix eval` output: one mindgame model (thinking, with
-# roles) and the two redline models (no_reasoning, no max_output_tokens). Fields
-# match the shape produced by anankeLib.mkClientModel.
+# A representative slice of `nix eval` output: one mindgame model (thinking) and
+# the two redline models (no_reasoning, no max_output_tokens). Fields match the
+# shape produced by anankeLib.mkClientModel.
 def _providers():
     return [
         (
@@ -34,7 +32,6 @@ def _providers():
                         "context_window": 196608,
                         "supports_vision": False,
                         "class": "medium",
-                        "roles": ["full", "mini"],
                         "reasoning": {"type": "thinking"},
                         "max_output_tokens": 32768,
                     },
@@ -81,10 +78,9 @@ def _providers():
 # expander uses rather than bespoke per-format functions.
 
 
-def _ctx(providers, defaults=None):
+def _ctx(providers):
     return {
         "providers": providers,
-        "defaults": defaults if defaults is not None else update_ai.resolve_defaults(providers),
         "maki_tier": update_ai.MAKI_TIER,
         "pt_class": update_ai.PT_CLASS,
     }
@@ -94,8 +90,8 @@ def _render_maki(providers):
     return update_ai._env.get_template("providers.toml.j2").render(**_ctx(providers))
 
 
-def _render_pt(providers, defaults=None):
-    return update_ai._env.get_template("config.yaml.j2").render(**_ctx(providers, defaults))
+def _render_pt(providers):
+    return update_ai._env.get_template("config.yaml.j2").render(**_ctx(providers))
 
 
 # ---------------------------------------------------------------------------
@@ -194,17 +190,15 @@ class TestFmtMaki:
 
 
 class TestFmtPolytoken:
-    def test_defaults_from_roles(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+    def test_defaults_are_static(self):
+        # Defaults are hand-maintained in the template, not derived from models.
+        yaml = _render_pt(_providers())
         assert "  full: ananke-mindgame/qwen3.6-27b-ninfer-mtp3" in yaml
         assert "  mini: ananke-mindgame/qwen3.6-27b-ninfer-mtp3" in yaml
-        # nano is absent (no model claims it in this fixture)
-        assert "  nano:" not in yaml
+        assert "  nano: ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7" in yaml
 
     def test_thinking_emits_can_disable(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+        yaml = _render_pt(_providers())
         block = yaml.split("ananke-mindgame/qwen3.6-27b-ninfer-mtp3:")[1].split("ananke-mindgame/")[
             0
         ]
@@ -215,15 +209,13 @@ class TestFmtPolytoken:
         assert "    class: mini" in block
 
     def test_no_reasoning_emits_no_reasoning(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+        yaml = _render_pt(_providers())
         block = yaml.split("ananke-mindgame/muse-glimmer:")[1].split("ananke-mindgame/")[0]
         assert "    reasoning:\n      type: no_reasoning\n" in block
         assert "can_disable" not in block
 
     def test_redline_omits_max_output_tokens(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+        yaml = _render_pt(_providers())
         block = yaml.split("ananke-redline/gemma-4-31b-it-qat:")[1].split(
             "default_permission_matcher"
         )[0]
@@ -231,16 +223,14 @@ class TestFmtPolytoken:
         assert "    context_window: 240000" in block
 
     def test_drift_fixes_hold(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+        yaml = _render_pt(_providers())
         assert "context_window: 131072" in yaml  # muse-glimmer
         assert "context_window: 240000" in yaml  # gemma-qat
         assert "context_window: 200000" not in yaml
         assert "context_window: 262144" not in yaml
 
     def test_static_sections_present(self):
-        defaults = update_ai.resolve_defaults(_providers())
-        yaml = _render_pt(_providers(), defaults)
+        yaml = _render_pt(_providers())
         assert "version: 3" in yaml
         assert "config_command_substitution: true" in yaml
         assert "default_permission_matcher: bypass_plus" in yaml
@@ -272,7 +262,7 @@ class TestFmtPolytoken:
                 },
             ),
         ]
-        yaml = _render_pt(providers, {})
+        yaml = _render_pt(providers)
         assert "      can_disable: false" in yaml
 
     def test_class_mapping(self):
@@ -309,67 +299,10 @@ class TestFmtPolytoken:
                 },
             ),
         ]
-        yaml = _render_pt(providers, {})
+        yaml = _render_pt(providers)
         assert "    class: full" in yaml
         assert "    class: mini" in yaml
         assert "    class: nano" in yaml
-
-
-# ---------------------------------------------------------------------------
-# resolve_defaults — role collisions
-# ---------------------------------------------------------------------------
-
-
-class TestResolveDefaults:
-    def test_role_collision_errors(self):
-        providers = [
-            (
-                "ananke-x",
-                {
-                    "models": [
-                        {
-                            "name": "a",
-                            "context_window": 1,
-                            "supports_vision": False,
-                            "class": "medium",
-                            "roles": ["full"],
-                            "reasoning": {"type": "none"},
-                        },
-                        {
-                            "name": "b",
-                            "context_window": 1,
-                            "supports_vision": False,
-                            "class": "medium",
-                            "roles": ["full"],
-                            "reasoning": {"type": "none"},
-                        },
-                    ],
-                },
-            ),
-        ]
-        with pytest.raises(SystemExit, match="role 'full'"):
-            update_ai.resolve_defaults(providers)
-
-    def test_same_model_multiple_roles_ok(self):
-        providers = [
-            (
-                "ananke-x",
-                {
-                    "models": [
-                        {
-                            "name": "a",
-                            "context_window": 1,
-                            "supports_vision": False,
-                            "class": "medium",
-                            "roles": ["full", "mini"],
-                            "reasoning": {"type": "none"},
-                        },
-                    ],
-                },
-            ),
-        ]
-        defaults = update_ai.resolve_defaults(providers)
-        assert defaults == {"full": "ananke-x/a", "mini": "ananke-x/a"}
 
 
 # ---------------------------------------------------------------------------

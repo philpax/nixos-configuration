@@ -60,7 +60,6 @@ let
       description = "Qwen3.6-27B (NVFP4) served by ninfer (MTP=3, 196608 ctx, text-only).";
       client = {
         class = "medium";
-        roles = [ "full" "mini" ];
         reasoning = { type = "thinking"; };
         max_output_tokens = 32768;
       };
@@ -96,7 +95,29 @@ let
       description = "Qwen3.6-35B-A3B served by ninfer (DFlash=7, 262144 ctx, text-only).";
       client = {
         class = "medium";
-        roles = [ "nano" ];
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
+      name = "qwen3.6-35b-a3b-ninfer-dflash7-c2";
+      upstreamModel = "qwen3.6-35b-a3b";
+      artifact = "qwen3_6_35b_a3b.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      # 2x concurrency against the same KV pool as the c1 profile. Each lane
+      # gets half the per-session context (131072), so two lanes at full
+      # context still fit the 262144-token pool and the VRAM reservation is
+      # unchanged — `--max-concurrency` only adds lanes, not KV.
+      maxContext = 131072;
+      kvCapacity = 262144;
+      maxConcurrency = 2;
+      spec = "dflash";
+      draftTokens = 7;
+      description = "Qwen3.6-35B-A3B served by ninfer (DFlash=7, 131072 ctx x2 lanes, text-only).";
+      client = {
+        class = "medium";
         reasoning = { type = "thinking"; };
         max_output_tokens = 32768;
       };
@@ -179,15 +200,18 @@ let
           # rest stay on Docker.
           runtime = m.runtime or "docker";
           # Replaces the image's CMD, so the executable leads.
-          # `--kv-capacity` tracks the context exactly, keeping the static
-          # reservation honest.
+          # `--kv-capacity` defaults to `maxContext` (the per-session ceiling)
+          # so the static reservation stays honest, but a model may raise it to
+          # share a larger pool across concurrent lanes — ninfer's KV cache is a
+          # single paged pool sized by `--kv-capacity`, independent of
+          # `--max-concurrency` (which only sets the lane count).
           command = [ "ninfer-serve" "${artifactsIn}/${m.artifact}" ] ++ flagArgs {
             "--host" = "\${listen_host}";
             "--port" = "\${listen_port}";
             "--max-context" = m.maxContext;
-            "--kv-capacity" = m.maxContext;
+            "--kv-capacity" = m.kvCapacity or m.maxContext;
             "--kv-dtype" = "int8";
-            "--max-concurrency" = 1;
+            "--max-concurrency" = m.maxConcurrency or 1;
             "--vision" = m.vision or false;
             "--spec" = m.spec;
             "--draft-tokens" = m.draftTokens;

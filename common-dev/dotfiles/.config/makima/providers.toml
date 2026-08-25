@@ -30,6 +30,14 @@ supports_thinking = true
 supports_vision = false
 
 [[ananke-mindgame.models]]
+id = "qwen3.6-35b-a3b-ninfer-dflash7-c2"
+tier = "medium"
+context_window = 131072
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
 id = "qwen3.6-35b-a3b-ninfer-mtp3-vision"
 tier = "medium"
 context_window = 163840

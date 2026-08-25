@@ -1,9 +1,10 @@
 version: 3
 config_command_substitution: true
 defaults:
-{% for role in ["full", "mini", "nano"] %}
-{% if role in defaults %}  {{ role }}: {{ defaults[role] }}
-{% endif %}{% endfor %}providers:
+  full: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
+  mini: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
+  nano: ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7
+providers:
   umans:
     kind:
       type: catalog

@@ -101,36 +101,17 @@ def build_providers() -> list[tuple[str, dict]]:
     return providers
 
 
-def resolve_defaults(providers: list[tuple[str, dict]]) -> dict[str, str]:
-    """Build the Polytoken ``defaults`` map (full/mini/nano) from model ``roles``.
-
-    Each role must map to exactly one model; a collision is an error.
-    """
-    defaults: dict[str, str] = {}
-    for provider_name, info in providers:
-        for model in info["models"]:
-            for role in model.get("roles", []):
-                full_name = f"{provider_name}/{model['name']}"
-                if role in defaults and defaults[role] != full_name:
-                    raise SystemExit(
-                        f"role '{role}' is claimed by both {defaults[role]} "
-                        f"and {full_name}; each role must map to one model"
-                    )
-                defaults[role] = full_name
-    return defaults
-
-
 def gather_context() -> dict:
     """Gather every template's inputs into one shared context.
 
-    ``providers`` and ``defaults`` come from the ananke Nix eval; ``maki_tier``
-    and ``pt_class`` map our canonical classes to each consumer's vocabulary.
-    Templates pick what they need from this dict.
+    ``providers`` comes from the ananke Nix eval; ``maki_tier`` and ``pt_class``
+    map our canonical classes to each consumer's vocabulary. Templates pick what
+    they need from this dict. Polytoken's ``defaults`` map is hand-maintained in
+    the template, not derived here.
     """
     providers = build_providers()
     return {
         "providers": providers,
-        "defaults": resolve_defaults(providers),
         "maki_tier": MAKI_TIER,
         "pt_class": PT_CLASS,
     }
