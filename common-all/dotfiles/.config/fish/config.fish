@@ -99,6 +99,11 @@ function gwti --description 'Initialise .worktrees/ (gitignored) in the current 
     echo "Initialised $root/.worktrees"
 end
 
+function _gwt_cd --argument-names path
+    cd $path; or return 1
+    test -f .envrc; and direnv allow
+end
+
 function gwta --argument-names name ref --description 'Add a worktree at .worktrees/<name> on a new branch <name>'
     if test -z "$name"
         echo "Usage: gwta <name> [ref]" >&2
@@ -109,15 +114,22 @@ function gwta --argument-names name ref --description 'Add a worktree at .worktr
     set -l path $root/.worktrees/$name
     if test -d $path
         echo "Worktree $name already exists" >&2
-        cd $path
+        _gwt_cd $path
         return 0
     end
     if git show-ref --verify --quiet refs/heads/$name
         git worktree add $path $name; or return 1
     else
-        git worktree add -b $name $path (test -n "$ref"; and echo $ref; or echo HEAD); or return 1
+        if test -z "$ref"
+            set ref $name
+        end
+        if git rev-parse --verify --quiet "$ref^{commit}" >/dev/null
+            git worktree add -b $name $path $ref; or return 1
+        else
+            git worktree add -b $name $path HEAD; or return 1
+        end
     end
-    cd $path
+    _gwt_cd $path
 end
 
 function gwtl --description 'List the worktrees of the current repo'
@@ -127,9 +139,9 @@ end
 function gwtc --argument-names name --description 'cd to .worktrees/<name>, or to the repo root if omitted'
     set -l root (_gwt_root); or return 1
     if test -z "$name"
-        cd $root
+        _gwt_cd $root
     else if test -d $root/.worktrees/$name
-        cd $root/.worktrees/$name
+        _gwt_cd $root/.worktrees/$name
     else
         echo "No worktree at $root/.worktrees/$name" >&2
         return 1
@@ -151,6 +163,24 @@ end
 function gwtp --description 'Prune worktree metadata for directories that are gone'
     git worktree prune -v $argv
 end
+
+function __gwta_branches
+    git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null \
+        | string match -v '*/HEAD'
+end
+
+function __gwtr_worktrees
+    git worktree list --porcelain 2>/dev/null \
+        | string match -r '^worktree .*/\\.worktrees/[^/]+$' \
+        | string replace -r '^worktree .*/' ''
+end
+
+complete -c gwta -f -n 'test (count (commandline -opc)) -eq 1' \
+    -a '(__gwta_branches)' -d 'Branch / worktree name'
+complete -c gwta -f -n 'test (count (commandline -opc)) -eq 2' \
+    -a '(__gwta_branches)' -d 'Starting branch'
+complete -c gwtr -f -n 'test (count (commandline -opc)) -eq 1' \
+    -a '(__gwtr_worktrees)' -d 'Worktree'
 
 function dlretry --argument-names url filename
     if test -z "$url"
