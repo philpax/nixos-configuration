@@ -87,6 +87,17 @@ models:
     context_window: 163840
     max_output_tokens_per_turn: 32768
     supports_vision: true
+  ananke-mindgame/ornith-1.5-35b-a3b-ninfer-dflash7:
+    provider_name: ornith-1.5-35b-a3b-ninfer-dflash7
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 262144
+    max_output_tokens_per_turn: 32768
+    supports_vision: false
   ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3:
     provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3
     variant: other

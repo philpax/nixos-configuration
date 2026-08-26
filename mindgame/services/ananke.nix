@@ -140,6 +140,23 @@ let
         max_output_tokens = 32768;
       };
     }
+    {
+      kind = "ninfer";
+      name = "ornith-1.5-35b-a3b-ninfer-dflash7";
+      upstreamModel = "qwen3.6-35b-a3b";
+      artifact = "Ornith-1.5-35B-A3B-MTP.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 262144;
+      spec = "dflash";
+      draftTokens = 7;
+      description = "Ornith 1.5 35B-A3B served by ninfer (DFlash=7, 262144 ctx, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # The NVFP4 weight profile of the Qwen3.8-27B target: 20.02 GiB of
     # weights against the groupwise-int build's 16.96, and 26 GiB is
     # already the ceiling this desktop leaves, so the extra comes out of

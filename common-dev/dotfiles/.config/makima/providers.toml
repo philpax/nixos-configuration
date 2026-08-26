@@ -46,6 +46,14 @@ supports_thinking = true
 supports_vision = true
 
 [[ananke-mindgame.models]]
+id = "ornith-1.5-35b-a3b-ninfer-dflash7"
+tier = "medium"
+context_window = 262144
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
 id = "qwen3.8-27b-nvfp4-ninfer-mtp3"
 tier = "medium"
 context_window = 180224
