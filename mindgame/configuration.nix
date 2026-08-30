@@ -10,6 +10,7 @@
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ./nixpkgs-xr.nix
+      ./nix-vrft.nix
       ./nvidia-bsb-dsc.nix
       (import ./programs { inherit config pkgs; })
       (import ./services { inherit config pkgs; })
