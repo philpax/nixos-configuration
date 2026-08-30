@@ -25,6 +25,15 @@ providers:
     auth:
       type: codex_device
       profile: codex
+  synthetic:
+    kind:
+      type: custom_open_ai_compatible
+    url: https://api.synthetic.new/openai/v1
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/synthetic-token)
+      format: bearer_token
+    protocol: openai_chat_completions
 models:
 {% for provider_name, info in providers %}
 {% for model in info.models %}  {{ provider_name }}/{{ model.name }}:

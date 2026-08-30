@@ -31,6 +31,15 @@ providers:
     auth:
       type: codex_device
       profile: codex
+  synthetic:
+    kind:
+      type: custom_open_ai_compatible
+    url: https://api.synthetic.new/openai/v1
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/synthetic-token)
+      format: bearer_token
+    protocol: openai_chat_completions
 models:
   ananke-mindgame/qwen3.6-27b-ninfer-mtp3:
     provider_name: qwen3.6-27b-ninfer-mtp3
