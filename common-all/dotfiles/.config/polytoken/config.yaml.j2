@@ -48,7 +48,16 @@ models:
 {% endif %}    context_window: {{ model.context_window }}
 {% if "max_output_tokens" in model %}    max_output_tokens_per_turn: {{ model.max_output_tokens }}
 {% endif %}    supports_vision: {{ model.supports_vision | lower }}
-{% endfor %}{% endfor %}default_permission_matcher: bypass_plus
+{% endfor %}{% endfor %}{% for model in pt_static_models %}  {{ model.id }}:
+    provider_name: {{ model.provider_name }}
+    variant: {{ model.variant }}
+    class: {{ model.class }}
+    provider: {{ model.provider }}
+    reasoning:
+      type: {{ model.reasoning.type }}
+    context_window: {{ model.context_window }}
+{% if "compaction_threshold" in model %}    compaction_threshold: {{ model.compaction_threshold }}
+{% endif %}{% endfor %}default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
     transport: stdio

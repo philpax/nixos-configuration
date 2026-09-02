@@ -39,6 +39,22 @@ MACHINES = ["mindgame", "redline"]
 MAKI_TIER = {"large": "strong", "medium": "medium", "small": "weak"}
 PT_CLASS = {"large": "full", "medium": "mini", "small": "nano"}
 
+# Static services that are not hosted by ananke. These are kept here rather
+# than in the generated YAML so `update-ai.py --check` continues to detect
+# drift while the model's upstream/provider metadata remains explicit.
+PT_STATIC_MODELS = [
+    {
+        "id": "synthetic/hf:zai-org/GLM-5.2",
+        "provider_name": "hf:zai-org/GLM-5.2",
+        "variant": "other",
+        "class": "full",
+        "provider": "synthetic",
+        "reasoning": {"type": "no_reasoning"},
+        "context_window": 512000,
+        "compaction_threshold": 0.8,
+    },
+]
+
 MAKI_PATH = REPO_DIR / "common-dev" / "dotfiles" / ".config" / "makima" / "providers.toml"
 PT_PATH = REPO_DIR / "common-all" / "dotfiles" / ".config" / "polytoken" / "config.yaml"
 
@@ -114,6 +130,7 @@ def gather_context() -> dict:
         "providers": providers,
         "maki_tier": MAKI_TIER,
         "pt_class": PT_CLASS,
+        "pt_static_models": PT_STATIC_MODELS,
     }
 
 

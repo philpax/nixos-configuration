@@ -147,6 +147,15 @@ models:
       type: no_reasoning
     context_window: 240000
     supports_vision: true
+  synthetic/hf:zai-org/GLM-5.2:
+    provider_name: hf:zai-org/GLM-5.2
+    variant: other
+    class: full
+    provider: synthetic
+    reasoning:
+      type: no_reasoning
+    context_window: 512000
+    compaction_threshold: 0.8
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:

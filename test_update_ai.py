@@ -83,6 +83,7 @@ def _ctx(providers):
         "providers": providers,
         "maki_tier": update_ai.MAKI_TIER,
         "pt_class": update_ai.PT_CLASS,
+        "pt_static_models": update_ai.PT_STATIC_MODELS,
     }
 
 
@@ -213,6 +214,19 @@ class TestFmtPolytoken:
         block = yaml.split("ananke-mindgame/muse-glimmer:")[1].split("ananke-mindgame/")[0]
         assert "    reasoning:\n      type: no_reasoning\n" in block
         assert "can_disable" not in block
+
+    def test_static_synthetic_glm_model(self):
+        yaml = _render_pt(_providers())
+        block = yaml.split("synthetic/hf:zai-org/GLM-5.2:")[1].split("default_permission_matcher")[
+            0
+        ]
+        assert "    provider_name: hf:zai-org/GLM-5.2" in block
+        assert "    variant: other" in block
+        assert "    class: full" in block
+        assert "    provider: synthetic" in block
+        assert "    reasoning:\n      type: no_reasoning\n" in block
+        assert "    context_window: 512000" in block
+        assert "    compaction_threshold: 0.8" in block
 
     def test_redline_omits_max_output_tokens(self):
         yaml = _render_pt(_providers())
