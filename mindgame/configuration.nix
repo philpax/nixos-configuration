@@ -75,8 +75,20 @@
   hardware.graphics.enable = true;
   hardware.nvidia.modesetting.enable = true;
 
-  virtualisation.docker.enable = true;
-  virtualisation.podman.enable = true;
+  # Podman is the native engine. Docker remains installed for explicit
+  # compatibility workflows: the root-only Unix socket is retained, while
+  # enableOnBoot prevents a boot start (the socket may still start it on demand).
+  virtualisation.podman = {
+    enable = true;
+    defaultNetwork.settings.dns_enabled = true;
+  };
+  virtualisation.docker = {
+    enable = true;
+    enableOnBoot = false;
+    # Keep compatibility access local and privileged; do not expose TCP.
+    listenOptions = [ "/run/docker.sock" ];
+    daemon.settings.live-restore = true;
+  };
   hardware.nvidia-container-toolkit.enable = true;
 
   # RTX 5090 (Blackwell, sm_120).

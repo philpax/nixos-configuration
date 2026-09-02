@@ -58,7 +58,7 @@ in
     };
   };
 
-  # Reached by the audiomuse containers via host.docker.internal, which
+  # Reached by the audiomuse containers via host.containers.internal, which
   # traverses the host firewall; the API key gates actual use.
   networking.firewall.allowedTCPPorts = [ port ];
 }

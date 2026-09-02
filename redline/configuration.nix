@@ -116,7 +116,20 @@ in {
     environment.LD_LIBRARY_PATH = "${pkgs.python312Packages.onnxruntime}/lib/python3.12/site-packages/onnxruntime/capi";
   };
 
-  virtualisation.docker.enable = true;
+  # Podman owns the declarative workloads. Docker remains available for
+  # explicit compatibility use: its root-only Unix socket is retained, while
+  # enableOnBoot prevents a boot start (the socket may still start it on demand)
+  # and no TCP listener is configured.
+  virtualisation.podman = {
+    enable = true;
+    defaultNetwork.settings.dns_enabled = true;
+  };
+  virtualisation.docker = {
+    enable = true;
+    enableOnBoot = false;
+    listenOptions = [ "/run/docker.sock" ];
+    daemon.settings.live-restore = true;
+  };
   virtualisation.libvirtd = {
     enable = true;
     qemu = {

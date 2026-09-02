@@ -61,8 +61,8 @@ let
       gridPos = { h = 8; w = 12; x = 12; y = 8; };
       unit = "Bps";
       targets = [
-        (mkTarget "A" "rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*\"}[5m])" "{{device}} rx")
-        (mkTarget "B" "rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*\"}[5m])" "{{device}} tx")
+        (mkTarget "A" "rate(node_network_receive_bytes_total{device!~\"lo|docker.*|podman.*|veth.*\"}[5m])" "{{device}} rx")
+        (mkTarget "B" "rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|podman.*|veth.*\"}[5m])" "{{device}} tx")
       ];
     };
 

@@ -19,7 +19,11 @@
     description = "AI Services User";
     home = "/home/ai";
     group = "ai";
-    extraGroups = [ "docker" "editabledata" ];
+    autoSubUidGidRange = true;
+    linger = true;
+    # Rootless Podman is run directly as this user; Docker socket access would
+    # grant unrelated root-equivalent control over the host.
+    extraGroups = [ "editabledata" ];
   };
 
   users.groups.ai = {};

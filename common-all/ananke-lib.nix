@@ -15,7 +15,7 @@ let
       # Expanded once per GPU ananke's placement picks, so the container
       # sees exactly the devices the allocator reserved for it.
     , gpuDevice ? "nvidia.com/gpu=\${id}"
-    , runtime ? "docker"
+    , runtime ? "podman"
     }:
     { inherit image network runtime; }
     // lib.optionalAttrs (gpuDevice != null) { gpu_device = gpuDevice; }
@@ -169,7 +169,7 @@ in
     , env ? { }
     , envPassthrough ? [ ]
     , gpuDevice ? "nvidia.com/gpu=\${id}"
-    , runtime ? "docker"
+    , runtime ? "podman"
     , description ? null
     , modality ? null
     , idleTimeout ? "60m"
@@ -214,25 +214,34 @@ in
   # `binaryPath` defaults to a cargo-built checkout — Nix wires up the
   # service but doesn't build ananke.
   mkAnankeSystemdService =
-    { anankeDir
+    { pkgs
+    , anankeDir
     , configFile
     , user
     , group ? user
     , binaryPath ? "${anankeDir}/target/debug/ananke"
     , after ? [ "network.target" ]
+    , wants ? [ ]
     , requires ? [ ]
     , path ? [ ]
     , environment ? { }
     }:
+    let
+      startScript = pkgs.writeShellScript "ananke-start" ''
+        set -euo pipefail
+        export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
+        exec ${lib.escapeShellArg binaryPath} --config ${lib.escapeShellArg configFile}
+      '';
+    in
     {
       description = "Ananke";
-      inherit after requires path environment;
+      inherit after wants requires path environment;
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         User = user;
         Group = group;
         WorkingDirectory = anankeDir;
-        ExecStart = "${binaryPath} --config ${configFile}";
+        ExecStart = "${startScript}";
         Restart = "always";
         RestartSec = "10s";
       };

@@ -1,7 +1,7 @@
 # AudioMuse-AI: sonic analysis and playlist generation for Navidrome.
 # https://github.com/NeptuneHub/AudioMuse-AI
 #
-# Runs as containers on a private docker network, mirroring upstream's
+# Runs as containers on a private Podman network, mirroring upstream's
 # docker-compose-nvidia.yaml: the Flask web app, a scalable pool of RQ
 # analysis workers, and dedicated postgres/redis instances. The app fetches
 # audio through Navidrome's Subsonic API (no direct music-folder access
@@ -37,12 +37,12 @@ let
     # and every other tunable in app_config, and from then on the DB rows
     # override env on every start. Changing values below therefore does NOT
     # propagate until you clear the stale snapshot:
-    #   docker exec audiomuse-postgres psql -U audiomuse audiomusedb \
+    #   podman exec audiomuse-postgres psql -U audiomuse audiomusedb \
     #     -c "truncate app_config;"   # then restart the containers
     # (music_servers needs the web UI or a postgres wipe instead.)
-    # host.docker.internal resolves via the --add-host mapping below.
+    # host.containers.internal resolves via the --add-host mapping below.
     MEDIASERVER_TYPE = "navidrome";
-    NAVIDROME_URL = "http://host.docker.internal:4533";
+    NAVIDROME_URL = "http://host.containers.internal:4533";
     NAVIDROME_USER = "audiomuse";
     NAVIDROME_PASSWORD = secrets.navidromePassword;
     # All three must be set to disable AudioMuse's unauthenticated "legacy
@@ -55,7 +55,7 @@ let
     # LLM playlist naming via ananke's default model. The URL must be the
     # full chat-completions path; the key just has to be non-empty.
     AI_MODEL_PROVIDER = "OPENAI";
-    OPENAI_SERVER_URL = "http://host.docker.internal:${toString config.ai.ananke.openaiPort}/v1/chat/completions";
+    OPENAI_SERVER_URL = "http://host.containers.internal:${toString config.ai.ananke.openaiPort}/v1/chat/completions";
     OPENAI_MODEL_NAME = config.ai.ananke.defaultModel;
     OPENAI_API_KEY = "ananke-no-auth";
     # Analysis throughput. The reload default trades 2-3s/track for low VRAM
@@ -74,7 +74,7 @@ let
     # Slot 2: the whisper-lyrics GPU transcription sidecar (see
     # services/whisper-lyrics.nix). The long timeout absorbs queueing when
     # several workers hit it at once.
-    LYRICS_API_2_URL_TEMPLATE = "http://host.docker.internal:8801/lyrics";
+    LYRICS_API_2_URL_TEMPLATE = "http://host.containers.internal:8801/lyrics";
     LYRICS_API_2_ARTIST_PARAM = "artist";
     LYRICS_API_2_TITLE_PARAM = "title";
     LYRICS_API_2_LYRICS_FIELD = "lyrics";
@@ -85,8 +85,9 @@ let
 
   appExtraOptions = gpu: [
     "--network=audiomuse"
-    "--add-host=host.docker.internal:host-gateway"
+    "--add-host=host.containers.internal:host-gateway"
     "--device=nvidia.com/gpu=${toString gpu}"
+    "--userns=keep-id"
   ];
 
   workerCount = config.redline.audiomuse.workerCount;
@@ -119,46 +120,50 @@ in
   };
 
   config = {
-    virtualisation.oci-containers.backend = "docker";
+    virtualisation.oci-containers.backend = "podman";
     virtualisation.oci-containers.containers = {
       audiomuse-postgres = {
-        image = "postgres:15-alpine";
+        image = "docker.io/library/postgres:15-alpine";
         environment = pgEnv;
-        volumes = [ "${folders.audiomuse}/postgres:/var/lib/postgresql/data" ];
-        extraOptions = [ "--network=audiomuse" ];
+        volumes = [ "${folders.audiomuse}/postgres:/var/lib/postgresql/data:U" ];
+        podman.user = "ai";
+        extraOptions = [ "--network=audiomuse" "--userns=keep-id" ];
       };
 
       audiomuse-redis = {
-        image = "redis:7-alpine";
-        volumes = [ "${folders.audiomuse}/redis:/data" ];
-        extraOptions = [ "--network=audiomuse" ];
+        image = "docker.io/library/redis:7-alpine";
+        volumes = [ "${folders.audiomuse}/redis:/data:U" ];
+        podman.user = "ai";
+        extraOptions = [ "--network=audiomuse" "--userns=keep-id" ];
       };
 
       audiomuse = {
         inherit image;
+        podman.user = "ai";
         environment = appEnv // { SERVICE_TYPE = "flask"; };
         # Published on all interfaces: the Navidrome plugin calls it via
         # 127.0.0.1 and the web UI is used from the LAN; AUDIOMUSE_* auth above
-        # is what stands between it and the network. Note docker's DNAT runs
-        # before the NixOS firewall INPUT rules, so no allowedTCPPorts entry is
-        # needed (or effective) for this port.
+        # is what stands between it and the network. Rootless Podman publishes
+        # this port directly, so it is explicitly allowed below in the host
+        # firewall.
         ports = [ "${toString port}:8000" ];
         volumes = [
-          "${folders.audiomuse}/temp-flask:/app/temp_audio"
-          "${folders.audiomuse}/plugins-flask:/app/plugin/installed"
+          "${folders.audiomuse}/temp-flask:/app/temp_audio:U"
+          "${folders.audiomuse}/plugins-flask:/app/plugin/installed:U"
         ];
         dependsOn = [ "audiomuse-postgres" "audiomuse-redis" ];
         extraOptions = appExtraOptions 0;
       };
     } // lib.listToAttrs (map (i: lib.nameValuePair (workerName i) {
       inherit image;
+      podman.user = "ai";
       environment = appEnv // {
         SERVICE_TYPE = "worker";
         USE_GPU_CLUSTERING = "true";
       };
       volumes = [
-        "${folders.audiomuse}/temp-${workerName i}:/app/temp_audio"
-        "${folders.audiomuse}/plugins-${workerName i}:/app/plugin/installed"
+        "${folders.audiomuse}/temp-${workerName i}:/app/temp_audio:U"
+        "${folders.audiomuse}/plugins-${workerName i}:/app/plugin/installed:U"
       ];
       dependsOn = [ "audiomuse-postgres" "audiomuse-redis" ];
       extraOptions = appExtraOptions (workerGpu i) ++ [ "--cpus=6" ];
@@ -170,34 +175,38 @@ in
     # exempt from the switch.
     systemd.tmpfiles.rules =
       lib.optionals config.redline.ssd0.enable ([
-        "d ${folders.audiomuse} 0755 root root -"
-        "d ${folders.audiomuse}/postgres 0700 root root -"
-        "d ${folders.audiomuse}/redis 0755 root root -"
-        "d ${folders.audiomuse}/temp-flask 0755 root root -"
-        "d ${folders.audiomuse}/plugins-flask 0755 root root -"
+        "d ${folders.audiomuse} 0755 ai ai -"
+        "d ${folders.audiomuse}/postgres 0700 ai ai -"
+        "d ${folders.audiomuse}/redis 0755 ai ai -"
+        "d ${folders.audiomuse}/temp-flask 0755 ai ai -"
+        "d ${folders.audiomuse}/plugins-flask 0755 ai ai -"
       ]
       ++ lib.concatMap (i: [
-        "d ${folders.audiomuse}/temp-${workerName i} 0755 root root -"
-        "d ${folders.audiomuse}/plugins-${workerName i} 0755 root root -"
+        "d ${folders.audiomuse}/temp-${workerName i} 0755 ai ai -"
+        "d ${folders.audiomuse}/plugins-${workerName i} 0755 ai ai -"
       ]) workerIds)
-      ++ [ "d ${folders.backup}/audiomuse 0755 root root -" ];
+      ++ [ "d ${folders.backup}/audiomuse 0755 ai ai -" ];
 
     systemd.services = {
-      # oci-containers does not manage docker networks; create ours once. Idempotent.
-      docker-network-audiomuse = {
-        description = "Docker network for AudioMuse-AI";
-        after = [ "docker.service" ];
-        requires = [ "docker.service" ];
+      # oci-containers does not manage Podman networks; create ours once.
+      podman-network-audiomuse = {
+        description = "Podman network for AudioMuse-AI";
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
         wantedBy = [ "multi-user.target" ];
-        before = map (n: "docker-${n}.service") containerNames;
-        requiredBy = map (n: "docker-${n}.service") containerNames;
+        before = map (n: "podman-${n}.service") containerNames;
+        requiredBy = map (n: "podman-${n}.service") containerNames;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
+          User = "ai";
+          Group = "ai";
+          Environment = [ "HOME=/home/ai" ];
         };
+        path = [ pkgs.podman pkgs.coreutils "/run/wrappers/bin" ];
         script = ''
-          ${pkgs.docker}/bin/docker network inspect audiomuse >/dev/null 2>&1 || \
-            ${pkgs.docker}/bin/docker network create audiomuse
+          export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
+          podman network exists audiomuse || podman network create audiomuse
         '';
       };
 
@@ -206,14 +215,21 @@ in
       # history/pruning comes for free). Restoring beats re-crunching ~20k tracks.
       audiomuse-pgdump = {
         description = "Dump AudioMuse-AI postgres database for backup";
-        after = [ "docker-audiomuse-postgres.service" ];
-        requires = [ "docker-audiomuse-postgres.service" ];
-        serviceConfig.Type = "oneshot";
+        after = [ "podman-audiomuse-postgres.service" ];
+        requires = [ "podman-audiomuse-postgres.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "ai";
+          Group = "ai";
+          Environment = [ "HOME=/home/ai" ];
+        };
+        path = [ pkgs.podman pkgs.gzip pkgs.coreutils "/run/wrappers/bin" ];
         script = ''
           set -euo pipefail
+          export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
           dump="${folders.backup}/audiomuse/audiomusedb.sql.gz"
-          ${pkgs.docker}/bin/docker exec audiomuse-postgres \
-            pg_dump -U audiomuse audiomusedb | ${pkgs.gzip}/bin/gzip > "$dump.tmp"
+          podman exec audiomuse-postgres \
+            pg_dump -U audiomuse audiomusedb | gzip > "$dump.tmp"
           mv "$dump.tmp" "$dump"
         '';
       };
@@ -221,17 +237,17 @@ in
       # Ordering-only edges for first-activation ergonomics: let the Navidrome
       # user exist before the app tries to authenticate with it, and give the app
       # containers breathing room against postgres's first-run initdb (the
-      # postgres unit is "started" the moment `docker run` execs, long before it
+      # postgres unit is "started" the moment `podman run` execs, long before it
       # accepts connections; without RestartSec the default 100ms restart cadence
       # can trip the start-rate limiter and wedge the unit in `failed`).
-      docker-audiomuse = {
+      podman-audiomuse = {
         after = [ "navidrome-audiomuse-user.service" ];
         serviceConfig.RestartSec = 15;
       };
-    } // lib.listToAttrs (map (i: lib.nameValuePair "docker-${workerName i}" {
+    } // lib.listToAttrs (map (i: lib.nameValuePair "podman-${workerName i}" {
       # Ordering only: the user oneshot for first-boot auth, and flask for
       # boot-time schema migrations (racing them deadlocked postgres once).
-      after = [ "navidrome-audiomuse-user.service" "docker-audiomuse.service" ];
+      after = [ "navidrome-audiomuse-user.service" "podman-audiomuse.service" ];
       serviceConfig.RestartSec = 15;
     }) workerIds);
 
@@ -247,5 +263,8 @@ in
         RandomizedDelaySec = "15m";
       };
     };
+
+    # Rootless Podman publishes this port without Docker's firewall DNAT path.
+    networking.firewall.allowedTCPPorts = [ port ];
   };
 }

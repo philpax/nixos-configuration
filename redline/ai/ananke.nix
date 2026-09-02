@@ -169,7 +169,7 @@ let
   # ananke publishes the loopback port it allocated onto it.
   vllmContainerPort = 8000;
 
-  # ComfyUI docker container always listens on 8188; ananke proxies the
+  # ComfyUI Podman container always listens on 8188; ananke proxies the
   # public port to a loopback port the start script binds for it.
   comfyuiContainerPort = 8188;
   comfyuiShared = import ../../common-all/comfyui.nix {
@@ -721,7 +721,7 @@ let
       };
     } ++ [
       # `${port}` is the loopback port ananke allocates, passed through
-      # to `docker run -p` onto the container's fixed 8188. Dynamic VRAM
+      # to `podman run -p` onto the container's fixed 8188. Dynamic VRAM
       # so other models can share the pool while ComfyUI is idle.
       {
         template = "command";
@@ -742,13 +742,9 @@ let
           min_vram_gb = 2.0;
           max_vram_gb = 20.0;
         };
-        # Without this the container's cgroup is invisible to the
-        # snapshotter and the dynamic pledge stays frozen at
-        # `min_vram_gb`. Matches the `--cgroup-parent` the wrapper
-        # script passes to `docker run`.
-        tracking = {
-          cgroup_parent = "/ananke.slice/ananke-comfyui.slice";
-        };
+        # The rootless container is launched by the ai-owned ananke service;
+        # its cgroup remains in that delegated user tree. The old Docker
+        # cgroup_parent was a root-only path and is intentionally omitted.
         health = {
           http = "/system_stats";
         };
@@ -817,44 +813,45 @@ in
   };
 
   config = {
-  # Sibling slice that holds the ComfyUI Docker container. The
-  # `comfyui-start` wrapper passes `--cgroup-parent ananke-comfyui.slice`
-  # so the resulting `docker-<id>.scope` lands inside this slice;
-  # ananke's snapshotter watches the subtree to attribute VRAM/RSS to
-  # the comfyui service. Declaring the slice here ensures it exists at
-  # boot — relying on docker's lazy creation can race the first
-  # `comfyui-start` invocation on some cgroup-driver setups.
-  systemd.slices."ananke-comfyui" = {
-    description = "Cgroup parent for ananke's ComfyUI container";
-  };
+  # Rootless Podman keeps ComfyUI in the ai user's delegated cgroup tree.
+  # Do not pass Docker's root-level --cgroup-parent path: it is not writable
+  # from the ai user manager and would make the container fail to start.
 
   # The mount sources every vLLM service shares. ananke does not create
   # them, and Docker makes a missing bind source root-owned, which the
   # container then cannot write its compile caches into.
-  systemd.tmpfiles.rules =
-    [ "d ${hfCache} 0755 ai ai - -" ]
-    ++ lib.concatMap
-      (m: [
-        "d ${vllmCache m.cacheName} 0755 ai ai - -"
-        "d ${vllmCache m.cacheName}/torch_compile 0755 ai ai - -"
-        "d ${vllmCache m.cacheName}/triton 0755 ai ai - -"
-      ])
-      (lib.filter (m: (m.kind or "") == "vllm") models);
+  systemd.tmpfiles.rules = lib.optionals config.redline.ssd0.enable
+    ([ "d ${hfCache} 0755 ai ai - -" ]
+      ++ lib.concatMap
+        (m: [
+          "d ${vllmCache m.cacheName} 0755 ai ai - -"
+          "d ${vllmCache m.cacheName}/torch_compile 0755 ai ai - -"
+          "d ${vllmCache m.cacheName}/triton 0755 ai ai - -"
+        ])
+        (lib.filter (m: (m.kind or "") == "vllm") models));
 
   systemd.services.container-images = mkImageService {
     images = lib.attrValues vllmImages;
+    user = "ai";
+    environment = {
+      HOME = "/home/ai";
+    };
+    wants = [ "network-online.target" ];
   };
 
   systemd.services.ananke = anankeLib.mkAnankeSystemdService {
-    inherit anankeDir configFile;
+    inherit pkgs anankeDir configFile;
     user = "ai";
     group = "ai";
-    after = [ "docker.service" "network.target" ];
-    requires = [ "docker.service" ];
-    path = [ config.ai.llamaCppCuda pkgs.docker pkgs.curl pkgs.bash ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    environment = {
+      HOME = "/home/ai";
+      LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+    };
+    path = [ config.ai.llamaCppCuda pkgs.podman pkgs.curl pkgs.bash ];
     # nvml-wrapper dlopen()s libnvidia-ml from the driver lib dir; without
     # this the daemon logs "NVML init failed" and falls back to CPU-only.
-    environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
   };
 
   networking.firewall.allowedTCPPorts = firewallPorts;

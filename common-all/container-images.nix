@@ -29,32 +29,20 @@ let
     else
       [ "COPY ${ctx} ${overlay.dest}" ];
 
-  # Builds `context` if `tag` is not already present. The inspect keeps the
-  # common case from even reading the context.
+  # Builds `context` if `tag` is not already present. Podman owns the image
+  # store directly, so builds and runs cannot drift across two engines.
   buildIfMissing = { name, tag, context }: ''
-    if docker image inspect ${tag} >/dev/null 2>&1; then
+    if podman image exists ${tag}; then
       echo "image ${name}: ${tag} already built"
     else
       echo "image ${name}: building ${tag}"
-      docker build --tag ${tag} ${context}
+      podman build --tag ${tag} ${context}
     fi
   '';
 
   # The store hash of a path, which is what every locally-built tag is
   # versioned by.
   storeHash = path: lib.head (lib.splitString "-" (baseNameOf path));
-
-  # A locally-built image exists only in Docker's store, so Podman cannot
-  # pull it — it has to be handed across. Streamed rather than staged
-  # through a file: these are gigabytes.
-  loadIntoPodman = tag: ''
-    if podman image exists ${tag}; then
-      echo "image ${tag}: already in podman"
-    else
-      echo "image ${tag}: copying from docker into podman"
-      docker save ${tag} | podman load
-    fi
-  '';
 in
 {
   # `base` is the image to build on, `overlays` the ordered list applied to
@@ -94,7 +82,6 @@ in
     {
       inherit name tag;
       buildCommand = buildIfMissing { inherit name tag context; };
-      podmanCommand = loadIntoPodman tag;
     };
 
   # A source tree carrying its own Dockerfile — `src` is both the build
@@ -108,7 +95,6 @@ in
     {
       inherit name tag;
       buildCommand = buildIfMissing { inherit name tag; context = src; };
-      podmanCommand = loadIntoPodman tag;
     };
 
   # An upstream image pinned to a digest. The digest is the reference —
@@ -123,20 +109,10 @@ in
     {
       inherit name tag;
       buildCommand = ''
-        if docker image inspect ${tag} >/dev/null 2>&1; then
+        if podman image exists ${tag}; then
           echo "image ${name}: ${tag} already present"
         else
           echo "image ${name}: pulling ${tag}"
-          docker pull ${tag}
-        fi
-      '';
-      # Podman can fetch a digest from the registry itself; nothing has to
-      # cross from Docker's store.
-      podmanCommand = ''
-        if podman image exists ${tag}; then
-          echo "image ${name}: ${tag} already in podman"
-        else
-          echo "image ${name}: pulling ${tag} into podman"
           podman pull ${tag}
         fi
       '';
@@ -147,25 +123,26 @@ in
   # should leave ananke running its other services, with the affected ones
   # failing to start and saying why.
   #
-  # `podmanImages` also need to be in Podman's store, which does not share
-  # Docker's. Set `user` when that store is a rootless one.
+  # Build all images directly in Podman's store. Set `user` for a rootless
+  # store; this must match the user that will later run the workload.
   mkImageService =
     { images
-    , podmanImages ? [ ]
     , user ? null
-    , after ? [ "docker.service" ]
-    , requires ? [ "docker.service" ]
+    , environment ? { }
+    , after ? [ "network-online.target" ]
+    , wants ? [ ]
+    , requires ? [ ]
     }:
     {
-      description = "Build the container images ananke serves";
-      inherit after requires;
+      description = "Build the container images ananke serves with Podman";
+      inherit after wants requires;
       wantedBy = [ "multi-user.target" ];
       before = [ "ananke.service" ];
       # Rootless Podman shells out to newuidmap/newgidmap, which only work as
       # the setuid wrappers in /run/wrappers/bin — the shadow package's own
       # binaries lack the capabilities.
-      path = [ pkgs.docker ]
-        ++ lib.optionals (podmanImages != [ ]) [ pkgs.podman "/run/wrappers/bin" ];
+      inherit environment;
+      path = [ pkgs.podman pkgs.coreutils "/run/wrappers/bin" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -174,9 +151,13 @@ in
         TimeoutStartSec = "3h";
       } // lib.optionalAttrs (user != null) { User = user; };
       script = lib.concatStringsSep "\n" (
-        [ "set -euo pipefail" ]
+        [
+          "set -euo pipefail"
+          # `%U` is the system manager's UID (0), not the service user's UID.
+          # Rootless Podman needs the runtime dir for the process identity.
+        ]
+        ++ lib.optional (user != null) "export XDG_RUNTIME_DIR=\"/run/user/$(${pkgs.coreutils}/bin/id -u)\""
         ++ map (image: image.buildCommand) images
-        ++ map (image: image.podmanCommand) podmanImages
       );
     };
 }

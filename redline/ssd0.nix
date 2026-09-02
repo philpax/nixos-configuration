@@ -42,41 +42,43 @@ in
     services.immich.enable = off; # media root is the /var/lib/immich bind
 
     # --- hand-rolled units ------------------------------------------------------
-    systemd.services.ananke.enable = off; # model dir + sqlite on ssd0
-    # audiomuse containers keep postgres/redis/temp data on ssd0; the navidrome
-    # oneshots (Wants=) and pgdump (Requires=) reference disabled units and
-    # would pull them back in if left enabled themselves.
-    systemd.services.docker-audiomuse.enable = off;
-    # Keep in sync with redline.audiomuse.workerCount.
-    systemd.services.docker-audiomuse-worker-1.enable = off;
-    systemd.services.docker-audiomuse-worker-2.enable = off;
-    systemd.services.docker-audiomuse-worker-3.enable = off;
-    systemd.services.docker-audiomuse-worker-4.enable = off;
-    systemd.services.docker-audiomuse-worker-5.enable = off;
-    systemd.services.docker-audiomuse-worker-6.enable = off;
-    systemd.services.docker-audiomuse-worker-7.enable = off;
-    systemd.services.docker-audiomuse-worker-8.enable = off;
-    systemd.services.docker-audiomuse-postgres.enable = off;
-    systemd.services.docker-audiomuse-redis.enable = off;
-    systemd.services.navidrome-audiomuse-user.enable = off;
-    systemd.services.navidrome-audiomuse-plugin.enable = off;
-    systemd.services.audiomuse-pgdump.enable = off;
-    systemd.timers.audiomuse-pgdump.enable = off;
-    systemd.services.minecraft-server.enable = off;
-    systemd.services.fivem-server.enable = off;
-    systemd.services.paxboard.enable = off;
-    systemd.services.paxcord.enable = off;
+    # These services either read/write ssd0 directly or would pull in units
+    # that do. The worker list is derived from the module option so changing
+    # redline.audiomuse.workerCount cannot leave an ungated worker behind.
+    systemd.services = lib.genAttrs
+      ([
+        "ananke"
+        "podman-network-audiomuse"
+        "podman-audiomuse"
+        "podman-audiomuse-postgres"
+        "podman-audiomuse-redis"
+        "navidrome-audiomuse-user"
+        "navidrome-audiomuse-plugin"
+        "audiomuse-pgdump"
+        "minecraft-server"
+        "fivem-server"
+        "paxboard"
+        "paxcord"
+        "backup-sync"
+        "icloud-sync"
+        "immich-stacker"
+      ]
+      ++ map (i: "podman-audiomuse-worker-${toString i}")
+        (lib.range 1 config.redline.audiomuse.workerCount))
+      (_: { enable = off; });
 
     # --- timers + their units ---------------------------------------------------
     # backup-sync reads ssd0 as its source; running it against a missing source would
     # do nothing useful, and its rsync has no --delete so it cannot damage the
     # destination, but there is no reason to let it fire.
-    systemd.services.backup-sync.enable = off;
-    systemd.timers.backup-sync.enable = off;
-    systemd.services.icloud-sync.enable = off;
-    systemd.timers.icloud-sync.enable = off;
-    systemd.services.immich-stacker.enable = off;
-    systemd.timers.immich-stacker.enable = off;
+    systemd.timers = lib.genAttrs
+      [
+        "audiomuse-pgdump"
+        "backup-sync"
+        "icloud-sync"
+        "immich-stacker"
+      ]
+      (_: { enable = off; });
 
     # restic (services.restic.backups.external) is intentionally left alone: it backs
     # up /storage/backup to the external drive and never touches ssd0. With the drive

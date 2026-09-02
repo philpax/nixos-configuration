@@ -7,13 +7,13 @@ in
 {
   comfyuiRebuildScript = pkgs.writeShellApplication {
     name = "comfyui-rebuild";
-    runtimeInputs = [ pkgs.git pkgs.docker ];
+    runtimeInputs = [ pkgs.git pkgs.podman ];
     text = ''
       set -e
 
       COMFYUI_DIR="${comfyuiDir}"
 
-      echo "Building/updating ComfyUI Docker image..."
+      echo "Building/updating ComfyUI Podman image..."
 
       if [ ! -d "$COMFYUI_DIR/.git" ]; then
         echo "Cloning ComfyUI repository..."
@@ -35,9 +35,9 @@ in
       ${pkgs.git}/bin/git pull origin master
 
       # Remove old image if it exists
-      if docker image inspect ${image} >/dev/null 2>&1; then
+      if podman image exists ${image}; then
         echo "Removing old ComfyUI image..."
-        docker rmi ${image}
+        podman rmi ${image}
       fi
 
       # Create temporary Dockerfile
@@ -61,18 +61,18 @@ in
       EOF
 
       # Build the image
-      docker build -t ${image} -f /tmp/Dockerfile .
+      podman build -t ${image} -f /tmp/Dockerfile .
 
       # Clean up
       rm /tmp/Dockerfile
 
-      echo "ComfyUI Docker image rebuilt successfully!"
+      echo "ComfyUI Podman image rebuilt successfully!"
     '';
   };
 
   comfyuiStartScript = pkgs.writeShellApplication {
     name = "comfyui-start";
-    runtimeInputs = [ pkgs.docker ];
+    runtimeInputs = [ pkgs.podman ];
     text = ''
       set -e
 
@@ -80,8 +80,8 @@ in
       cd "$COMFYUI_DIR"
 
       # Check if image exists
-      if ! docker image inspect ${image} >/dev/null 2>&1; then
-        echo "Error: ComfyUI Docker image not found. Please run 'sudo comfyui-rebuild' first."
+      if ! podman image exists ${image}; then
+        echo "Error: ComfyUI Podman image not found. Please run 'comfyui-rebuild' first."
         exit 1
       fi
 
@@ -113,34 +113,22 @@ in
       # CDI's `nvidia.com/gpu=N` accepts a comma-separated index list, so we
       # forward it directly: the container only sees the picked GPU(s) and
       # Comfy's `cuda:0` actually maps to it. Falls back to `all` when the
-      # script is invoked outside ananke (e.g. via `sudo comfyui-start`).
+      # script is invoked outside ananke.
       GPU_DEVICES="''${CUDA_VISIBLE_DEVICES:-all}"
 
-      # Place the container under a known systemd slice so ananke's
-      # snapshotter can attribute VRAM to this service via cgroup
-      # membership. Without this, the container's cgroup
-      # (`docker-<id>.scope`) lives under `system.slice/docker.service`
-      # — entirely outside ananke's view of the daemon's children — and
-      # ananke's pledge book would stay frozen at `min_vram_gb` no
-      # matter how much VRAM the workload was actually using. Mirrors
-      # `tracking.cgroup_parent` in the daemon's service config.
-      CGROUP_PARENT="ananke-comfyui.slice"
-
       if [ "$FOREGROUND" = true ]; then
-        echo "Starting ComfyUI in foreground on port $PORT (GPUs: $GPU_DEVICES, slice: $CGROUP_PARENT)..."
-        exec docker run --rm --name comfyui \
+        echo "Starting ComfyUI in foreground on port $PORT (GPUs: $GPU_DEVICES)..."
+        exec podman run --rm --name comfyui \
           --device "nvidia.com/gpu=$GPU_DEVICES" \
-          --cgroup-parent "$CGROUP_PARENT" \
-          -v "$COMFYUI_DIR:/workspace" \
-          -p "$PORT:8188" \
+          -v "$COMFYUI_DIR:/workspace:U" \
+          -p "127.0.0.1:$PORT:8188" \
           ${image}
       else
-        echo "Starting ComfyUI (detached) on port $PORT (GPUs: $GPU_DEVICES, slice: $CGROUP_PARENT)..."
-        docker run -d --rm --name comfyui \
+        echo "Starting ComfyUI (detached) on port $PORT (GPUs: $GPU_DEVICES)..."
+        podman run -d --rm --name comfyui \
           --device "nvidia.com/gpu=$GPU_DEVICES" \
-          --cgroup-parent "$CGROUP_PARENT" \
-          -v "$COMFYUI_DIR:/workspace" \
-          -p "$PORT:8188" \
+          -v "$COMFYUI_DIR:/workspace:U" \
+          -p "127.0.0.1:$PORT:8188" \
           ${image}
         echo "ComfyUI started. Access at http://localhost:$PORT"
       fi
@@ -149,9 +137,9 @@ in
 
   comfyuiStopScript = pkgs.writeShellApplication {
     name = "comfyui-stop";
-    runtimeInputs = [ pkgs.docker ];
+    runtimeInputs = [ pkgs.podman ];
     text = ''
-      docker kill comfyui
+      podman kill comfyui
       echo "ComfyUI stopped."
     '';
   };

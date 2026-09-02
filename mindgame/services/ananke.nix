@@ -213,9 +213,9 @@ let
           inherit (m) name vramGb perGpuMib description upstreamModel;
           inherit port;
           image = images.ninfer.tag;
-          # Per-model so one service can exercise a second runtime while the
-          # rest stay on Docker.
-          runtime = m.runtime or "docker";
+          # Podman is the default; a model can still opt into another runtime
+          # when an external compatibility workflow requires it.
+          runtime = m.runtime or "podman";
           # Replaces the image's CMD, so the executable leads.
           # `--kv-capacity` defaults to `maxContext` (the per-session ceiling)
           # so the static reservation stays honest, but a model may raise it to
@@ -281,21 +281,27 @@ in
     # rootless one, and the canary's image has to land in it.
     systemd.services.container-images = mkImageService {
       images = lib.attrValues images;
-      podmanImages = [ images.ninfer ];
       user = config.mainUser;
+      environment = {
+        HOME = config.users.users.${config.mainUser}.home;
+      };
+      wants = [ "network-online.target" ];
     };
 
     systemd.services.ananke = anankeLib.mkAnankeSystemdService {
-      inherit anankeDir configFile;
+      inherit pkgs anankeDir configFile;
       user = config.mainUser;
       group = "users";
-      after = [ "docker.service" "network.target" ];
-      requires = [ "docker.service" ];
-      # ananke invokes the runtime CLIs directly, so both are on its own
-      # PATH; the containers get no PATH from here.
-      # wrapperDir for rootless Podman's setuid newuidmap/newgidmap.
-      path = [ pkgs.docker pkgs.podman pkgs.curl pkgs.bash config.security.wrapperDir ];
-      environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      # ananke invokes Podman directly; no daemon is required.
+      # The generated start wrapper derives XDG_RUNTIME_DIR from the service
+      # process UID; the system-manager `%U` specifier would incorrectly be 0.
+      environment = {
+        HOME = config.users.users.${config.mainUser}.home;
+        LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+      };
+      path = [ pkgs.podman pkgs.curl pkgs.bash config.security.wrapperDir ];
     };
 
     # Per-service ports are loopback-only (allowExternalServices defaults to
