@@ -1,3 +1,5 @@
+require("code_review")
+
 local vortex = require("vortex")
 
 maki.store.register("splash", "vortex", {
