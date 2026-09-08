@@ -169,9 +169,9 @@ function __gwta_branches
         | string match -v '*/HEAD'
 end
 
-function __gwtr_worktrees
+function __gwt_worktrees
     git worktree list --porcelain 2>/dev/null \
-        | string match -r '^worktree .*/\\.worktrees/[^/]+$' \
+        | string match -r '^worktree .*/\.worktrees/[^/]+$' \
         | string replace -r '^worktree .*/' ''
 end
 
@@ -179,8 +179,10 @@ complete -c gwta -f -n 'test (count (commandline -opc)) -eq 1' \
     -a '(__gwta_branches)' -d 'Branch / worktree name'
 complete -c gwta -f -n 'test (count (commandline -opc)) -eq 2' \
     -a '(__gwta_branches)' -d 'Starting branch'
+complete -c gwtc -f -n 'test (count (commandline -opc)) -eq 1' \
+    -a '(__gwt_worktrees)' -d 'Worktree'
 complete -c gwtr -f -n 'test (count (commandline -opc)) -eq 1' \
-    -a '(__gwtr_worktrees)' -d 'Worktree'
+    -a '(__gwt_worktrees)' -d 'Worktree'
 
 function dlretry --argument-names url filename
     if test -z "$url"
