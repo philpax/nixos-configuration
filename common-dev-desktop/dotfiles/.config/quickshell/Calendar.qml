@@ -42,7 +42,14 @@ PopupWindow {
             anchors.centerIn: parent
             spacing: 6
 
-            readonly property date today: new Date()
+            SystemClock {
+                id: clock
+                precision: SystemClock.Seconds
+            }
+
+            // From a SystemClock, not `new Date()`: the latter is evaluated
+            // once at item creation and goes stale if the bar stays up for days.
+            readonly property date today: clock.date
             readonly property date monthDate: new Date(today.getFullYear(), today.getMonth() + popup.monthOffset, 1)
             readonly property int firstWeekday: monthDate.getDay()
 
