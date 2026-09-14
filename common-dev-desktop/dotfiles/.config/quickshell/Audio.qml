@@ -20,5 +20,19 @@ Pill {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: pavuctl.running = true
+        // Step in 5% increments, snapping to the grid first so an off-grid
+        // volume (e.g. 63%) lands on 65%/60% rather than 68%/58%.
+        property int wheelAccum: 0
+        onWheel: wheel => {
+            if (!audio.sink || !audio.sink.audio) return;
+            wheelAccum += wheel.angleDelta.y;
+            const steps = Math.trunc(wheelAccum / 120);
+            if (steps === 0) return;
+            wheelAccum -= steps * 120;
+            const percent = Math.round(audio.sink.audio.volume * 100);
+            const current = steps > 0 ? Math.floor(percent / 5) * 5 : Math.ceil(percent / 5) * 5;
+            const next = Math.max(0, Math.min(100, current + steps * 5));
+            audio.sink.audio.volume = next / 100;
+        }
     }
 }
