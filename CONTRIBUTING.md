@@ -67,6 +67,10 @@ read `config.mainUser` for the name and
 - **mindgame**: common-all + common-ai + common-desktop + common-dev + common-dev-desktop + NVIDIA/Docker/ML
 - **redline**: common-all + common-ai + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
 
+### Syncthing
+
+`common-all/syncthing-topology.nix` lists device IDs and folder members. A machine sets `philpax.syncthing.device = "<name>"` and `common-all/services/syncthing.nix` derives its peers and folders; machine-specific folders and paths merge in via `services.syncthing.settings` and `philpax.syncthing.folderPaths`.
+
 ### Auto-importing Modules
 
 `programs/default.nix` and `services/default.nix` use `builtins.readDir` to auto-import all `.nix` files in their directory. Drop a new `.nix` file in and it's automatically included — no need to edit `default.nix`.

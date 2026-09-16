@@ -26,6 +26,7 @@
 
   time.timeZone = "Europe/Stockholm";
   networking.hostName = "mindgame";
+  philpax.syncthing.device = "mindgame-nixos";
 
   # Give plenty of time at the boot menu to pick Windows.
   boot.loader.timeout = 60;

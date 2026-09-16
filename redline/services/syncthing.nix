@@ -2,7 +2,7 @@
 
 let
   folders = import ../folders.nix;
-  deviceIds = import ../../common-all/syncthing-device-ids.nix;
+  topology = import ../../common-all/syncthing-topology.nix;
   gamesDir = "/storage/installers/Games";
   gameFolder = name: {
     path = "${gamesDir}/${name}";
@@ -27,42 +27,19 @@ in {
   };
   users.groups.syncthing = {};
 
+  # Main comes from the shared topology; the game folders are local.
+  philpax.syncthing.device = "redline";
+  philpax.syncthing.folderPaths.Main = folders.notes;
   services.syncthing = {
-    enable = true;
     user = "syncthing";
     group = "syncthing";
     dataDir = "/var/lib/syncthing";
     configDir = "/var/lib/syncthing/.config/syncthing";
-    overrideDevices = true;
-    overrideFolders = true;
     settings = {
-      devices = {
-        "iphone" = { id = deviceIds.iphone; };
-        "paprika" = { id = deviceIds.paprika; };
-        "patlabor" = { id = deviceIds.patlabor; };
-        "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
-        "aynthor" = { id = deviceIds.aynthor; };
-        "mindgame-windows" = { id = deviceIds.mindgame-windows; };
-      };
-      folders = {
-        "Main" = {
-          path = folders.notes;
-          devices = [ "iphone" "paprika" "patlabor" "mindgame-nixos" "mindgame-windows" ];
-          ignorePerms = true;
-        };
-      } // gameFolders // {
+      devices.aynthor.id = topology.devices.aynthor;
+      folders = { Main.ignorePerms = true; } // gameFolders // {
         "saves" = gameFolder "Saves";
-      };
-      options = {
-        minHomeDiskFree = {
-          unit = "GB";
-          value = 1;
-        };
       };
     };
   };
-
-  # Syncthing ports
-  networking.firewall.allowedTCPPorts = [ 8384 22000 ];
-  networking.firewall.allowedUDPPorts = [ 22000 ];
 }

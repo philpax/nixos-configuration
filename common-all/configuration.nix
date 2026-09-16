@@ -9,7 +9,7 @@
   imports =
     [
       /etc/nixos/hardware-configuration.nix
-      (import ./services { inherit config pkgs; })
+      (import ./services { inherit config lib pkgs; })
       (import ./programs { inherit config pkgs; })
     ];
 

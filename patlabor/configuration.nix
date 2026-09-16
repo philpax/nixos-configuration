@@ -10,13 +10,13 @@
       ../common-desktop/nvidia.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
-      (import ./services { inherit config pkgs; })
     ];
 
   system.stateVersion = "26.05";
 
   time.timeZone = "Asia/Tokyo";
   networking.hostName = "patlabor";
+  philpax.syncthing.device = "patlabor";
 
   # Bus IDs from /sys/bus/pci/devices.
   services.xserver.videoDrivers = [ "nvidia" ];

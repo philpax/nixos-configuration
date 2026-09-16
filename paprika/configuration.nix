@@ -8,7 +8,6 @@
       ../common-desktop/configuration.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
-      (import ./services { inherit config pkgs; })
     ];
 
   system.stateVersion = "24.11";
@@ -36,4 +35,5 @@
 
   time.timeZone = "Asia/Tokyo";
   networking.hostName = "paprika";
+  philpax.syncthing.device = "paprika";
 }
