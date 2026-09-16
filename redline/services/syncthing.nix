@@ -39,6 +39,7 @@ in {
       devices = {
         "iphone" = { id = deviceIds.iphone; };
         "paprika" = { id = deviceIds.paprika; };
+        "patlabor" = { id = deviceIds.patlabor; };
         "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
         "aynthor" = { id = deviceIds.aynthor; };
         "mindgame-windows" = { id = deviceIds.mindgame-windows; };
@@ -46,7 +47,7 @@ in {
       folders = {
         "Main" = {
           path = folders.notes;
-          devices = [ "iphone" "paprika" "mindgame-nixos" "mindgame-windows" ];
+          devices = [ "iphone" "paprika" "patlabor" "mindgame-nixos" "mindgame-windows" ];
           ignorePerms = true;
         };
       } // gameFolders // {

@@ -14,13 +14,12 @@ in {
     settings = {
       devices = {
         "redline" = { id = deviceIds.redline; };
-        "paprika" = { id = deviceIds.paprika; };
-        "patlabor" = { id = deviceIds.patlabor; };
+        "mindgame-nixos" = { id = deviceIds.mindgame-nixos; };
       };
       folders = {
         "Main" = {
           path = "${config.users.users.${config.mainUser}.home}/notes/Main";
-          devices = [ "redline" "paprika" "patlabor" ];
+          devices = [ "redline" "mindgame-nixos" ];
         };
       };
       options = {
