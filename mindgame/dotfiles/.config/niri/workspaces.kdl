@@ -1,0 +1,33 @@
+workspace "main" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "work" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "ananke" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "jc3vrs" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "zuihitsu" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "website" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "pyxis" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "balatro" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "gis" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "music" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "pkb" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}

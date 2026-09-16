@@ -1,0 +1,4 @@
+workspace "main"
+workspace "website"
+workspace "music"
+workspace "pkb"

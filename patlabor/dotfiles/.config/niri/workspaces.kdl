@@ -1,0 +1,5 @@
+workspace "main"
+workspace "biome"
+workspace "stream"
+workspace "website"
+workspace "music"

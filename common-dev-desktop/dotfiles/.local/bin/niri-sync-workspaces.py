@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""niri-sync-workspaces — write currently named Niri workspaces into config.kdl.
+"""niri-sync-workspaces — write currently named Niri workspaces into workspaces.kdl.
 
 Reads the live workspace list from ``niri msg -j workspaces``, resolves each
-workspace's output to the "<make> <model> <serial>" name config.kdl uses (via
-``niri msg -j outputs``), and replaces the contiguous run of
-``workspace "..." { open-on-output "..." }`` blocks in config.kdl with exactly
-the currently open named workspaces, in their live order.
+workspace's output to the "<make> <model> <serial>" name the config uses (via
+``niri msg -j outputs``), and replaces the contiguous run of ``workspace``
+blocks in ~/.config/niri/workspaces.kdl (the per-machine file included from
+config.kdl) with exactly the currently open named workspaces, in their live
+order. With a single output the blocks omit ``open-on-output``.
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG_PATH = Path.home() / ".config" / "niri" / "config.kdl"
+CONFIG_PATH = Path.home() / ".config" / "niri" / "workspaces.kdl"
 
-BLOCK_RE = re.compile(r'workspace "([^"]+)" \{\n    open-on-output "([^"]+)"\n\}\n?')
+BLOCK_RE = re.compile(r'workspace "([^"]+)"(?: \{\n    open-on-output "([^"]+)"\n\})?\n?')
 
 
 def niri_json(*args: str) -> object:
@@ -28,8 +29,12 @@ def niri_json(*args: str) -> object:
     return json.loads(result.stdout)
 
 
-def current_workspaces() -> list[tuple[str, str]]:
-    """Named workspaces from the live session as (name, output_name), by idx."""
+def current_workspaces() -> list[tuple[str, str | None]]:
+    """Named workspaces from the live session as (name, output_name), by idx.
+
+    output_name is None when the session has a single output, so the written
+    blocks don't pin workspaces to a laptop panel.
+    """
     workspaces = niri_json("workspaces")
     outputs = niri_json("outputs")
     named = [w for w in workspaces if w["name"] is not None]
@@ -40,11 +45,13 @@ def current_workspaces() -> list[tuple[str, str]]:
         if output is None:
             continue
         output_name = f"{output['make']} {output['model']} {output['serial']}"
-        result.append((w["name"], output_name))
+        result.append((w["name"], output_name if len(outputs) > 1 else None))
     return result
 
 
-def render_block(name: str, output: str) -> str:
+def render_block(name: str, output: str | None) -> str:
+    if output is None:
+        return f'workspace "{name}"\n'
     return f'workspace "{name}" {{\n    open-on-output "{output}"\n}}\n'
 
 
@@ -55,9 +62,6 @@ def main() -> int:
 
     text = CONFIG_PATH.read_text()
     matches = list(BLOCK_RE.finditer(text))
-    if not matches:
-        print("error: no workspace blocks found in config.kdl", file=sys.stderr)
-        return 1
 
     # Confirm the matches form one contiguous run, and that no other
     # 'workspace "' occurrences exist outside it — otherwise bail rather than
@@ -65,14 +69,17 @@ def main() -> int:
     for a, b in zip(matches, matches[1:]):
         if a.end() != b.start():
             print(
-                "error: workspace blocks aren't contiguous; edit config.kdl by hand",
+                "error: workspace blocks aren't contiguous; edit workspaces.kdl by hand",
                 file=sys.stderr,
             )
             return 1
-    span_start, span_end = matches[0].start(), matches[-1].end()
+    if matches:
+        span_start, span_end = matches[0].start(), matches[-1].end()
+    else:
+        span_start = span_end = len(text)
     if 'workspace "' in text[:span_start] or 'workspace "' in text[span_end:]:
         print(
-            "error: found workspace blocks outside the main run; edit config.kdl by hand",
+            "error: found workspace blocks outside the main run; edit workspaces.kdl by hand",
             file=sys.stderr,
         )
         return 1
@@ -86,7 +93,7 @@ def main() -> int:
         return 1
 
     if current == existing:
-        print("niri-sync-workspaces: config.kdl already up to date")
+        print("niri-sync-workspaces: workspaces.kdl already up to date")
         return 0
 
     new_section = "".join(render_block(name, output) for name, output in current)
