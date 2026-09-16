@@ -7,6 +7,7 @@
       ../common-all/configuration.nix
       ../common-ai/configuration.nix
       ../common-desktop/configuration.nix
+      ../common-desktop/nvidia.nix
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ./nixpkgs-xr.nix
@@ -69,9 +70,7 @@
       '';
     in
     "${pkgs.weston}/bin/weston --shell=kiosk -c ${greeterIni}";
-  # hardware.nvidia.package is set in ./nvidia-bsb-dsc.nix — it wraps
-  # nvidiaPackages.latest to patch the open kernel modules for the Bigscreen
-  # Beyond's DSC quirks.
+  # hardware.nvidia.package: ../common-desktop/nvidia.nix, plus ./nvidia-bsb-dsc.nix patches.
   hardware.graphics.enable = true;
   hardware.nvidia.modesetting.enable = true;
 
