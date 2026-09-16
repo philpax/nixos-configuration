@@ -1,5 +1,5 @@
 #!/bin/sh
-# Shared autostart for Wayland compositors (niri, driftwm, etc.)
+# Shared autostart for Wayland compositors (niri).
 
 qs &
 mako &
