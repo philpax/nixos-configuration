@@ -15,6 +15,7 @@ on:
       - "jinroh/**"
       - "mindgame/**"
       - "paprika/**"
+      - "patlabor/**"
       - "redline/**"
   pull_request:
     paths:
@@ -29,6 +30,7 @@ on:
       - "jinroh/**"
       - "mindgame/**"
       - "paprika/**"
+      - "patlabor/**"
       - "redline/**"
 
 jobs:

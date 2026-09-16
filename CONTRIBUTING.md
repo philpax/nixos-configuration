@@ -31,6 +31,7 @@ common-dev-desktop/  → Niri compositor, Waybar, Alacritty, Steam, Wine
 jinroh/
 mindgame/
 paprika/
+patlabor/
 redline/
 ```
 
@@ -62,6 +63,7 @@ read `config.mainUser` for the name and
 **Machine import patterns:**
 - **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
 - **paprika**: common-all + common-desktop + common-dev + common-dev-desktop + ThinkPad T480s hardware
+- **patlabor**: common-all + common-desktop + common-dev + common-dev-desktop + Zephyrus G14 GU405AR hardware (Intel Panther Lake + NVIDIA Blackwell as PRIME offload, asusd)
 - **mindgame**: common-all + common-ai + common-desktop + common-dev + common-dev-desktop + NVIDIA/Docker/ML
 - **redline**: common-all + common-ai + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
 
@@ -88,7 +90,7 @@ pattern as the repo's own project-local `.claude/skills → .agents/skills`.
 Skills are stored per-layer at `<layer>/dotfiles/.agents/skills/<name>/`, so a
 machine gets a skill only if it includes that layer; the shared dev-workflow
 skills (committing, GitHub issues, contributing docs, prose) live in
-`common-dev/dotfiles/.agents/skills/` and reach the dev machines (paprika,
+`common-dev/dotfiles/.agents/skills/` and reach the dev machines (paprika, patlabor,
 mindgame, redline), not jinroh.
 
 Skills marked with a `.work-compatible` marker file are additionally symlinked
