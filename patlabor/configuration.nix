@@ -46,6 +46,36 @@
     driversi686Linux.intel-media-driver
   ];
 
+  # nixpkgs' alsa-ucm-conf 1.2.15.3 mis-parses this card's combined speaker
+  # component (spk:cs35l56+cs42l43-spk), so UCM fails and PipeWire falls back
+  # to the jack PCM with no speakers. Point PipeWire at a release that parses it
+  # via ALSA_CONFIG_UCM2 instead of overlaying alsa-lib (world rebuild).
+  systemd.user.services =
+    let
+      ucm = pkgs.alsa-ucm-conf.overrideAttrs (old: rec {
+        version = "1.2.16.1";
+        src = pkgs.fetchFromGitHub {
+          owner = "alsa-project";
+          repo = "alsa-ucm-conf";
+          rev = "v${version}";
+          hash = "sha256-PBhA5hgwnIB/8h+tikP1PisIY1qrmrs06YzU32lD+bU=";
+        };
+        patches = [ ]; # nixpkgs' Volt2 patch is already upstream
+        # PipeWire's mute control is remapped to both the codec switch and the
+        # amp switches under one name, and only the amps take; enable the codec
+        # (tweeter) switch with the device instead, or the speakers sound muffled.
+        postPatch = (old.postPatch or "") + ''
+          sed -i "/^\tEnableSequence \[/a\\\t\tcset \"name='cs42l43 Speaker Digital Switch' on,on\"" \
+            ucm2/sof-soundwire/cs42l43-spk.conf
+        '';
+      });
+      env.ALSA_CONFIG_UCM2 = "${ucm}/share/alsa/ucm2";
+    in
+    {
+      pipewire.environment = env;
+      wireplumber.environment = env;
+    };
+
   services.asusd.enable = true;
   # The unit binds /etc/asusd rw, but nixpkgs only creates it when a config is set.
   systemd.tmpfiles.rules = [ "d /etc/asusd 0755 root root -" ];
