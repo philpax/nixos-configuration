@@ -49,7 +49,12 @@ set_wallpaper() {
 
 set_wallpaper "Microstep MSI MAG342CQR DB6H261C01393" ~/wallpapers/21x9/wallhaven-vq72xm.png
 set_wallpaper "Dell Inc. DELL U2723QE F31Q0P3" ~/wallpapers/9x16/wallhaven-7j91ee.png
-set_wallpaper "eDP-1" ~/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg
+# patlabor is 16:10, paprika is 16:9.
+if [ "$(hostname)" = patlabor ]; then
+    set_wallpaper "eDP-1" ~/wallpapers/16x10/wallhaven-zp523j.jpg
+else
+    set_wallpaper "eDP-1" ~/wallpapers/16x9/Half_Life_2_Episode_Three_concept_2.jpg
+fi
 
 sunsetr &
 
