@@ -18,6 +18,8 @@ in
   services.gvfs.enable = true;
   services.udisks2.enable = true;
   services.upower.enable = true;
+  hardware.bluetooth.enable = true;
+  services.blueman.enable = true;
   services.udev.packages = [ pkgs.libgphoto2 ];
 
   # Niri compositor + fork/config selection: see ./niri.nix.
@@ -59,7 +61,6 @@ in
     ffmpegthumbnailer  # video thumbnails/previews in nautilus
     file-roller
     networkmanagerapplet
-    blueman
     xwayland-satellite
     volantes-cursors
     swaybg
