@@ -1,0 +1,11 @@
+#!/bin/sh
+# brightnessctl on the backlight wired to the internal panel: the one whose
+# sysfs device is a DRM eDP connector. Optimus laptops also get an inert
+# nvidia_0 from the NVIDIA driver, which brightnessctl may list first.
+dev=
+for d in /sys/class/backlight/*; do
+    case "$(readlink -f "$d/device" 2>/dev/null)" in
+        *-eDP-*) dev=$(basename "$d"); break ;;
+    esac
+done
+exec brightnessctl ${dev:+-d "$dev"} "$@"

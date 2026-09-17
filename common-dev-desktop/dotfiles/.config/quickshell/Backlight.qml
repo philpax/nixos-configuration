@@ -9,7 +9,7 @@ Pill {
     Poller {
         id: poll
         interval: 10000
-        command: ["sh", "-c", "for d in /sys/class/backlight/*/brightness; do [ -r \"$d\" ] || continue; m=${d%/brightness}/max_brightness; b=$(cat \"$d\"); x=$(cat \"$m\"); echo $(((b*100+x/2)/x)); exit; done; echo n/a"]
+        command: ["sh", "-c", "~/.local/bin/panel-backlight -m 2>/dev/null | head -1 | cut -d, -f4 | tr -d % | grep . || echo n/a"]
     }
     MouseArea {
         anchors.fill: parent
@@ -27,7 +27,7 @@ Pill {
             wheelAccum -= steps * 120;
             const current = steps > 0 ? Math.floor(value / 5) * 5 : Math.ceil(value / 5) * 5;
             const next = Math.max(0, Math.min(100, current + steps * 5));
-            Quickshell.execDetached(["brightnessctl", "set", next + "%"]);
+            Quickshell.execDetached(["sh", "-c", "~/.local/bin/panel-backlight set " + next + "%"]);
             poll.value = String(next);
         }
     }
