@@ -33,3 +33,6 @@ shell-integration-features = ssh-env,ssh-terminfo
 bell-features = audio,title,attention
 bell-audio-path = /run/current-system/sw/share/sounds/ocean/stereo/bell-window-system.oga
 bell-audio-volume = 1
+
+# Per-machine overrides from <machine>/dotfiles/.config/ghostty/machine; last wins.
+config-file = ?machine
