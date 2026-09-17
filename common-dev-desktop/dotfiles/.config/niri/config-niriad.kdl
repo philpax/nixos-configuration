@@ -68,8 +68,9 @@ input {
     focus-follows-mouse max-scroll-amount="0%"
 }
 
-// Per-machine outputs and named workspaces live in <machine>/dotfiles/.config/niri/.
+// Per-machine outputs, named workspaces and other overrides live in <machine>/dotfiles/.config/niri/.
 include optional=true "outputs.kdl"
+include optional=true "machine.kdl"
 
 cursor {
     xcursor-theme "volantes_light_cursors"

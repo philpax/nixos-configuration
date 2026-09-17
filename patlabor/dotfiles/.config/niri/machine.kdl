@@ -1,0 +1,8 @@
+// The FocalTech pad reports no pressure or size, so a resting palm counts as a
+// finger and every tap becomes a two-finger tap. Physical clicks only.
+input {
+    touchpad {
+        natural-scroll
+        click-method "button-areas"
+    }
+}
