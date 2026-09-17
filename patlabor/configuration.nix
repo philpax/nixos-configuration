@@ -88,7 +88,9 @@
   }];
   # Offset from `btrfs inspect-internal map-swapfile -r /swapfile`; redo if the file is recreated.
   boot.resumeDevice = "/dev/mapper/luks-134c8196-65af-47c0-a9aa-1f6d940119e5";
-  boot.kernelParams = [ "resume_offset=6563072" ];
+  # The OLED is only dimmable over DP AUX. The panel advertises both AUX
+  # interfaces; the driver's pick (=1, Intel HDR) blanks it, VESA (=2) works.
+  boot.kernelParams = [ "resume_offset=6563072" "xe.enable_dpcd_backlight=2" ];
 
   services.logind.settings.Login = {
     HandleLidSwitch = "suspend-then-hibernate";
