@@ -63,7 +63,7 @@ read `config.mainUser` for the name and
 **Machine import patterns:**
 - **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
 - **paprika**: common-all + common-desktop + common-dev + common-dev-desktop + ThinkPad T480s hardware
-- **patlabor**: common-all + common-desktop + common-dev + common-dev-desktop + Zephyrus G14 GU405AR hardware (Intel Panther Lake + NVIDIA Blackwell as PRIME offload, asusd)
+- **patlabor**: common-all + common-desktop + common-dev + common-dev-desktop + Zephyrus G14 GU405AR hardware (Intel Panther Lake + NVIDIA Blackwell as PRIME offload, asusd); `power.nix` boots the dGPU off the bus via supergfxd and follows the AC adapter with a power profile, and `gfx perf` / `gfx battery` switch between the two
 - **mindgame**: common-all + common-ai + common-desktop + common-dev + common-dev-desktop + NVIDIA/Docker/ML
 - **redline**: common-all + common-ai + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
 
