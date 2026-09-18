@@ -40,6 +40,9 @@ let
         powerprofilesctl set performance
         ;;
       battery|off|integrated)
+        # With no_logind set there is no logout gate left to catch this, and
+        # niri is still holding card1, so say so rather than let it look clean.
+        echo "note: niri holds the dGPU; reboot if the card does not go away." >&2
         supergfxctl --mode Integrated
         powerprofilesctl set balanced
         ;;
@@ -78,6 +81,11 @@ in
   # patches the file in place instead.
   services.supergfxd.enable = true;
 
+  # The nixpkgs module gives the unit kmod and pciutils only, so supergfxd logs
+  # "The lsof util is missing from your system" and cannot identify processes
+  # holding the card when it tries to take it off the bus.
+  systemd.services.supergfxd.path = [ pkgs.lsof ];
+
   # The mode has to be right *before* supergfxd starts, not after. Asking the
   # running daemon to switch is what the first version did, and it fails: with
   # no mode configured supergfxd starts in Hybrid, modprobes the nvidia stack
@@ -85,8 +93,15 @@ in
   # times out. Pinning the config first means the daemon comes up integrated
   # having never loaded the driver at all.
   #
-  # Only mode and hotplug_type are rewritten, so anything else the daemon
-  # persists survives; the fallback is only for a machine that has never run it.
+  # no_logind drops supergfxd's logout gate. It gates every mode change while a
+  # graphical session exists, without distinguishing adding the card from
+  # removing it, so turning the dGPU on — which only adds a PCI device and loads
+  # the driver — otherwise costs a logout for no reason. Turning it back off is
+  # the direction that genuinely wants the session gone, since niri holds card1;
+  # reboot for that rather than trusting gfx battery to unpick it live.
+  #
+  # Only these three keys are rewritten, so anything else the daemon persists
+  # survives; the fallback is only for a machine that has never run it.
   systemd.services.supergfxd-boot-integrated = {
     description = "Pin supergfxd to Integrated before it starts";
     before = [ "supergfxd.service" ];
@@ -95,7 +110,7 @@ in
     script = ''
       conf=/etc/supergfxd.conf
       if [ -s "$conf" ]; then
-        ${pkgs.jq}/bin/jq '.mode = "Integrated" | .hotplug_type = "Asus"' "$conf" > "$conf.new"
+        ${pkgs.jq}/bin/jq '.mode = "Integrated" | .hotplug_type = "Asus" | .no_logind = true' "$conf" > "$conf.new"
         mv "$conf.new" "$conf"
       else
         cat > "$conf" <<'JSON'
@@ -104,7 +119,7 @@ in
         "vfio_enable": false,
         "vfio_save": false,
         "always_reboot": false,
-        "no_logind": false,
+        "no_logind": true,
         "logout_timeout_s": 180,
         "hotplug_type": "Asus"
       }
