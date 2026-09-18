@@ -119,10 +119,13 @@ in
   # it, so make sure it is there by then.
   boot.kernelModules = [ "asus_nb_wmi" ];
 
+  # Deliberately not ordered after power-profiles-daemon: that closes a cycle
+  # through multi-user.target and systemd resolves it by dropping this job from
+  # the boot transaction altogether, which is how the first version silently
+  # never ran. Nothing is lost by omitting it, because powerprofilesctl talks to
+  # a D-Bus activatable service and will start the daemon on demand.
   systemd.services.ac-power-profile = {
     description = "Follow the AC adapter with a power-profiles-daemon profile";
-    after = [ "power-profiles-daemon.service" ];
-    wants = [ "power-profiles-daemon.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig.Type = "oneshot";
     # balanced rather than power-saver on battery: power-saver measured only
