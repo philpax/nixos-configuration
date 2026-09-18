@@ -46,9 +46,9 @@ let
       status)
         echo "graphics: $(supergfxctl --get)"
         echo "profile:  $(powerprofilesctl get)"
-        # current_now reads 0 or reverses sign while charging, so this line is
-        # only meaningful on battery.
-        if [ -r /sys/class/power_supply/BAT1/current_now ]; then
+        # current_now is the charge current while plugged in, not consumption,
+        # so a draw figure is only meaningful while discharging.
+        if [ "$(cat /sys/class/power_supply/BAT1/status 2>/dev/null)" = Discharging ]; then
           ${pkgs.gawk}/bin/awk \
             -v v="$(cat /sys/class/power_supply/BAT1/voltage_now)" \
             -v c="$(cat /sys/class/power_supply/BAT1/current_now)" \
