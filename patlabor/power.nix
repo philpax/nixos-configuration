@@ -140,6 +140,18 @@ in
     '';
   };
 
+  # dynamicBoost only means anything in Hybrid, but the nvidia module wants
+  # nvidia-powerd at multi-user.target, so in Integrated mode it starts with no
+  # GPU to talk to, fails with "Allocate Root client failed", and takes the exit
+  # status of the whole nixos-rebuild with it. supergfxd starts and stops the
+  # daemon along with the mode, so the boot-time want is redundant; the
+  # condition makes it skip rather than fail if anything else asks for it while
+  # the card is off the bus.
+  systemd.services.nvidia-powerd = {
+    wantedBy = lib.mkForce [ ];
+    unitConfig.ConditionPathExists = "/sys/bus/pci/devices/0000:01:00.0";
+  };
+
   services.udev.extraRules = ''
     SUBSYSTEM=="power_supply", ATTR{online}=="?*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ac-power-profile.service"
   '';
