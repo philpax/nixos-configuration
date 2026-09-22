@@ -11,6 +11,7 @@
       ../common-dev/programs/development.nix
       ../common-dev-desktop/configuration.nix
       ./power.nix
+      ./sleep.nix
     ];
 
   system.stateVersion = "26.05";
