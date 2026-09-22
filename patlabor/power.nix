@@ -162,9 +162,44 @@ in
   # daemon along with the mode, so the boot-time want is redundant; the
   # condition makes it skip rather than fail if anything else asks for it while
   # the card is off the bus.
+  #
+  # The dynamicBoost udev rule also starts it on the power_supply events udev
+  # replays at boot, which can land while supergfxd is still unloading the
+  # driver and pin the module. Waiting on dgpu-settled first means the path
+  # condition sees no card by the time it is evaluated.
   systemd.services.nvidia-powerd = {
     wantedBy = lib.mkForce [ ];
+    wants = [ "dgpu-settled.service" ];
+    after = [ "dgpu-settled.service" ];
     unitConfig.ConditionPathExists = "/sys/bus/pci/devices/0000:01:00.0";
+  };
+
+  # supergfxd claims its bus name before the rmmod pass, so `After=` on it is
+  # not enough; wait for the module and the card to actually be gone. The SDDM
+  # greeter can otherwise open card1 in that window and pin the driver.
+  systemd.services.dgpu-settled = {
+    description = "Wait for supergfxd to finish taking the dGPU off the bus";
+    wants = [ "supergfxd.service" ];
+    after = [ "supergfxd.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      mode=$(${pkgs.jq}/bin/jq -r .mode /etc/supergfxd.conf 2>/dev/null || echo Integrated)
+      [ "$mode" = Integrated ] || exit 0
+      for _ in $(seq 60); do
+        if ! grep -q '^nvidia ' /proc/modules && [ ! -e /sys/bus/pci/devices/0000:01:00.0 ]; then
+          exit 0
+        fi
+        sleep 0.5
+      done
+      echo "dGPU still present after 30 s; continuing anyway" >&2
+    '';
+  };
+  systemd.services.display-manager = {
+    wants = [ "dgpu-settled.service" ];
+    after = [ "dgpu-settled.service" ];
   };
 
   services.udev.extraRules = ''
