@@ -1,0 +1,19 @@
+Config(
+  x: Fraction(0.5),
+  y: Fraction(0.3),
+  width: Absolute(640),
+  height: Absolute(1),
+  hide_icons: false,
+  ignore_exclusive_zones: false,
+  layer: Overlay,
+  hide_plugin_info: true,
+  close_on_click: true,
+  show_results_immediately: false,
+  max_entries: None,
+  // Order is result priority. Plugins are loaded from ANYRUN_PLUGINS, which
+  // the nixpkgs wrapper points at the bundled plugin directory.
+  plugins: [
+    "libapplications.so",
+    "librink.so",
+  ],
+)

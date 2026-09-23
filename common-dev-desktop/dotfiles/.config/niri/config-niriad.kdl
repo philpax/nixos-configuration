@@ -357,7 +357,8 @@ window-rule {
     }
 }
 
-// Enable blur behind the fuzzel launcher.
+// Enable blur behind fuzzel. anyrun is left out: its layer surface spans the
+// whole output, so blurring it hides everything.
 layer-rule {
     match namespace="^launcher$"
 
@@ -385,7 +386,7 @@ binds {
 
     // Programs (sway: $mod+Return terminal, $mod+d launcher).
     Mod+Return { spawn "ghostty"; }
-    Mod+D      { spawn "fuzzel"; }
+    Mod+D      { spawn "anyrun"; }
     Super+Alt+L { spawn "swaylock"; }
 
     // Media keys.

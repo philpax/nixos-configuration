@@ -50,7 +50,8 @@ in
     alacritty
     ghostty
     kdePackages.ocean-sound-theme  # Ghostty and GTK audible bell sound
-    fuzzel
+    fuzzel  # dmenu backend for audio-action.sh / window-action.sh
+    anyrun  # Mod+D launcher; rink plugin gives live arithmetic and unit conversion
     polkit_gnome
     swaylock
     swayidle

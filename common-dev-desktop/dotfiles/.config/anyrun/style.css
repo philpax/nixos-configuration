@@ -1,0 +1,54 @@
+/* Matches the fuzzel palette: translucent black, catppuccin text. */
+@define-color bg-color rgba(0, 0, 0, 0.85);
+@define-color fg-color #cdd6f4;
+@define-color desc-color #7f849c;
+@define-color selection #585b70;
+@define-color accent #f5e0dc;
+
+* {
+  font-family: Cozette;
+  font-size: 10pt;
+}
+
+window {
+  background: transparent;
+}
+
+box.main {
+  padding: 4px;
+  background-color: @bg-color;
+}
+
+text {
+  min-height: 24px;
+  padding: 4px 8px;
+  color: @fg-color;
+  background-color: transparent;
+}
+
+.matches,
+list.plugin {
+  background-color: transparent;
+}
+
+box.plugin:first-child {
+  margin-top: 4px;
+}
+
+label.match {
+  color: @fg-color;
+}
+
+label.match.description {
+  color: @desc-color;
+}
+
+.match {
+  padding: 2px 8px;
+  background: transparent;
+}
+
+.match:selected {
+  background: @selection;
+  border-left: 2px solid @accent;
+}
