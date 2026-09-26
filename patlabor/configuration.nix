@@ -12,6 +12,7 @@
       ../common-dev-desktop/configuration.nix
       ./power.nix
       ./sleep.nix
+      ./slash-clock.nix
     ];
 
   system.stateVersion = "26.05";
