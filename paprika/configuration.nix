@@ -33,7 +33,6 @@
   # cost — it is control equivalent to root over the engine.
   users.users.${config.mainUser}.extraGroups = [ "docker" ];
 
-  time.timeZone = "Asia/Tokyo";
   networking.hostName = "paprika";
   philpax.syncthing.device = "paprika";
 }

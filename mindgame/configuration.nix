@@ -24,7 +24,6 @@
     (import ./overlays/igpu-offload.nix)
   ];
 
-  time.timeZone = "Europe/Stockholm";
   networking.hostName = "mindgame";
   philpax.syncthing.device = "mindgame-nixos";
 

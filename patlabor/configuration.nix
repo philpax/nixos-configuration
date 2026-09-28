@@ -17,7 +17,6 @@
 
   system.stateVersion = "26.05";
 
-  time.timeZone = "Asia/Tokyo";
   networking.hostName = "patlabor";
   philpax.syncthing.device = "patlabor";
 
