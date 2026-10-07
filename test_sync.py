@@ -1208,6 +1208,13 @@ class TestBuildLayeredPluginSymlinks:
 
         assert symlinks == [(target / "deep-plan", machine)]
 
+    def test_repo_plugins_are_found(self):
+        """The repository's own plugins carry a manifest and get linked."""
+        symlinks = sync.build_layered_plugin_symlinks(
+            sync.TARGETS_ROOT, Path("/plugins"), "paprika", ["common-dev"]
+        )
+        assert Path("/plugins/deep-plan") in [t for t, _ in symlinks]
+
 
 class TestSkillsSyncMode:
     def _make_source_skill(self, root, name):

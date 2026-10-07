@@ -112,6 +112,16 @@ directory-symlinks each one into `~/.local/share/claude-plugins/<name>`, and
 `CLAUDE_CODE_PLUGIN_DIRS` at every directory there, so both the personal and
 the work account (`claudew`) load them. They are invisible to other agents.
 
+`deep-plan` ports Polytoken's plan and execute facets. `/deep-plan [request]`
+enters the read-only plan facet: the facet prompt goes into the system prompt,
+Write/Edit/todo tools are refused, Bash commands outside a read-only allowlist
+go through a Haiku judge, and the model writes its plan with
+`write_plan`/`edit_plan`, reviews it with the `deep-plan:plan-reviewer` agent,
+and submits it with `handoff_plan`. Approving can clear the context, replacing
+the transcript with the plan before the execute facet starts. `/facet` shows or
+switches the facet. The prompts are Markdown under `prompts/`; a repository's
+own `.claude/plan-spec.md` overrides the plan spec.
+
 Validate, test and type-check a plugin from its directory:
 
 ```bash

@@ -1,0 +1,10 @@
+{
+  "name": "deep-plan",
+  "version": "0.1.0",
+  "description": "Polytoken's plan and execute facets: read-only planning with enforced guards, plan tools, review loop and handoff",
+  "author": {
+    "name": "Philpax",
+    "email": "me@philpax.me"
+  },
+  "types": "./types/index.d.ts"
+}
