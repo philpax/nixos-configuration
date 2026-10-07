@@ -140,9 +140,10 @@ in
       before = [ "ananke.service" ];
       # Rootless Podman shells out to newuidmap/newgidmap, which only work as
       # the setuid wrappers in /run/wrappers/bin — the shadow package's own
-      # binaries lack the capabilities.
+      # binaries lack the capabilities. `path` appends /bin to each entry, so
+      # this names the wrapper root rather than /run/wrappers/bin.
       inherit environment;
-      path = [ pkgs.podman pkgs.coreutils "/run/wrappers/bin" ];
+      path = [ pkgs.podman pkgs.coreutils "/run/wrappers" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;

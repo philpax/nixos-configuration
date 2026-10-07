@@ -301,7 +301,7 @@ in
         HOME = config.users.users.${config.mainUser}.home;
         LD_LIBRARY_PATH = "/run/opengl-driver/lib";
       };
-      path = [ pkgs.podman pkgs.curl pkgs.bash config.security.wrapperDir ];
+      path = [ pkgs.podman pkgs.curl pkgs.bash "/run/wrappers" ];
     };
 
     # Per-service ports are loopback-only (allowExternalServices defaults to

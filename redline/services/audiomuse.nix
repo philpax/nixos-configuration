@@ -203,7 +203,7 @@ in
           Group = "ai";
           Environment = [ "HOME=/home/ai" ];
         };
-        path = [ pkgs.podman pkgs.coreutils "/run/wrappers/bin" ];
+        path = [ pkgs.podman pkgs.coreutils "/run/wrappers" ];
         script = ''
           export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
           podman network exists audiomuse || podman network create audiomuse
@@ -223,7 +223,7 @@ in
           Group = "ai";
           Environment = [ "HOME=/home/ai" ];
         };
-        path = [ pkgs.podman pkgs.gzip pkgs.coreutils "/run/wrappers/bin" ];
+        path = [ pkgs.podman pkgs.gzip pkgs.coreutils "/run/wrappers" ];
         script = ''
           set -euo pipefail
           export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
