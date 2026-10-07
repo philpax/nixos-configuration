@@ -13,7 +13,9 @@ Skills are symlinked into the canonical ~/.agents/skills tree (which
 Polytoken discovers), with Claude Code personal wired to the same tree via
 ~/.claude/skills -> ~/.agents/skills. Work-account skills additionally go to
 ~/.claude-work/skills; the work-account set is the skills marked
-.work-compatible.
+.work-compatible. Claude Code plugins (mods) are directory-symlinked into
+~/.local/share/claude-plugins, which the fish config hands to every Claude
+Code account through CLAUDE_CODE_PLUGIN_DIRS.
 
 Only the common-* layers that the machine's configuration.nix actually imports
 are synced — mirrors the NixOS import hierarchy so e.g. a headless machine
@@ -91,6 +93,13 @@ AGENTS_SKILLS_TARGET = Path.home() / ".agents" / "skills"
 CLAUDE_WORK_SKILLS_DIR = Path.home() / ".claude-work"
 CLAUDE_WORK_SKILLS_TARGET = CLAUDE_WORK_SKILLS_DIR / "skills"
 WORK_COMPATIBLE_MARKER = ".work-compatible"
+
+# Claude Code plugins (mods) live per-layer at <layer>/dotfiles/.claude-plugins/<name>
+# and are directory-symlinked into ~/.local/share/claude-plugins/<name>, like the
+# skills. common-dev's fish conf.d sets CLAUDE_CODE_PLUGIN_DIRS to every
+# directory there, so the personal and work accounts both load them.
+CLAUDE_PLUGINS_SUBPATH = Path(".claude-plugins")
+CLAUDE_PLUGINS_TARGET = Path.home() / ".local" / "share" / "claude-plugins"
 
 # Steel plugins ("cogs") for the plugin-enabled Helix fork are git submodules under
 # steel-cogs/. Each is directory-symlinked into steel's cog root ($STEEL_HOME/cogs; STEEL_HOME
@@ -315,6 +324,11 @@ def build_symlink_list(
             if strip_layer_prefix and relative.parts[0].startswith(".agents"):
                 continue
 
+            # Likewise the per-layer Claude Code plugin sources, which
+            # build_layered_plugin_symlinks links as whole directories.
+            if strip_layer_prefix and relative.parts[0] == str(CLAUDE_PLUGINS_SUBPATH):
+                continue
+
             target_path = target_dir / relative
             symlinks.append((target_path, source_path))
 
@@ -446,6 +460,31 @@ def classify_stale(
         else:
             remaining.append(path)
     return cc_stale, work_stale, remaining
+
+
+def build_layered_plugin_symlinks(
+    targets_root: Path,
+    target_dir: Path,
+    folder_name: str,
+    allowed_layers: list[str],
+) -> list[tuple[Path, Path]]:
+    """Collect Claude Code plugin links across every layer the machine syncs.
+
+    Plugins are stored per-layer at ``<layer>/dotfiles/.claude-plugins/<name>``;
+    a directory counts as one when it holds ``.claude-plugin/plugin.json``. Each
+    becomes a directory symlink at ``target_dir/<name>``, and a machine-specific
+    layer wins over the shared common-* layers for a plugin of the same name.
+    """
+    layers = [*allowed_layers, folder_name]
+    by_target: dict[Path, Path] = {}
+    for layer in layers:
+        plugins_dir = targets_root / layer / "dotfiles" / CLAUDE_PLUGINS_SUBPATH
+        if not plugins_dir.is_dir():
+            continue
+        for entry in sorted(plugins_dir.iterdir()):
+            if entry.is_dir() and (entry / ".claude-plugin" / "plugin.json").is_file():
+                by_target[target_dir / entry.name] = entry
+    return sorted(by_target.items())
 
 
 def build_cog_symlinks(
@@ -739,6 +778,9 @@ def _init_state(folder_name: str) -> None:
     )
     cc_personal_symlink = build_cc_personal_wiring(AGENTS_SKILLS_TARGET)
     work_skill_symlinks = build_work_skill_symlinks(SHARED_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET)
+    plugin_symlinks = build_layered_plugin_symlinks(
+        TARGETS_ROOT, CLAUDE_PLUGINS_TARGET, folder_name, all_common
+    )
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
 
     all_symlinks = (
@@ -747,6 +789,7 @@ def _init_state(folder_name: str) -> None:
         + skill_symlinks
         + cc_personal_symlink
         + work_skill_symlinks
+        + plugin_symlinks
         + cog_symlinks
     )
     total = len(all_symlinks)
@@ -844,6 +887,12 @@ def main():
     # composition.
     work_skill_symlinks = build_work_skill_symlinks(SHARED_SKILLS_SOURCE, CLAUDE_WORK_SKILLS_TARGET)
 
+    # Symlink Claude Code plugins (mods) into ~/.local/share/claude-plugins,
+    # following the layer hierarchy like the skills.
+    plugin_symlinks = build_layered_plugin_symlinks(
+        TARGETS_ROOT, CLAUDE_PLUGINS_TARGET, folder_name, imported_layers
+    )
+
     # Symlink Steel cogs into $STEEL_HOME/cogs for the plugin-enabled Helix.
     # These are common to all machines (helix-steel lives in common-all).
     cog_symlinks = build_cog_symlinks(STEEL_COGS_SOURCE, STEEL_COGS_TARGET)
@@ -854,6 +903,7 @@ def main():
         + skill_symlinks
         + cc_personal_symlink
         + work_skill_symlinks
+        + plugin_symlinks
         + cog_symlinks
     )
 
@@ -886,6 +936,12 @@ def main():
         print(f"{bold('Claude Code skills (work)')} {green(f'({len(work_skill_symlinks)})')}:")
         print(f"  {yellow('agents-skills')} {dim(f'({len(work_skill_symlinks)})')}:")
         for target, _ in work_skill_symlinks:
+            print(f"    {dim(shorten_path(target))}")
+        print()
+    if plugin_symlinks:
+        print(f"{bold('Claude Code plugins')} {green(f'({len(plugin_symlinks)})')}:")
+        print(f"  {yellow('claude-plugins')} {dim(f'({len(plugin_symlinks)})')}:")
+        for target, _ in plugin_symlinks:
             print(f"    {dim(shorten_path(target))}")
         print()
     if cog_symlinks:
@@ -930,6 +986,7 @@ def main():
         + find_conflicts(dotfiles_symlinks)
         + find_conflicts(skill_symlinks)
         + find_conflicts(work_skill_symlinks)
+        + find_conflicts(plugin_symlinks)
         + find_conflicts(cog_symlinks)
     )
     if all_conflicts:
@@ -953,6 +1010,7 @@ def main():
         skill_symlinks=skill_symlinks,
         cc_personal_symlink=cc_personal_symlink,
         work_skill_symlinks=work_skill_symlinks,
+        plugin_symlinks=plugin_symlinks,
         cog_symlinks=cog_symlinks,
         stale=stale,
         force=args.force,
@@ -968,6 +1026,7 @@ def apply_sync_changes(
     skill_symlinks: list[tuple[Path, Path]],
     cc_personal_symlink: list[tuple[Path, Path]],
     work_skill_symlinks: list[tuple[Path, Path]],
+    plugin_symlinks: list[tuple[Path, Path]],
     cog_symlinks: list[tuple[Path, Path]],
     stale: list[str] | None,
     force: bool,
@@ -998,6 +1057,7 @@ def apply_sync_changes(
     created_skills: list[tuple[Path, Path]] = []
     created_cc_personal: list[tuple[Path, Path]] = []
     created_work_skills: list[tuple[Path, Path]] = []
+    created_plugins: list[tuple[Path, Path]] = []
     created_cogs: list[tuple[Path, Path]] = []
 
     try:
@@ -1052,6 +1112,12 @@ def apply_sync_changes(
                 work_skill_symlinks, use_sudo=False, force=force
             )
 
+        if plugin_symlinks:
+            print(bold("Claude Code plugins"))
+            created_plugins = create_or_update_symlinks(
+                plugin_symlinks, use_sudo=False, force=force
+            )
+
         if cog_symlinks:
             print(bold("Steel cogs"))
             created_cogs = create_or_update_symlinks(cog_symlinks, use_sudo=False, force=force)
@@ -1063,6 +1129,7 @@ def apply_sync_changes(
             + created_skills
             + created_cc_personal
             + created_work_skills
+            + created_plugins
             + created_cogs
         )
         if machine is not None and all_created:

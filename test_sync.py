@@ -472,6 +472,27 @@ class TestBuildSymlinkList:
         # Non-skill dotfile still walked
         assert str(home / ".gitconfig") in targets
 
+    def test_dotfiles_flow_does_not_walk_claude_plugins(self, tmp_path):
+        """Plugin sources are linked as whole directories by
+        build_layered_plugin_symlinks, so the dotfiles walk must not add
+        per-file links beneath ~/.claude-plugins."""
+        source = tmp_path / "source"
+        self._make_target(
+            source,
+            "common-dev",
+            dotfiles={
+                ".claude-plugins/deep-plan/.claude-plugin/plugin.json": "{}",
+                ".claude-plugins/deep-plan/hooks/register.tsx": "// hooks",
+                ".gitconfig": "# git",
+            },
+        )
+
+        home = tmp_path / "home"
+        symlinks = sync.build_symlink_list(
+            source, home, "redline", ["common-dev"], strip_layer_prefix=True
+        )
+        assert [t for t, _ in symlinks] == [home / ".gitconfig"]
+
 
 # ---------------------------------------------------------------------------
 # find_conflicts — filesystem-reading
@@ -1152,6 +1173,42 @@ class TestBuildLayeredSkillSymlinks:
 # ---------------------------------------------------------------------------
 
 
+class TestBuildLayeredPluginSymlinks:
+    def _make_plugin(self, root: Path, layer: str, name: str) -> Path:
+        plugin = root / layer / "dotfiles" / ".claude-plugins" / name
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+        return plugin
+
+    def test_links_plugins_from_included_layers_only(self, tmp_path):
+        source = tmp_path / "source"
+        deep_plan = self._make_plugin(source, "common-dev", "deep-plan")
+        self._make_plugin(source, "common-dev-desktop", "desktop-only")
+        target = tmp_path / "plugins"
+
+        symlinks = sync.build_layered_plugin_symlinks(source, target, "redline", ["common-dev"])
+
+        assert symlinks == [(target / "deep-plan", deep_plan)]
+
+    def test_skips_directories_without_a_manifest(self, tmp_path):
+        source = tmp_path / "source"
+        (source / "common-dev" / "dotfiles" / ".claude-plugins" / "half-made").mkdir(parents=True)
+        symlinks = sync.build_layered_plugin_symlinks(
+            source, tmp_path / "plugins", "redline", ["common-dev"]
+        )
+        assert symlinks == []
+
+    def test_machine_layer_wins_over_common(self, tmp_path):
+        source = tmp_path / "source"
+        self._make_plugin(source, "common-dev", "deep-plan")
+        machine = self._make_plugin(source, "redline", "deep-plan")
+        target = tmp_path / "plugins"
+
+        symlinks = sync.build_layered_plugin_symlinks(source, target, "redline", ["common-dev"])
+
+        assert symlinks == [(target / "deep-plan", machine)]
+
+
 class TestSkillsSyncMode:
     def _make_source_skill(self, root, name):
         skill = root / name
@@ -1187,6 +1244,7 @@ class TestSkillsSyncMode:
             skill_symlinks=[(agents / "alpha", source)],
             cc_personal_symlink=[],
             work_skill_symlinks=[],
+            plugin_symlinks=[],
             cog_symlinks=[],
             stale=[],
             force=False,
@@ -1484,6 +1542,7 @@ class TestFirstSyncStaleRemovalOrdering:
             skill_symlinks=skill_symlinks,
             cc_personal_symlink=cc_personal,
             work_skill_symlinks=work_symlinks,
+            plugin_symlinks=[],
             cog_symlinks=[],  # cogs
             stale=stale,
             force=False,

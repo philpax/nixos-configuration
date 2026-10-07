@@ -103,6 +103,25 @@ into the work-account directory `~/.claude-work/skills/<name>` (sourced from
 the same skills. Add the marker file to a skill's directory to opt it into the
 work account.
 
+### Claude Code plugins
+
+Claude Code plugins, including mods (TypeScript hooks that run inside Claude
+Code), live per-layer at `<layer>/dotfiles/.claude-plugins/<name>/`. `sync.sh`
+directory-symlinks each one into `~/.local/share/claude-plugins/<name>`, and
+`common-dev/dotfiles/.config/fish/conf.d/claude-plugins.fish` points
+`CLAUDE_CODE_PLUGIN_DIRS` at every directory there, so both the personal and
+the work account (`claudew`) load them. They are invisible to other agents.
+
+Validate, test and type-check a plugin from its directory:
+
+```bash
+claude plugin validate .
+claude plugin test .
+```
+
+`tsc -p .` type-checks it once Claude Code has loaded it, which writes the API
+types into `.claude-plugin/types/` (gitignored).
+
 ### Redline Server
 
 `redline/` is the most complex machine config with:
