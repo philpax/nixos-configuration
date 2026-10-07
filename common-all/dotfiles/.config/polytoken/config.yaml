@@ -1,9 +1,9 @@
 version: 3
 config_command_substitution: true
 defaults:
-  full: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
-  mini: ananke-mindgame/qwen3.6-27b-ninfer-mtp3
-  nano: ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7
+  full: codex/gpt-6-astra(high)
+  mini: codex/gpt-5.6-luna(xhigh)
+  nano: codex/gpt-5.6-luna(low)
 providers:
   umans:
     kind:
