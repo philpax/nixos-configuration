@@ -142,7 +142,7 @@ types into `.claude-plugin/types/` (gitignored).
 
 ## Development
 
-Python scripts are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Configuration lives in `pyproject.toml`; dependencies are pinned in `uv.lock`. Run everything through [uv](https://docs.astral.sh/uv/):
+Python scripts are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Pytest files and test support live under `tests/`; `pyproject.toml` restricts test discovery to that directory. Configuration lives in `pyproject.toml`; dependencies are pinned in `uv.lock`. Run everything through [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv run ruff check           # lint

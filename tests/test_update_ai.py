@@ -9,7 +9,7 @@ from pathlib import Path
 # update-ai.py is hyphenated (a CLI script name), so it is not importable as a
 # normal module; load it from its path.
 _spec = importlib.util.spec_from_file_location(
-    "update_ai", Path(__file__).resolve().parent / "update-ai.py"
+    "update_ai", Path(__file__).resolve().parents[1] / "update-ai.py"
 )
 update_ai = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(update_ai)

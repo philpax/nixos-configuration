@@ -7,6 +7,7 @@ on:
       - "*.md"
       - "pyproject.toml"
       - ".github/workflows/ci.yml"
+      - "tests/**"
       # Target-first layout: each target dir owns Nix files (+ dotfiles/).
       - "common-all/**"
       - "common-desktop/**"
@@ -23,6 +24,7 @@ on:
       - "*.md"
       - "pyproject.toml"
       - ".github/workflows/ci.yml"
+      - "tests/**"
       - "common-all/**"
       - "common-desktop/**"
       - "common-dev/**"
