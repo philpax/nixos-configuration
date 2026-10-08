@@ -81,6 +81,14 @@ in
   # patches the file in place instead.
   services.supergfxd.enable = true;
 
+  # Never restart supergfxd on a switch. The new daemon comes up, re-runs
+  # supergfxd-boot-integrated, and tries to take a card niri still holds off
+  # the bus; the nvidia unbind then spins in the kernel waiting for the usage
+  # count to drop, and a task stuck there cannot be frozen, so every suspend
+  # after it fails with EBUSY. An unattended autoUpgrade did exactly this. Mode
+  # changes are boot-time anyway, so the new units take over on the next boot.
+  systemd.services.supergfxd.restartIfChanged = false;
+
   # The nixpkgs module gives the unit kmod and pciutils only, so supergfxd logs
   # "The lsof util is missing from your system" and cannot identify processes
   # holding the card when it tries to take it off the bus.
@@ -106,6 +114,7 @@ in
     description = "Pin supergfxd to Integrated before it starts";
     before = [ "supergfxd.service" ];
     wantedBy = [ "supergfxd.service" ];
+    restartIfChanged = false;
     serviceConfig.Type = "oneshot";
     script = ''
       conf=/etc/supergfxd.conf
