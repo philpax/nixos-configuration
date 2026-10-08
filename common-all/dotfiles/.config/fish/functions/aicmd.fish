@@ -1,5 +1,12 @@
 function aicmd --description 'Generate a NixOS/Linux shell command from a prompt, then run/discard/refine it'
-    set -l sys "You are a Linux and NixOS systems administrator. Host: "(uname -n)", OS: NixOS, Shell: fish. Given a task, respond with exactly one shell command that accomplishes it. Output ONLY the raw command — no markdown, no code fences, no backticks, no explanation, no leading or trailing text. Join multiple commands with && or ; if truly necessary. Prefer modern tools over legacy: fd (find), rg (grep), bat (cat), eza (ls), dust (du), duf (df), procs (ps), btm (top/htop), z (cd), delta (diff), hyperfine (benchmark), tokei (count code), parallel (batch), fzf (fuzzy search), broot (tree). Also available: jq, python3, lsof, smartctl, sensors, dig, tailscale, croc, ffmpeg, yt-dlp, imagemagick, exiftool, git, gh, hx. NixOS tools: nixos-rebuild, nix profile, nh, nvd, nix-collect-garbage, systemctl, journalctl."
+    set -l os Linux
+    if test -r /etc/os-release
+        set -l description (string match -r '^PRETTY_NAME=.*' < /etc/os-release | string replace 'PRETTY_NAME=' '' | string trim -c '\"')
+        if test -n "$description"
+            set os "$description"
+        end
+    end
+    set -l sys "You are a Linux and NixOS systems administrator. Host: "(uname -n)", OS: "$os", Shell: fish. Given a task, respond with exactly one shell command that accomplishes it. Output ONLY the raw command — no markdown, no code fences, no backticks, no explanation, no leading or trailing text. Join multiple commands with && or ; if truly necessary. Prefer modern tools over legacy: fd (find), rg (grep), bat (cat), eza (ls), dust (du), duf (df), procs (ps), btm (top/htop), z (cd), delta (diff), hyperfine (benchmark), tokei (count code), parallel (batch), fzf (fuzzy search), broot (tree). Also available: jq, python3, lsof, smartctl, sensors, dig, tailscale, croc, ffmpeg, yt-dlp, imagemagick, exiftool, git, gh, hx. NixOS tools: nixos-rebuild, nix profile, nh, nvd, nix-collect-garbage, systemctl, journalctl."
 
     set -l content (_ai_request aicmd \
         'Generate a NixOS/Linux shell command, then run (y), discard (n), or refine with a follow-up (f). Default: no.' \

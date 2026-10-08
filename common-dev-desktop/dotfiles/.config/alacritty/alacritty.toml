@@ -1,3 +1,6 @@
+[general]
+import = ["~/.config/alacritty/machine.toml"]
+
 [font]
 normal = { family = "Cozette", style = "Regular" }
 

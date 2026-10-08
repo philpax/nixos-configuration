@@ -1,7 +1,7 @@
 [user]
 	name = Philpax
 	email = me@philpax.me
-	signingkey = /home/philpax/.ssh/id_rsa.pub
+	signingkey = ~/.ssh/id_rsa.pub
 [safe]
 	directory = /home/philpax/comfyui
 [credential]
@@ -29,4 +29,4 @@
 [tag]
 	gpgsign = true
 [gpg "ssh"]
-	allowedSignersFile = /home/philpax/.ssh/allowed_signers
+	allowedSignersFile = ~/.ssh/allowed_signers
