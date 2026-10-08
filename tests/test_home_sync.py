@@ -142,7 +142,7 @@ def test_home_sync_selection_and_overrides(tree, monkeypatch, capsys):
     put(repo / "common-all/dotfiles/.config/tool", "all")
     put(repo / "common-dev-desktop/dotfiles/.config/tool", "desktop")
     winner = put(repo / "frame/dotfiles/.config/tool", "frame")
-    put(repo / "frame/dotfiles/.ssh/key", "never")
+    key = put(repo / "frame/dotfiles/.ssh/key", "synthetic-key")
     put(repo / "frame/dotfiles/.excluded/child", "never")
     put(repo / "common-dev/dotfiles/.agents/skills/skill/SKILL.md")
     put(repo / "common-dev/dotfiles/.agents/skills/skill/.work-compatible")
@@ -156,7 +156,7 @@ def test_home_sync_selection_and_overrides(tree, monkeypatch, capsys):
     assert len(proposal.overrides) == 2
     main_home(tree, monkeypatch)
     assert (home / ".config/tool").read_text() == "frame"
-    assert not (home / ".ssh").exists()
+    assert (home / ".ssh/key").readlink() == key
     assert not (home / ".excluded").exists()
     assert (home / ".agents/skills/skill").is_symlink()
     assert (home / ".claude/skills").readlink() == home / ".agents/skills"
@@ -183,6 +183,9 @@ def test_frame_passive_desktop_selection(tmp_path):
         ".config/quickshell/shell.qml",
         ".config/swaylock/config",
         ".local/bin/record-screen.sh",
+        ".ssh/authorized_keys",
+        ".local/state/makima/auth/ananke-mindgame.json",
+        ".local/state/makima/auth/ananke-redline.json",
     ):
         assert path in selected
     for path in FRAME_EXCLUSIONS:
@@ -234,6 +237,55 @@ def test_home_exclusions_come_only_from_declaration_and_control_paths(tree):
     assert revised.exclusions.count("nixos-clean.sh") == 1
     assert (home / ".bashrc", sources[home / ".bashrc"]) in revised.symlinks
     assert snapshot(home) == {}
+
+
+@pytest.mark.parametrize(
+    "relative", (".ssh/authorized_keys", ".local/state/makima/auth/account.json")
+)
+def test_declared_credentials_follow_shared_ownership_rules(tree, relative):
+    repo, home = tree
+    source = put(repo / "common-all/dotfiles" / relative, "synthetic-repository-credential")
+    destination = home / relative
+    first = plan(tree)
+    assert dict(first.symlinks)[destination] == source
+    assert next(op.action for op in first.operations if op.destination == destination) == "create"
+    result = home_sync.apply_home_sync(first, confirmed=True)
+    assert result.complete and not result.warnings
+    assert destination.readlink() == source
+    assert sync.read_manifest(first.state_path)[str(destination)] == str(source)
+    assert (
+        next(op.action for op in plan(tree).operations if op.destination == destination) == "keep"
+    )
+
+    replacement = put(repo / "frame/dotfiles" / relative, "synthetic-frame-override")
+    update = plan(tree)
+    assert next(op.action for op in update.operations if op.destination == destination) == "replace"
+    home_sync.apply_home_sync(update, confirmed=True)
+    assert destination.readlink() == replacement
+
+    modified = put(home / "user-credential", "synthetic-user-credential")
+    destination.unlink()
+    destination.symlink_to(modified)
+    conflict = plan(tree)
+    assert next(op.action for op in conflict.operations if op.destination == destination) == "skip"
+    home_sync.apply_home_sync(conflict, confirmed=True)
+    assert destination.readlink() == modified
+    assert str(destination) not in sync.read_manifest(first.state_path)
+
+
+@pytest.mark.parametrize(
+    "relative", (".ssh/authorized_keys", ".local/state/makima/auth/account.json")
+)
+def test_declared_credentials_preserve_existing_unowned_files(tree, relative):
+    repo, home = tree
+    put(repo / "common-all/dotfiles" / relative, "synthetic-repository-credential")
+    destination = put(home / relative, "synthetic-existing-credential")
+    proposal = plan(tree)
+    operation = next(op for op in proposal.operations if op.destination == destination)
+    assert operation.action == "skip" and operation.conflict
+    home_sync.apply_home_sync(proposal, confirmed=True)
+    assert not destination.is_symlink()
+    assert destination.read_text() == "synthetic-existing-credential"
 
 
 def test_additional_kde_autostart_descendant_excluded(tree):

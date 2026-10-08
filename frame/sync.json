@@ -7,10 +7,8 @@
     "common-dev-desktop"
   ],
   "exclusions": [
-    ".ssh",
     ".tokens",
     "nixos-clean.sh",
-    ".local/state/makima/auth",
     ".config/wayland-autostart.sh",
     ".config/autostart",
     ".config/autostart-scripts",
