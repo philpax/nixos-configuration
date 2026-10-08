@@ -1,188 +1,86 @@
-## What This Is
+# Contributing
 
-Personal NixOS configuration managing multiple machines with shared configuration layers and dotfiles.
+Personal NixOS configuration with shared layers and dotfiles.
 
 ## Deployment
 
 ```bash
-# Sync config to a machine (creates symlinks for <target>/ and <target>/dotfiles/)
-./sync.sh <machine_name> [--force]
-
-# After syncing, rebuild the system
+./sync.sh <machine>
 sudo nixos-rebuild switch
 ```
 
-### Steam Frame
+`./sync.sh frame` installs or updates the home-only Steam Frame environment and confirms activation. It requires no NixOS rebuild or sudo. See [frame/README.md](frame/README.md) for entry, overrides, and recovery.
 
-`frame/` is a non-NixOS, home-directory-only target. `./sync.sh frame` installs its CLI profile on first use or updates it on later runs, then displays and confirms home activation. No NixOS rebuild follows this command. `./sync.sh frame --dry-run` is read-only, including on a fresh home. `./sync.sh --home-only --dry-run frame` plans only home links; explicit `--home-only` bypasses profile and generated integration management. Frame deployment rejects `--force` and `--init-state`, preserves conflicts, and never creates NixOS links, runs sudo, or uses the repository's legacy sync state. Its `sync.json` declares ordered dotfile layers and exclusions rather than NixOS imports. See [frame/README.md](frame/README.md) for installation, namespace entry, source/package overrides, generated assets, SSH-agent handling, recovery, and scope limits.
+`--dry-run` is read-only. Sync preserves unowned or modified objects and removes stale links only when they still match recorded ownership. NixOS `--force` backs up non-directory conflicts; directories are never recursively replaced. Frame deployment rejects `--force` and `--init-state`. Unresolved conflicts return a nonzero status.
 
-CLI package lists are functions accepting `pkgs` under `common-all/packages/` and `common-dev/packages/`. Explicit font packages are in `common-desktop/packages/fonts.nix`. NixOS modules call them with the host's existing package set; Frame uses its independent pin and the existing Helix Steel overlay. Package functions must remain outside auto-imported `programs/` directories. Services, shell enablement, firewall rules, implicit NixOS fonts, and font defaults remain in their NixOS modules.
-
-Frame selects CLI and passive desktop dotfiles but excludes credentials, automatic desktop startup, user services/environment startup, MIME associations, host GTK settings, and NixOS cleanup. It does not provide a supported replacement desktop session or install GUI terminals. Generated terminal/Fontconfig files are owned by activation, not generic sync. Tests never invoke bespoke agent binaries or their installers.
-
-### Current-host build-only verification
-
-`tests/check-current-nixos.py` captures a bounded baseline and compares the refactored configuration using the same resolved host nixpkgs source, real hardware file, and canonical checkout target. Every evaluation/build sets `NIXOS_CONFIG` to that target and supplies matching `-I nixos-config=...`, replacing a conflicting inherited target without changing the host store/settings. Baselines are temporary artifacts, not a production package inventory.
-
-The verification entry point accepts `baseline`, `evaluate --baseline <artifact>`, and `build --baseline <artifact> --timeout 14400`. Capture the baseline before changing affected modules; compare and build after the extraction. For the current `mindgame` host:
-
-```bash
-uv run tests/check-current-nixos.py baseline
-uv run tests/check-current-nixos.py evaluate --baseline <printed-baseline-artifact>
-uv run tests/check-current-nixos.py build --baseline <printed-baseline-artifact> --timeout 14400
-```
-
-The non-activating build command is equivalent to:
-
-```bash
-NIXOS_CONFIG=<canonical-checkout>/mindgame/configuration.nix nix-build --no-out-link <resolved-host-nixpkgs>/nixos -A system -I nixos-config=<canonical-checkout>/mindgame/configuration.nix
-```
-
-The verification entry point uses subprocess argument arrays and an explicit environment rather than shell interpolation. It checks the realized system and compares `/run/current-system` and the system-profile generation before/after. It never executes `switch-to-configuration`, `nixos-rebuild switch/test/boot`, or `sync.sh mindgame`. A baseline or unrelated build failure is an unresolved gate, not evidence of successful regression validation.
-
-Machines synced before 2026-08-09 (the target-first inversion) need the migration steps in [MIGRATION.md](MIGRATION.md). The file covers the stale-symlink sweep for old `nixos/` and `dotfiles/` paths, root-owned dangling links, the mindgame nixpkgs-config rebuild failure, and the redline secrets relocation.
+Machines last synced before the target-first migration need [MIGRATION.md](MIGRATION.md).
 
 ## Architecture
 
-### Repository Layout
+### Repository layout and layers
 
-The repository is target-first: every machine or shared layer ("target") owns a
-directory at the repo root, containing its Nix files directly (incl.
-`configuration.nix`) plus a `dotfiles/` subdirectory where it has dotfiles:
+Each machine or shared layer owns `<target>/configuration.nix` and `<target>/dotfiles/`. NixOS imports determine the dotfile layers; machine overrides win. Frame declares its layers and exclusions in `frame/sync.json`.
 
-```
-common-all/          → Base: users, SSH, packages, locale
-common-ai/           → CUDA-enabled llama.cpp/ik_llama.cpp packages (redline, mindgame only)
-common-desktop/      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
-common-dev/          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
-common-dev-desktop/  → Niri compositor, Waybar, Alacritty, Steam, Wine
-jinroh/
-mindgame/
-paprika/
-patlabor/
-redline/
-```
+| Layer | Contents |
+| --- | --- |
+| `common-all` | Users, SSH, packages, locale |
+| `common-ai` | AI packages and services |
+| `common-desktop` | KDE, fonts, audio, desktop applications |
+| `common-dev` | Development tools, Helix, shared skills and plugins |
+| `common-dev-desktop` | Niri, panels, terminals, Steam and Wine |
 
-There are no top-level `nixos/` or `dotfiles/` grouping directories — the
-machine dirs and the `common-*` layers live side by side at the root, and each
-target holds its own `dotfiles/` subdir (e.g. `redline/dotfiles/.config/...`).
+Machine-specific configuration lives in `jinroh/`, `paprika/`, `patlabor/`, `mindgame/`, and `redline/`. Frame shares CLI and passive desktop configuration without importing NixOS services or installing GUI terminals. Its declared sync includes repository `authorized_keys` and Makima authentication files.
 
-### Configuration Layering
+Modules must use `config.mainUser` and `config.users.users.${config.mainUser}.home` rather than hardcoded user names or home paths.
 
-Machines compose from shared layers via NixOS imports. Each layer's Nix files
-live at `<layer>/...` and its dotfiles at `<layer>/dotfiles/...`; a machine's
-own config likewise lives at `<machine>/...` with dotfiles at
-`<machine>/dotfiles/...`:
+`programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files. Shared package functions belong in `packages/`, not those module directories. NixOS supplies its existing `pkgs`; Frame uses its independent pin and the shared Helix Steel overlay.
 
-```
-common-all          → Base: users, SSH, packages, locale
-common-ai           → CUDA-enabled llama.cpp/ik_llama.cpp packages (redline, mindgame only)
-common-desktop      → GUI: display manager (SDDM), fonts, PipeWire, Firefox, printing
-common-dev          → Dev tools: Git, Helix, Direnv, Ripgrep; shared agent skills
-common-dev-desktop  → Niri compositor, Waybar, Alacritty, Steam, Wine
-```
+Syncthing membership is declared in `common-all/syncthing-topology.nix`. Machines select `philpax.syncthing.device` and supply their folder paths.
 
-The primary user account is centralised in `common-all/configuration.nix`
-(`users.users.philpax`) and exposed as the `options.mainUser` option (default
-`"philpax"`). Modules must never hardcode the username or `/home/<name>`:
-read `config.mainUser` for the name and
-`config.users.users.${config.mainUser}.home` for the home path instead.
+### Dotfiles and sync
 
-**Machine import patterns:**
-- **jinroh**: common-all + common-desktop (KDE Plasma, not Niri)
-- **paprika**: common-all + common-desktop + common-dev + common-dev-desktop + ThinkPad T480s hardware
-- **patlabor**: common-all + common-desktop + common-dev + common-dev-desktop + Zephyrus G14 GU405AR hardware (Intel Panther Lake + NVIDIA Blackwell as PRIME offload, asusd); `power.nix` boots the dGPU off the bus via supergfxd and follows the AC adapter with a power profile, and `gfx perf` / `gfx battery` switch between the two; `slash-clock.nix` runs a BCD clock on the lid's Slash Lighting strip via `slash_clock.py`, which drives the hidraw node directly because asusctl does not know the GU405
-- **mindgame**: common-all + common-ai + common-desktop + common-dev + common-dev-desktop + NVIDIA/Docker/ML
-- **redline**: common-all + common-ai + common-dev (headless server with ZFS, AI services, Immich, Navidrome; the dev tools and shared agent skills arrive via `programs/development.nix`)
+`sync_workflow.py` handles shared discovery, display, and confirmation; `sync_engine.py` handles ownership, state, and mutations. Target adapters supply destinations and exclusions. Frame adds generated files and startup integration to the displayed plan.
 
-### Syncthing
+NixOS records ownership in repository `.sync-state.json`; home-only sync uses `~/.local/state/nixos-configuration/sync-home.json`. Sudo is requested only after a permitted non-home write fails for lack of permission. Home and state writes never elevate. Do not delete lock or request files to bypass a stalled worker, or use independent manifests to manage overlapping destinations.
 
-`common-all/syncthing-topology.nix` lists device IDs and folder members. A machine sets `philpax.syncthing.device = "<name>"` and `common-all/services/syncthing.nix` derives its peers and folders; machine-specific folders and paths merge in via `services.syncthing.settings` and `philpax.syncthing.folderPaths`.
+### Skills and plugins
 
-### Auto-importing Modules
+Skills live in `<layer>/dotfiles/.agents/skills/`. Sync links them into `~/.agents/skills` and points `~/.claude/skills` there. A `.work-compatible` marker also enables a skill under `~/.claude-work/skills`.
 
-`programs/default.nix` and `services/default.nix` use `builtins.readDir` to auto-import all `.nix` files in their directory. Drop a new `.nix` file in and it's automatically included — no need to edit `default.nix`.
+Claude Code plugins live in `<layer>/dotfiles/.claude-plugins/` and sync to `~/.local/share/claude-plugins/`. Fish sets `CLAUDE_CODE_PLUGIN_DIRS` for personal and work accounts. The `deep-plan` plugin provides `/deep-plan` and `/facet`; prompts live under `prompts/`, with a repository override at `.claude/plan-spec.md`.
 
-### Dotfiles
-
-`sync.sh` reads `<target>/configuration.nix` to determine which `common-*`
-layers a machine imports, then symlinks its dotfiles from each imported
-target's `dotfiles/` subdir. This mirrors the NixOS import hierarchy — e.g.
-redline (headless, imports only `common-all`) won't receive desktop dotfiles
-like niri or quickshell configs. When re-syncing a different machine, symlinks
-from the previous sync that are no longer needed are detected via
-`.sync-state.json` and offered for removal.
-
-### Agent skills
-
-`sync.sh` symlinks skills into the canonical `~/.agents/skills` tree, which
-Polytoken discovers, then wires Claude Code personal to the same tree via a
-single `~/.claude/skills → ~/.agents/skills` directory symlink — the same
-pattern as the repo's own project-local `.claude/skills → .agents/skills`.
-Skills are stored per-layer at `<layer>/dotfiles/.agents/skills/<name>/`, so a
-machine gets a skill only if it includes that layer; the shared dev-workflow
-skills (committing, GitHub issues, contributing docs, prose) live in
-`common-dev/dotfiles/.agents/skills/` and reach the dev machines (paprika, patlabor,
-mindgame, redline), not jinroh.
-
-Skills marked with a `.work-compatible` marker file are additionally symlinked
-into the work-account directory `~/.claude-work/skills/<name>` (sourced from
-`common-dev/dotfiles/.agents/skills`), so the personal and work accounts load
-the same skills. Add the marker file to a skill's directory to opt it into the
-work account.
-
-### Claude Code plugins
-
-Claude Code plugins, including mods (TypeScript hooks that run inside Claude
-Code), live per-layer at `<layer>/dotfiles/.claude-plugins/<name>/`. `sync.sh`
-directory-symlinks each one into `~/.local/share/claude-plugins/<name>`, and
-`common-dev/dotfiles/.config/fish/conf.d/claude-plugins.fish` points
-`CLAUDE_CODE_PLUGIN_DIRS` at every directory there, so both the personal and
-the work account (`claudew`) load them. They are invisible to other agents.
-
-`deep-plan` ports Polytoken's plan and execute facets. `/deep-plan [request]`
-enters the read-only plan facet: the facet prompt goes into the system prompt,
-Write/Edit/todo tools are refused, Bash commands outside a read-only allowlist
-go through a Haiku judge, and the model writes its plan with
-`write_plan`/`edit_plan`, reviews it with the `deep-plan:plan-reviewer` agent,
-and submits it with `handoff_plan`. Approving can clear the context, replacing
-the transcript with the plan before the execute facet starts. `/facet` shows or
-switches the facet. The prompts are Markdown under `prompts/`; a repository's
-own `.claude/plan-spec.md` overrides the plan spec.
-
-Validate, test and type-check a plugin from its directory:
+From a plugin directory:
 
 ```bash
 claude plugin validate .
 claude plugin test .
+tsc -p .
 ```
 
-`tsc -p .` type-checks it once Claude Code has loaded it, which writes the API
-types into `.claude-plugin/types/` (gitignored).
-
-### Redline Server
-
-`redline/` is the most complex machine config with:
-- `ai/` — llama-cpp, large-model-proxy, ComfyUI (custom ONNX/CUDA overlay)
-- `folders.nix` — central mount point and directory definitions used across services
-- Services for Immich, Navidrome, Samba, Syncthing, DNS (dnsmasq)
-- Game servers: Minecraft, and FiveM (`services/fivem.nix` packages FXServer and builds its resource tree; `services/fivem/` holds the custom resources)
+Type checking requires the API types generated when Claude Code loads the plugin.
 
 ## Development
 
-Python scripts are linted and formatted with [ruff](https://docs.astral.sh/ruff/), and tested with [pytest](https://docs.pytest.org/). Pytest files and test support live under `tests/`; `pyproject.toml` restricts test discovery to that directory. Configuration lives in `pyproject.toml`; dependencies are pinned in `uv.lock`. Run everything through [uv](https://docs.astral.sh/uv/):
+Python dependencies are pinned in `uv.lock`; tests and support live in `tests/`.
 
 ```bash
-uv run ruff check           # lint
-uv run ruff format --check  # format check
-uv run pytest -v            # run tests
+uv run ruff check
+uv run ruff format --check
+uv run pytest -v
 ```
 
-`update-ai.py` regenerates the makima/Polytoken provider configs from the ananke model definitions (`mindgame/services/ananke.nix`, `redline/ai/ananke.nix`) via the colocated `.j2` templates; run it before `sync.sh` when the served models change:
+Use `uv run ruff format` to format changes. CI runs lint and tests. Set `FRAME_NIX_BUILD_TESTS=1` to include real profile builds. Frame tests use synthetic homes and keys; device-test staging excludes real credential contents and tests do not invoke bespoke agent binaries or installers. Do not stage, commit, or deploy without operator consent.
+
+`uv run update-ai.py` regenerates provider configs from the Ananke definitions in `mindgame/services/ananke.nix` and `redline/ai/ananke.nix`. Run it before syncing model changes; `--check` detects drift.
+
+### Current-host build-only verification
+
+Capture a baseline before changing shared NixOS package or font definitions:
 
 ```bash
-uv run update-ai.py          # regenerate common-dev/.../makima/providers.toml + common-all/.../polytoken/config.yaml
-uv run update-ai.py --check  # exit non-zero if those files have drifted from their templates
+uv run tests/check-current-nixos.py baseline
+uv run tests/check-current-nixos.py evaluate --baseline <artifact>
+uv run tests/check-current-nixos.py build --baseline <artifact> --timeout 14400
 ```
 
-CI runs lint + tests on push/PR. Run `uv run ruff format` to auto-format before committing.
+The checker targets the current `mindgame` checkout with the existing host nixpkgs and hardware inputs. It builds without activating or syncing `/etc/nixos`, and verifies the running system is unchanged. A failed or changed baseline is an unresolved check; do not substitute Frame's pin or repair unrelated host inputs to pass it.
