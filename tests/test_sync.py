@@ -1768,7 +1768,10 @@ class TestMainModes:
         (tmp_path / "frame").mkdir()
         (tmp_path / "frame/sync.json").write_text("{}")
         monkeypatch.setattr(sync, "TARGETS_ROOT", tmp_path)
-        assert "frame (home-only; use --home-only)" in sync.list_available_targets()
+        assert (
+            "frame (home deployment; --home-only for dotfiles only)"
+            in sync.list_available_targets()
+        )
         monkeypatch.setattr(sync.sys, "argv", ["sync.py", "--help"])
         with pytest.raises(SystemExit) as exc:
             sync.main()
@@ -1776,10 +1779,40 @@ class TestMainModes:
         help_text = capsys.readouterr().out
         assert "--home-only" in help_text and "--dry-run" in help_text
 
-    def test_home_only_target_requires_explicit_mode(self, tmp_path, monkeypatch):
-        repo, _, _ = self._legacy_tree(tmp_path, monkeypatch)
-        (repo / "frame").mkdir()
-        (repo / "frame/sync.json").write_text("{}")
+    def test_frame_dispatches_combined_deployment_without_legacy_mutation(
+        self, tmp_path, monkeypatch
+    ):
+        from frame import deploy as deployment
+
+        repo, home, _ = self._legacy_tree(tmp_path, monkeypatch)
+        captured = []
+        monkeypatch.setattr(
+            deployment, "deploy", lambda frame, **kwargs: captured.append((frame, kwargs)) or 0
+        )
+        monkeypatch.setattr(
+            sync, "apply_sync_changes", lambda **kwargs: pytest.fail("legacy mutation")
+        )
+        monkeypatch.setattr(sync, "_run_sudo", lambda *args: pytest.fail("sudo"))
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame", "--dry-run"])
+        sync.main()
+        frame, options = captured[0]
+        assert frame.home == home and frame.repo == repo
+        assert options == {"dry_run": True}
+        assert list(home.iterdir()) == []
+
+    @pytest.mark.parametrize("option", ["--force", "--init-state"])
+    def test_frame_rejects_legacy_mutation_options(self, tmp_path, monkeypatch, option):
+        self._legacy_tree(tmp_path, monkeypatch)
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame", option])
+        with pytest.raises(SystemExit) as exc:
+            sync.main()
+        assert exc.value.code == 2
+
+    def test_frame_propagates_partial_deployment_exit_status(self, tmp_path, monkeypatch):
+        from frame import deploy as deployment
+
+        self._legacy_tree(tmp_path, monkeypatch)
+        monkeypatch.setattr(deployment, "deploy", lambda *args, **kwargs: 1)
         monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame"])
         with pytest.raises(SystemExit) as exc:
             sync.main()

@@ -550,7 +550,11 @@ def list_available_targets() -> list[str]:
             else:
                 targets.append(f"{entry.name} (no layers)")
         elif (entry / "sync.json").is_file():
-            targets.append(f"{entry.name} (home-only; use --home-only)")
+            targets.append(
+                "frame (home deployment; --home-only for dotfiles only)"
+                if entry.name == "frame"
+                else f"{entry.name} (home-only; use --home-only)"
+            )
         else:
             targets.append(f"{entry.name} (no configuration.nix)")
     return targets
@@ -813,14 +817,14 @@ def _init_state(folder_name: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync NixOS and dotfiles, or explicitly select home-only dotfiles.",
+        description="Sync NixOS dotfiles, deploy Frame, or explicitly select home-only dotfiles.",
         usage="%(prog)s [--home-only] <target> [--dry-run] [--force]",
     )
     parser.add_argument(
         "machine",
         nargs="?",
         metavar="target",
-        help="NixOS machine, or home-only target (e.g. frame)",
+        help="NixOS machine, frame for combined home deployment, or --home-only target",
     )
     parser.add_argument(
         "-f",
@@ -846,6 +850,23 @@ def main():
 
     if args.init_state and (args.home_only or args.dry_run):
         parser.error("--init-state cannot be combined with --home-only or --dry-run")
+
+    if args.machine == "frame" and not args.home_only:
+        if args.init_state or args.force:
+            parser.error(
+                "Frame deployment does not support --init-state or --force; conflicts are preserved"
+            )
+        from frame.core import Frame
+        from frame.deploy import deploy
+
+        try:
+            code = deploy(Frame(home=DOTFILES_TARGET, repo=TARGETS_ROOT), dry_run=args.dry_run)
+        except (ValueError, OSError, RuntimeError) as exc:
+            print(f"Frame deployment failed: {exc}")
+            sys.exit(1)
+        if code:
+            sys.exit(code)
+        return
 
     if args.home_only and args.machine:
         try:
@@ -885,6 +906,7 @@ def main():
 
     if not args.machine:
         print(f"Usage: {sys.argv[0]} [--home-only] <target> [--dry-run] [--force]\n")
+        print("frame installs/updates its CLI profile, then confirms home activation.")
         print("--home-only reads target sync.json and changes only home dotfiles.")
         print("--dry-run reports changes without prompts or writes.\n")
         print("Creates symlinks for NixOS and dotfiles, then creates a symlink from")

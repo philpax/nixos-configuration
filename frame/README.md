@@ -26,7 +26,21 @@ The namespace cannot map every supplementary group. Ordinary CLI work is support
 
 ## Installation and entry
 
-Run from a stable checkout only after production consent:
+The combined Frame workflow runs from a stable checkout after production consent:
+
+```bash
+cd ~/nixos-configuration
+git pull --ff-only
+git submodule update --init
+./sync.sh frame --dry-run
+./sync.sh frame
+```
+
+`sync.sh frame` selects home deployment automatically. It installs the dedicated CLI profile on first use, including a reusable partial bootstrap, or builds and publishes an update when a profile already exists. It then displays the combined dotfile, asset, terminal, and Bash startup plan and asks for activation confirmation. No `sudo nixos-rebuild switch` follows this command. A build failure stops before activation. Declining activation leaves the installed or updated CLI profile available for explicit entry; an already activated update can refresh its matching assets before this prompt, but does not edit startup files.
+
+The dry-run does not bootstrap, download, evaluate package expressions, build, acquire mutation locks, or write files. On a fresh home it shows proposed destinations and reports that installation must succeed before the final activation plan is confirmed. On an installed home it also performs the existing read-only namespace readiness checks. Explicit `./sync.sh --home-only frame` remains dotfile-only. Combined deployment rejects `--force` and `--init-state`; configuration conflicts remain preserved and yield partial integration with a nonzero exit status. Existing active startup hooks are preserved, but new startup integration is deferred until conflicts are resolved.
+
+The lower-level commands remain available for installation without activation, package-only updates, explicit entry, and rollback:
 
 ```bash
 /usr/bin/python3 frame/cli.py install
