@@ -1,11 +1,5 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    # Development utilities
-    git
-    ripgrep
-    direnv
-    gdb
-  ];
+  environment.systemPackages = import ../packages/development.nix { inherit pkgs; };
 }

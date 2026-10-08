@@ -1,10 +1,5 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    ffmpeg-full
-    yt-dlp
-    imagemagick
-    exiftool
-  ];
+  environment.systemPackages = import ../packages/media.nix { inherit pkgs; };
 }
