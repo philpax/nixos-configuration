@@ -38,7 +38,11 @@ in
   };
 
   # Three failures in fifteen minutes means it is stuck: hibernate, and if that
-  # fails too, power off. `systemctl hibernate` blocks until the job completes.
+  # fails too, power off. Both go to PID 1 directly rather than through logind:
+  # with the lid still closed logind has usually started its next retry by the
+  # time this runs, and refuses `systemctl hibernate`/`poweroff` as "already in
+  # progress". replace-irreversibly also stops that retry cancelling the
+  # poweroff. `systemctl start` blocks until the job completes.
   systemd.services.sleep-failure-fallback = {
     description = "Hibernate, then power off, when sleep keeps failing";
     serviceConfig.Type = "oneshot";
@@ -55,11 +59,11 @@ in
       fi
       echo "sleep failed $n times in 15 minutes; hibernating instead"
       : > "$log"
-      if systemctl hibernate; then
+      if systemctl start --job-mode=replace-irreversibly hibernate.target; then
         exit 0
       fi
       echo "hibernate failed as well; powering off"
-      systemctl poweroff
+      systemctl start --job-mode=replace-irreversibly poweroff.target
     '';
   };
   systemd.services.systemd-suspend.unitConfig.OnFailure = "sleep-failure-fallback.service";
