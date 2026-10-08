@@ -1702,6 +1702,90 @@ STALE_PATH_DOC_FIXTURES = [
 ]
 
 
+class TestMainModes:
+    def _legacy_tree(self, tmp_path, monkeypatch):
+        repo, home, nixos = tmp_path / "repo", tmp_path / "home", tmp_path / "nixos"
+        home.mkdir()
+        for name in ("common-all", "common-dev", "aardvark"):
+            target = repo / name
+            target.mkdir(parents=True)
+            (target / "configuration.nix").write_text(
+                "../common-all ../common-dev" if name == "aardvark" else "{}"
+            )
+            dotfiles = target / "dotfiles"
+            dotfiles.mkdir()
+            (dotfiles / ".tool").write_text(name)
+        monkeypatch.setattr(sync, "TARGETS_ROOT", repo)
+        monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
+        monkeypatch.setattr(sync, "NIXOS_TARGET", nixos)
+        monkeypatch.setattr(sync, "STATE_FILE", repo / ".sync-state.json")
+        monkeypatch.setattr(
+            sync, "SHARED_SKILLS_SOURCE", repo / "common-dev/dotfiles/.agents/skills"
+        )
+        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", home / ".agents/skills")
+        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", home / ".claude/skills")
+        monkeypatch.setattr(sync, "CLAUDE_WORK_SKILLS_TARGET", home / ".claude-work/skills")
+        monkeypatch.setattr(sync, "CLAUDE_PLUGINS_TARGET", home / ".local/share/claude-plugins")
+        monkeypatch.setattr(sync, "STEEL_COGS_SOURCE", repo / "steel-cogs")
+        monkeypatch.setattr(sync, "STEEL_COGS_TARGET", home / ".config/steel/cogs")
+        return repo, home, nixos
+
+    def test_full_main_deduplicates_machine_last_before_display_and_adapter(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        repo, home, nixos = self._legacy_tree(tmp_path, monkeypatch)
+        captured = []
+        monkeypatch.setattr(sync, "confirm", lambda message: True)
+        monkeypatch.setattr(sync, "apply_sync_changes", lambda **kwargs: captured.append(kwargs))
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "aardvark", "--force"])
+        sync.main()
+        request = captured[0]
+        assert request["force"] is True
+        assert request["machine"] == "aardvark"
+        assert request["dotfiles_symlinks"] == [(home / ".tool", repo / "aardvark/dotfiles/.tool")]
+        assert (nixos / "configuration.nix", repo / "aardvark/configuration.nix") in request[
+            "nixos_symlinks"
+        ]
+        assert capsys.readouterr().out.count("~/.tool") == 1
+        assert not (repo / ".sync-state.json").exists()
+
+    def test_full_legacy_main_dry_run_never_prompts_or_applies(self, tmp_path, monkeypatch, capsys):
+        repo, home, _ = self._legacy_tree(tmp_path, monkeypatch)
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Dry-run reached a prompt or mutation")
+
+        monkeypatch.setattr(sync, "confirm", forbidden)
+        monkeypatch.setattr(sync, "apply_sync_changes", forbidden)
+        monkeypatch.setattr(sync, "_run_sudo", forbidden)
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "aardvark", "--dry-run"])
+        sync.main()
+        assert "Dry-run" in capsys.readouterr().out
+        assert not (repo / ".sync-state.json").exists()
+        assert list(home.iterdir()) == []
+
+    def test_mode_help_and_home_only_target_listing(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "frame").mkdir()
+        (tmp_path / "frame/sync.json").write_text("{}")
+        monkeypatch.setattr(sync, "TARGETS_ROOT", tmp_path)
+        assert "frame (home-only; use --home-only)" in sync.list_available_targets()
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "--help"])
+        with pytest.raises(SystemExit) as exc:
+            sync.main()
+        assert exc.value.code == 0
+        help_text = capsys.readouterr().out
+        assert "--home-only" in help_text and "--dry-run" in help_text
+
+    def test_home_only_target_requires_explicit_mode(self, tmp_path, monkeypatch):
+        repo, _, _ = self._legacy_tree(tmp_path, monkeypatch)
+        (repo / "frame").mkdir()
+        (repo / "frame/sync.json").write_text("{}")
+        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame"])
+        with pytest.raises(SystemExit) as exc:
+            sync.main()
+        assert exc.value.code == 1
+
+
 class TestStalePathRegex:
     """STALE_PATH_RE flags stale pre-move path forms and allows the correct
     post-move (target-first) forms — exercised over inline fixtures."""

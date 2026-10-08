@@ -40,6 +40,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from home_sync import apply_home_sync, describe_home_plan, plan_home_sync
+
 REPO_DIR = Path(__file__).resolve().parent
 # Target-first layout: every machine/layer ("target") lives at the repo root,
 # with its Nix files directly (incl. configuration.nix) and any dotfiles under
@@ -67,7 +69,12 @@ def discover_targets() -> list[Path]:
     targets = [
         d
         for d in TARGETS_ROOT.iterdir()
-        if d.is_dir() and ((d / "configuration.nix").is_file() or (d / "dotfiles").is_dir())
+        if d.is_dir()
+        and (
+            (d / "configuration.nix").is_file()
+            or (d / "dotfiles").is_dir()
+            or (d / "sync.json").is_file()
+        )
     ]
     return sorted(targets)
 
@@ -271,10 +278,11 @@ def build_symlink_list(
     if not targets_root.is_dir():
         raise FileNotFoundError(f"Source directory not found: {targets_root}")
 
-    allowed = {folder_name, *allowed_layers}
-    symlinks: list[tuple[Path, Path]] = []
+    # Preserve legacy shared-layer ordering; apply the machine exactly once last.
+    allowed = [*sorted(set(allowed_layers) - {folder_name}), folder_name]
+    symlinks: dict[Path, Path] = {}
 
-    for target_name in sorted(allowed):
+    for target_name in allowed:
         if strip_layer_prefix:
             # Dotfiles pass: walk only <target>/dotfiles/**
             source_dir = targets_root / target_name / "dotfiles"
@@ -330,9 +338,9 @@ def build_symlink_list(
                 continue
 
             target_path = target_dir / relative
-            symlinks.append((target_path, source_path))
+            symlinks[target_path] = source_path
 
-    return symlinks
+    return sorted(symlinks.items())
 
 
 def build_skill_symlinks(
@@ -541,6 +549,8 @@ def list_available_targets() -> list[str]:
                 targets.append(f"{entry.name} (layers: {' '.join(layers)})")
             else:
                 targets.append(f"{entry.name} (no layers)")
+        elif (entry / "sync.json").is_file():
+            targets.append(f"{entry.name} (home-only; use --home-only)")
         else:
             targets.append(f"{entry.name} (no configuration.nix)")
     return targets
@@ -803,12 +813,20 @@ def _init_state(folder_name: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create symlinks for NixOS configuration and dotfiles.",
-        usage="%(prog)s <machine_name> [--force]",
+        description="Sync NixOS and dotfiles, or explicitly select home-only dotfiles.",
+        usage="%(prog)s [--home-only] <target> [--dry-run] [--force]",
     )
-    parser.add_argument("machine", nargs="?", help="Machine name (e.g. redline, paprika)")
     parser.add_argument(
-        "-f", "--force", action="store_true", help="Overwrite existing non-symlink files"
+        "machine",
+        nargs="?",
+        metavar="target",
+        help="NixOS machine, or home-only target (e.g. frame)",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Overwrite legacy conflicts; home-only backs up confirmed non-directory conflicts",
     )
     parser.add_argument(
         "--init-state",
@@ -816,7 +834,47 @@ def main():
         help="Write a manifest for the old (pre-layer-aware) sync behavior, "
         "so the next regular sync detects and removes stale symlinks",
     )
+    parser.add_argument(
+        "--home-only", action="store_true", help="Use target sync.json; never mutate NixOS"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report selections and conflicts without writes/prompts",
+    )
     args = parser.parse_args()
+
+    if args.init_state and (args.home_only or args.dry_run):
+        parser.error("--init-state cannot be combined with --home-only or --dry-run")
+
+    if args.home_only and args.machine:
+        try:
+            plan = plan_home_sync(
+                target=args.machine, home=DOTFILES_TARGET, repo=TARGETS_ROOT, force=args.force
+            )
+            print(describe_home_plan(plan))
+            if args.dry_run:
+                print("Dry-run: no changes made.")
+                return
+            prompt = "Apply these home-only changes"
+            if args.force:
+                prompt += " (back up non-directory conflicts before replacement)"
+            if not confirm(prompt + "? (y/n) "):
+                print("Operation cancelled.")
+                return
+            result = apply_home_sync(plan, confirmed=True)
+            for warning in result.warnings:
+                print(f"Warning: {warning}")
+            for backup in result.backups:
+                print(f"Backup: {backup}")
+            print(
+                "Home-only sync complete"
+                + (" with preserved conflicts." if result.warnings else ".")
+            )
+        except (ValueError, OSError) as exc:
+            print(f"Error: {exc}")
+            sys.exit(1)
+        return
 
     if args.init_state:
         if not args.machine:
@@ -826,7 +884,9 @@ def main():
         return
 
     if not args.machine:
-        print(f"Usage: {sys.argv[0]} <machine_name> [--force]\n")
+        print(f"Usage: {sys.argv[0]} [--home-only] <target> [--dry-run] [--force]\n")
+        print("--home-only reads target sync.json and changes only home dotfiles.")
+        print("--dry-run reports changes without prompts or writes.\n")
         print("Creates symlinks for NixOS and dotfiles, then creates a symlink from")
         print(f"{NIXOS_TARGET}/configuration.nix to")
         print(f"{TARGETS_ROOT}/<target>/configuration.nix\n")
@@ -998,6 +1058,10 @@ def main():
             msg = "Use --force / -f to overwrite them. Without it, these files will be skipped."
             print(dim(msg))
             print()
+
+    if args.dry_run:
+        print("Dry-run: no changes made.")
+        return
 
     # Ask for confirmation
     if not confirm("Are these symlinks OK? (y/n) "):
