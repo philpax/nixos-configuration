@@ -277,7 +277,10 @@ def test_actual_sync_shell_fresh_home_dry_run_is_read_only(tmp_path, monkeypatch
     assert "Home-only target: frame" in result.stdout
 
 
-def test_invalid_pin_fails_before_profile_stage(tmp_path, monkeypatch):
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_invalid_pin_fails_before_profile_stage(tmp_path, monkeypatch, dry_run):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "host-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "host-data"))
     home, repo = tmp_path / "home", tmp_path / "repo"
     home.mkdir()
     (repo / "frame").mkdir(parents=True)
@@ -285,9 +288,9 @@ def test_invalid_pin_fails_before_profile_stage(tmp_path, monkeypatch):
         json.dumps({"schema_version": 1, "layers": [], "exclusions": []})
     )
     (repo / "frame/nixpkgs.json").write_text("invalid")
-    frame = Frame(home, repo=repo)
+    frame = Frame(home, repo=repo, environ={"HOME": str(home), "PATH": os.environ["PATH"]})
     monkeypatch.setattr(frame, "activation_config_home", lambda: None)
     monkeypatch.setattr(frame, "install", lambda: pytest.fail("invalid selection installed"))
     with pytest.raises(FrameError, match="selected nixpkgs pin"):
-        deploy(frame)
+        deploy(frame, dry_run=dry_run)
     assert list(home.iterdir()) == []
