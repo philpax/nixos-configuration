@@ -2,7 +2,7 @@
 
 import os
 
-from home_sync import describe_home_plan, plan_home_sync
+from home_sync import plan_home_sync
 
 from .activation import Activation, handle_cli
 
@@ -34,7 +34,6 @@ def deploy(frame, *, dry_run=False, confirm=None, output=print):
         if installed:
             return handle_cli(frame, dry_run=True, output=output)
         plan = activation.plan(profile="(created by installation)", sync_plan=selected)
-        plan.sync_description = describe_home_plan(selected)
         output(plan.describe())
         output("Installation must succeed before the final activation plan can be confirmed.")
         return 0

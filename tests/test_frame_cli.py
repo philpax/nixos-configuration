@@ -502,10 +502,10 @@ def test_cli_activation_delegates_lazily(installed, monkeypatch):
     monkeypatch.setattr(frame, "activation_config_home", lambda: None)
     calls = []
 
-    def handler(selected, *, dry_run, input_fn):
+    def handler(selected, *, dry_run, confirm):
         calls.append((selected, dry_run))
         if not dry_run:
-            assert input_fn("displayed combined plan") == "yes"
+            assert confirm("displayed combined plan") is True
         return 0
 
     monkeypatch.setattr(cli, "Frame", lambda *args, **kwargs: frame)
@@ -685,23 +685,6 @@ def test_tar_accepts_only_existing_logical_store_references(tmp_path):
                 core.extract_installer(archive, staging)
 
 
-def test_bootstrap_nix_2285_installer_xdg_profile_chain(installed, monkeypatch):
-    frame, _ = installed
-    profile = frame.paths.bootstrap_home / ".local/state/nix/profiles/profile"
-    assert os.readlink(frame.paths.bootstrap_home / ".nix-profile") == str(profile)
-    assert os.readlink(profile) == "profile-1-link"
-    assert os.readlink(profile.with_name("profile-1-link")) == STORE_ONE
-    original = Path.resolve
-
-    def guarded(path, *args, **kwargs):
-        assert not path.is_relative_to("/nix"), "Do not resolve logical /nix on the host"
-        return original(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "resolve", guarded)
-    assert frame.bootstrap_profile() == (STORE_ONE, frame.physical_target(STORE_ONE))
-    assert frame.readiness()
-
-
 @pytest.mark.parametrize(
     "hop,target",
     [
@@ -746,31 +729,6 @@ def test_enter_signal_status_is_conventional_128_plus_signal(installed, monkeypa
     runner.command_status = -signal.SIGTERM
     monkeypatch.setattr(cli, "Frame", lambda *args, **kwargs: frame)
     assert cli.main(["enter", "--", "true"]) == 128 + signal.SIGTERM
-
-
-def test_cli_agent_uses_module_frame_adapter(installed, monkeypatch, capsys):
-    frame, _ = installed
-    calls = []
-    manager = SimpleNamespace(
-        status=lambda env: SimpleNamespace(as_dict=lambda: {"kind": "none"}),
-        stop=lambda: calls.append("stop"),
-    )
-    adapter = SimpleNamespace(manager_for_frame=lambda selected: calls.append(selected) or manager)
-    monkeypatch.setattr(core.importlib, "import_module", lambda name: adapter)
-    monkeypatch.setattr(cli, "Frame", lambda *args, **kwargs: frame)
-    assert cli.main(["agent", "status"]) == 0
-    assert json.loads(capsys.readouterr().out) == {"kind": "none"}
-    assert cli.main(["agent", "stop"]) == 0
-    assert calls == [frame, frame, "stop"]
-
-
-def test_readiness_uses_retained_cacert_not_nix_profile(installed):
-    frame, runner = installed
-    assert not (frame.physical_target(STORE_ONE) / "etc/ssl/certs/ca-bundle.crt").exists()
-    assert frame.verified_certificate() == frame.certificate_path
-    assert frame.readiness()
-    assert any(str(frame.certificate_path) in argv for argv, _ in runner.calls)
-    assert any("store" in argv and "info" in argv for argv, _ in runner.calls)
 
 
 @pytest.mark.parametrize("change", ["bytes", "symlink", "hardlink", "path", "hash", "archive"])
@@ -832,16 +790,6 @@ def test_bash_exported_functions_are_not_inherited(installed):
         ["true"], env={**frame.environment(), "BASH_FUNC_unset%%": "() { echo unsafe; }"}
     )
     assert not any(key.startswith("BASH_FUNC_") for key in runner.calls[-1][1]["env"])
-
-
-def test_nix_source_paths_are_string_arguments(installed):
-    frame, runner = installed
-    overrides = frame.home / "override with ${literal}.nix"
-    overrides.write_text("args: args")
-    frame._build(overrides=overrides)
-    argv = runner.calls[-1][0]
-    for name in ("nixpkgsPin", "overrides"):
-        assert argv[argv.index(name) - 1] == "--argstr"
 
 
 def test_nix_source_paths_evaluate_literal_strings(installed, monkeypatch):

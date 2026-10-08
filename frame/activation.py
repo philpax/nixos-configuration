@@ -61,7 +61,6 @@ class Plan:
     operations: list[Operation]
     font_dir: Path
     sync_plan: object = None
-    sync_description: str | None = None
     readiness: bool = False
     warnings: list[str] = field(default_factory=list)
 
@@ -70,18 +69,48 @@ class Plan:
         return [op for op in self.operations if op.conflict]
 
     def describe(self) -> str:
-        lines = [f"Frame activation profile: {self.profile}", f"Export fonts: {self.font_dir}"]
-        lines.append(f"Wrapper readiness: {'ready' if self.readiness else 'unavailable'}")
-        for op in self.operations:
-            action = f"conflict ({op.conflict})" if op.conflict else "manage"
-            lines.append(f"{action}: {op.path}")
-        lines.extend(self.warnings)
-        if self.sync_description is not None:
-            lines.append(self.sync_description)
-        elif self.sync_plan is not None:
+        from types import SimpleNamespace
+
+        from sync_workflow import Section, describe_sync_plan
+
+        selected = getattr(self.sync_plan, "plan", self.sync_plan)
+        context = (
+            selected
+            if hasattr(selected, "home")
+            else SimpleNamespace(
+                home=self.font_dir.parent,
+                repo=self.font_dir.parent,
+                target="frame",
+                layers=(),
+                operations=(),
+                exclusions=(),
+            )
+        )
+        sections = [
+            Section(
+                "CLI profile",
+                (
+                    self.profile,
+                    f"Wrapper readiness: {'ready' if self.readiness else 'unavailable'}",
+                ),
+            )
+        ]
+        for kind, title in (
+            ("file", "Generated configuration"),
+            ("link", "Host assets"),
+            ("startup", "Shell startup"),
+        ):
+            items = tuple(
+                str(op.path) + (f" [skipped: {op.conflict}]" if op.conflict else "")
+                for op in self.operations
+                if op.kind == kind
+            )
+            sections.append(Section(title, items))
+        footer = list(self.warnings)
+        if not hasattr(selected, "home") and self.sync_plan is not None:
             describe = getattr(self.sync_plan, "describe", None)
-            lines.append(describe() if describe else str(self.sync_plan))
-        return "\n".join(lines)
+            footer.append(describe() if describe else str(self.sync_plan))
+        return describe_sync_plan(context, extra_sections=sections, footer=footer)
 
 
 @dataclass
@@ -788,6 +817,10 @@ class Activation:
             f"{op.destination}: {op.conflict}" for op in getattr(selected, "conflicts", ())
         ]
         prerequisite_conflicts.extend(getattr(sync_result, "warnings", ()))
+        if getattr(sync_result, "complete", True) is False:
+            prerequisite_conflicts.append(
+                "home sync is incomplete; review the reported link results"
+            )
         prerequisite_conflicts.extend(
             f"{op.path}: {op.conflict}"
             for op in plan.operations
@@ -993,24 +1026,15 @@ def status(frame) -> dict:
     return Activation(frame).status()
 
 
-def activate(frame, *, dry_run=False, confirm=None, sync_plan=None, sync_apply=None) -> dict | Plan:
-    """The CLI calls this under its lock except for the read-only dry-run."""
-    activation = Activation(frame)
-    activation.policy()
-    selected = sync_plan() if callable(sync_plan) else sync_plan
-    plan = activation.plan(sync_plan=selected)
-    if dry_run:
-        return plan
-    if confirm is None or not confirm(plan.describe()):
-        raise ActivationError("activation cancelled; no mutation was performed")
-    return activation.apply(plan, confirmed=True, sync_apply=sync_apply)
-
-
 def handle_cli(frame, *, dry_run=False, confirm=None, input_fn=None, output=print) -> int:
-    """Combine read-only planning, one confirmation, and ordered mutation locks."""
-    from home_sync import apply_home_sync, describe_home_plan, plan_home_sync
+    """Extend the shared sync workflow with generated assets and startup files."""
+    from home_sync import apply_home_sync, plan_home_sync
+    from sync_workflow import run_sync
+
+    activation = None
 
     def planned():
+        nonlocal activation
         activation = Activation(frame)
         font_dir = activation.policy()
         selected = plan_home_sync(
@@ -1023,11 +1047,10 @@ def handle_cli(frame, *, dry_run=False, confirm=None, input_fn=None, output=prin
                 str(font_dir.relative_to(activation.home)),
             ),
         )
-        plan = activation.plan(sync_plan=selected)
-        plan.sync_description = describe_home_plan(selected)
-        return activation, plan
+        return activation.plan(sync_plan=selected)
 
-    def signature(manager, plan):
+    def signature(plan):
+        manager = activation
         current = []
         for op in plan.operations:
             path = op.path
@@ -1043,42 +1066,34 @@ def handle_cli(frame, *, dry_run=False, confirm=None, input_fn=None, output=prin
                         stat.S_IMODE(path.lstat().st_mode),
                     )
             current.append((str(path), op.kind, op.content, op.original, op.conflict, content))
-        return (plan.describe(), current, manager.read_manifest())
+        return (plan.profile, plan.readiness, plan.sync_plan, current, manager.read_manifest())
 
-    activation, plan = planned()
-    expected = signature(activation, plan)
-    output(plan.describe())
-    if dry_run:
-        return 0
-    accepted = (
-        confirm(plan.describe())
-        if confirm
-        else (
-            (input_fn or input)("Apply the displayed home-only activation changes? [y/N] ")
-            .strip()
-            .lower()
-            in {"y", "yes"}
-        )
-    )
-    if not accepted:
-        output("Activation cancelled; no mutation was performed.")
-        return 1
-    with frame.lock():
-        activation, current = planned()
-        if signature(activation, current) != expected:
-            raise ActivationError(
-                "activation plan changed after confirmation; review a fresh dry-run"
+    def apply(current):
+        sync_result = None
+
+        def sync_apply(chosen):
+            nonlocal sync_result
+            sync_result = apply_home_sync(chosen, confirmed=True)
+            return sync_result
+
+        result = activation.apply(current, confirmed=True, sync_apply=sync_apply)
+        if sync_result is not None:
+            result.update(
+                plan=current.sync_plan,
+                ownership=sync_result.ownership,
+                warnings=sync_result.warnings,
+                backups=sync_result.backups,
             )
-        result = activation.apply(
-            current,
-            confirmed=True,
-            sync_apply=lambda chosen: apply_home_sync(chosen, confirmed=True),
-        )
-    for conflict in result["conflicts"]:
-        output(f"Skipped: {conflict}")
-    output(
-        "Frame automatic startup is ready."
-        if result["complete"]
-        else "Frame integration is partial; resolve conflicts before automatic startup."
+        return result
+
+    return run_sync(
+        planner=planned,
+        applier=apply,
+        describe=lambda plan: plan.describe(),
+        signature=signature,
+        lock=frame.lock,
+        dry_run=dry_run,
+        confirm=confirm,
+        input_fn=input_fn,
+        output=output,
     )
-    return 0 if result["complete"] else 1

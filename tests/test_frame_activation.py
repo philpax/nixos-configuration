@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 import tomllib
 
-from frame.activation import BEGIN, END, Activation, ActivationError, activate, handle_cli
+from frame.activation import BEGIN, END, Activation, ActivationError, handle_cli
 
 BASH = shutil.which("bash")
 REFRESH_FONTS = Activation.refresh_fonts
@@ -193,7 +193,7 @@ def test_activation_dry_run_no_mutation(setup):
     frame, activation = setup
     before = snapshot(frame.home)
     selected = SimpleNamespace(describe=lambda: "sync link plan")
-    plan = activate(frame, dry_run=True, sync_plan=lambda: selected)
+    plan = activation.plan(sync_plan=selected)
     assert "sync link plan" in plan.describe()
     assert len(plan.operations) == 7
     assert snapshot(frame.home) == before
@@ -202,19 +202,31 @@ def test_activation_dry_run_no_mutation(setup):
     assert snapshot(frame.home) == before
 
 
-def test_activation_single_confirmation(setup):
+def test_activation_single_confirmation(setup, monkeypatch):
+    import home_sync
+
     frame, _ = setup
-    prompts = []
-    calls = []
-    result = activate(
-        frame,
-        confirm=lambda text: prompts.append(text) or True,
-        sync_plan=lambda: "SYNC-PLAN",
-        sync_apply=lambda plan: calls.append(plan),
+    prompts, output, calls = [], [], []
+    apply_sync = home_sync.apply_home_sync
+
+    def applied(plan, **kwargs):
+        calls.append(plan)
+        return apply_sync(plan, **kwargs)
+
+    monkeypatch.setattr(home_sync, "apply_home_sync", applied)
+    assert (
+        handle_cli(
+            frame,
+            confirm=lambda text: prompts.append(text) or True,
+            output=output.append,
+        )
+        == 0
     )
-    assert len(prompts) == 1 and "SYNC-PLAN" in prompts[0]
-    assert calls == ["SYNC-PLAN"]
-    assert result["complete"]
+    assert prompts == [output[0]]
+    assert "Imported layers: common-all" in prompts[0]
+    assert "Shell startup" in prompts[0]
+    assert len(calls) == 1
+    assert Activation(frame).status()["complete"]
 
 
 @pytest.mark.parametrize("config", ["relative", "/tmp/config", "outside", "traversal"])
@@ -596,7 +608,8 @@ def test_cli_combines_real_sync_dryrun_and_declined_confirmation(setup):
     before = snapshot(frame.home)
     lines = []
     assert handle_cli(frame, dry_run=True, output=lines.append) == 0
-    assert "Home-only target: frame" in lines[0]
+    assert "Imported layers: common-all" in lines[0]
+    assert "Agent skills (personal)" in lines[0]
     assert ".config/fish/config.fish" in lines[0]
     assert snapshot(frame.home) == before
     prompts = []
@@ -644,8 +657,9 @@ def test_cli_confirmation_change_rejected(setup):
         write(frame.home / ".bashrc", "user added this after review\n")
         return True
 
-    with pytest.raises(ActivationError, match="changed after confirmation"):
-        handle_cli(frame, confirm=confirm, output=lambda _: None)
+    messages = []
+    assert handle_cli(frame, confirm=confirm, output=messages.append) == 1
+    assert any("changed after confirmation" in message for message in messages)
     assert (frame.home / ".bashrc").read_text() == "user added this after review\n"
     assert not (frame.state / "activation.json").exists()
 
@@ -872,8 +886,9 @@ def test_symlinked_control_parent_rejected_without_writes(setup, nested):
     else:
         frame.state.symlink_to(target)
     before = snapshot(frame.home)
-    with pytest.raises(ActivationError, match="unsafe activation parent"):
-        handle_cli(frame, dry_run=True, output=lambda _: None)
+    messages = []
+    assert handle_cli(frame, dry_run=True, output=messages.append) == 1
+    assert any("unsafe activation parent" in message for message in messages)
     assert snapshot(frame.home) == before
     assert list(target.iterdir()) == []
 

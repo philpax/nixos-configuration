@@ -115,7 +115,7 @@ def test_combined_dry_run_is_read_only(deployment, installed):
         and "update" not in frame.events
         and "lock" not in frame.events
     )
-    assert any("create:" in message for message in messages)
+    assert any("~/.tool [create]" in message for message in messages)
     assert not frame.home.joinpath(".tool").exists()
 
 
@@ -134,7 +134,8 @@ def test_profile_stage_precedes_single_confirmed_activation(deployment, installe
         return True
 
     assert deploy(frame, confirm=confirm, output=lambda _: None) == 0
-    assert len(prompts) == 1 and "Home-only target: frame" in prompts[0]
+    assert len(prompts) == 1 and "Imported layers: common-all" in prompts[0]
+    assert "Dotfiles (1):" in prompts[0] and "CLI profile" in prompts[0]
     assert (frame.home / ".tool").is_symlink()
     assert (frame.state / "activation.json").is_file()
     assert (frame.home / ".bash_profile").is_file()
@@ -216,8 +217,8 @@ def test_confirmation_uses_post_deployment_profile_and_home_selection(
 
     def confirm(description):
         prompts.append(description)
-        assert frame.candidate in description
-        assert str(frame.home / ".after-deployment") in description
+        assert "~/sources/profile-new-selection" in description
+        assert "~/.after-deployment" in description
         assert not (frame.home / ".after-deployment").exists()
         return True
 
@@ -274,7 +275,9 @@ def test_actual_sync_shell_fresh_home_dry_run_is_read_only(tmp_path, monkeypatch
     assert result.returncode == 0, result.stdout + result.stderr
     assert not list(home.iterdir())
     assert "Frame profile action: install" in result.stdout
-    assert "Home-only target: frame" in result.stdout
+    assert "Imported layers: common-all" in result.stdout
+    assert "Dotfiles" in result.stdout and "CLI profile" in result.stdout
+    assert "  keep:" not in result.stdout
 
 
 @pytest.mark.parametrize("dry_run", [False, True])

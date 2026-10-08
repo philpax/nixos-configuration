@@ -10,6 +10,11 @@ import pytest
 
 import home_sync
 import sync
+import sync_engine
+
+FRAME_EXCLUSIONS = tuple(
+    json.loads((Path(__file__).resolve().parents[1] / "frame/sync.json").read_text())["exclusions"]
+)
 
 
 def put(path, text="fixture"):
@@ -32,7 +37,7 @@ def tree(tmp_path):
             {
                 "schema_version": 1,
                 "layers": ["common-all", "common-dev", "common-desktop", "common-dev-desktop"],
-                "exclusions": [".excluded"],
+                "exclusions": [*FRAME_EXCLUSIONS, ".excluded"],
             }
         ),
     )
@@ -83,15 +88,9 @@ def main_home(tree, monkeypatch, *arguments, confirm=True):
     monkeypatch.setattr(sync, "TARGETS_ROOT", repo)
     monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
     monkeypatch.setattr(sync, "confirm", confirm if callable(confirm) else lambda message: confirm)
-    for name in (
-        "_run_sudo",
-        "apply_sync_changes",
-        "_init_state",
-        "get_imported_layers",
-        "write_manifest",
-    ):
+    for name in ("_init_state", "get_imported_layers"):
         monkeypatch.setattr(sync, name, forbid)
-    monkeypatch.setattr(sync.subprocess, "run", forbid)
+    monkeypatch.setattr(sync_engine.subprocess, "Popen", forbid)
     monkeypatch.setattr(sync.sys, "argv", ["sync.py", "--home-only", "frame", *arguments])
     sync.main()
 
@@ -165,7 +164,7 @@ def test_home_sync_selection_and_overrides(tree, monkeypatch, capsys):
     assert (home / ".local/share/claude-plugins/plugin").is_symlink()
     assert (home / ".config/steel/cogs/forest").is_symlink()
     assert not (home / ".config/steel/cogs/uninitialized").exists()
-    assert "Overrides:" in capsys.readouterr().out
+    assert "Layer overrides" in capsys.readouterr().out
     assert not (repo / ".sync-state.json").exists()
 
 
@@ -186,12 +185,12 @@ def test_frame_passive_desktop_selection(tmp_path):
         ".local/bin/record-screen.sh",
     ):
         assert path in selected
-    for path in home_sync.PROTECTED_PATHS:
+    for path in FRAME_EXCLUSIONS:
         assert not any(dest == path or dest.startswith(path + "/") for dest in selected)
     assert snapshot(home) == {}
 
 
-@pytest.mark.parametrize("relative", home_sync.PROTECTED_PATHS)
+@pytest.mark.parametrize("relative", FRAME_EXCLUSIONS)
 def test_home_sync_protected_paths(tree, monkeypatch, relative):
     repo, home = tree
     source = put(repo / "common-all/dotfiles" / relative)
@@ -207,6 +206,34 @@ def test_home_sync_protected_paths(tree, monkeypatch, relative):
     source.unlink()
     main_home(tree, monkeypatch)
     assert destination.is_symlink()
+
+
+def test_home_exclusions_come_only_from_declaration_and_control_paths(tree):
+    repo, home = tree
+    declaration = repo / "frame/sync.json"
+    selection = json.loads(declaration.read_text())
+    selection["exclusions"] = []
+    declaration.write_text(json.dumps(selection))
+    sources = {
+        home / relative: put(repo / "common-all/dotfiles" / relative)
+        for relative in (".bashrc", ".config/mimeapps.list", "nixos-clean.sh")
+    }
+    proposal = plan(tree)
+    assert dict(proposal.symlinks) == {
+        **sources,
+        home / ".claude/skills": home / ".agents/skills",
+    }
+    assert set(proposal.exclusions) == {
+        ".local/state/nixos-configuration/sync-home.json" + suffix
+        for suffix in ("", ".lock", ".worker-lock", ".worker-request")
+    }
+    selection["exclusions"] = ["nixos-clean.sh", "nixos-clean.sh"]
+    declaration.write_text(json.dumps(selection))
+    revised = plan(tree)
+    assert (home / "nixos-clean.sh", sources[home / "nixos-clean.sh"]) not in revised.symlinks
+    assert revised.exclusions.count("nixos-clean.sh") == 1
+    assert (home / ".bashrc", sources[home / ".bashrc"]) in revised.symlinks
+    assert snapshot(home) == {}
 
 
 def test_additional_kde_autostart_descendant_excluded(tree):
@@ -232,7 +259,9 @@ def test_home_sync_state_isolation(tree):
     home_sync.apply_home_sync(plan(tree), confirmed=True)
     state_path = home / ".local/state/nixos-configuration/sync-home.json"
     full, _ = home_sync.read_home_state(state_path, home=home, repo=repo)
-    assert full["mode"] == "home-only"
+    assert full["mode"] == "sync"
+    assert full["schema_version"] == 2
+    assert full["roots"] == []
     assert full["home"] == str(home)
     assert full["repo"] == str(repo)
     assert sync.read_manifest(state_path) == full["symlinks"]
@@ -340,8 +369,8 @@ def test_home_dry_run_existing_state_is_read_only(tree, monkeypatch):
     (home / "stale").symlink_to(source)
     write_state(tree, {home / "stale": source})
     before = snapshot(home)
-    monkeypatch.setattr(home_sync, "_persist", forbid)
-    monkeypatch.setattr(home_sync, "_mutation_lock", forbid)
+    monkeypatch.setattr(sync_engine, "_persist", forbid)
+    monkeypatch.setattr(sync_engine, "_mutation_lock", forbid)
     main_home(tree, monkeypatch, "--dry-run")
     assert snapshot(home) == before
 
@@ -435,7 +464,7 @@ def test_home_failure_second_link_records_progress_and_retains_unvisited(tree, m
     (home / "c").symlink_to(old)
     write_state(tree, {home / "c": old})
     proposal = plan(tree)
-    original = home_sync.os.symlink
+    original = sync_engine.os.symlink
 
     def fail_second(source, destination, **kwargs):
         if destination == "b":
@@ -443,7 +472,7 @@ def test_home_failure_second_link_records_progress_and_retains_unvisited(tree, m
         return original(source, destination, **kwargs)
 
     with monkeypatch.context() as patch:
-        patch.setattr(home_sync.os, "symlink", fail_second)
+        patch.setattr(sync_engine.os, "symlink", fail_second)
         with pytest.raises(OSError, match="second link"):
             home_sync.apply_home_sync(proposal, confirmed=True)
     manifest = sync.read_manifest(proposal.state_path)
@@ -580,7 +609,7 @@ def test_home_mutation_holds_lock(tree, monkeypatch):
     import fcntl
 
     proposal = plan(tree)
-    original = home_sync._persist
+    original = sync_engine._persist
     seen = []
 
     def persist_with_check(plan, ownership):
@@ -591,7 +620,7 @@ def test_home_mutation_holds_lock(tree, monkeypatch):
         seen.append(True)
         original(plan, ownership)
 
-    monkeypatch.setattr(home_sync, "_persist", persist_with_check)
+    monkeypatch.setattr(sync_engine, "_persist", persist_with_check)
     home_sync.apply_home_sync(proposal, confirmed=True)
     assert seen
 
@@ -609,7 +638,7 @@ def test_work_account_follows_winning_skill_marker(tree):
 
 
 def test_control_paths_cannot_occupy_protected_destinations(tree):
-    for path in (".bashrc", ".ssh/state.json", ".local/share/frame-cli/sync.json"):
+    for path in (".bashrc", ".tokens/state.json", ".local/share/frame-cli/sync.json"):
         with pytest.raises(ValueError, match="protected destinations"):
             plan(tree, state_path=tree[1] / path)
     assert snapshot(tree[1]) == {}

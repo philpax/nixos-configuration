@@ -41,8 +41,7 @@ def parser():
 def activate(frame, *, dry_run=False, confirm=None):
     module = importlib.import_module("frame.activation")
     frame.activation_config_home()
-    input_fn = (lambda text: "yes" if confirm(text) else "no") if confirm else None
-    return module.handle_cli(frame, dry_run=dry_run, input_fn=input_fn)
+    return module.handle_cli(frame, dry_run=dry_run, confirm=confirm)
 
 
 def main(argv=None, *, runner=None, repo=None, environ=None, downloader=None, confirm=None):

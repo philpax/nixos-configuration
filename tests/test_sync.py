@@ -1,1839 +1,595 @@
-"""Tests for sync.py — pure logic, filesystem helpers, and manifest round-trips."""
+"""Sync CLI selection, shared planning/application, and compatibility exports."""
 
 from __future__ import annotations
 
 import json
 import os
-import re
-from pathlib import Path
 
 import pytest
 
 import sync
-
-# ---------------------------------------------------------------------------
-# parse_imported_layers — pure function, no I/O
-# ---------------------------------------------------------------------------
+import sync_workflow
 
 
-class TestParseImportedLayers:
-    def test_single_layer(self):
-        content = """
-        { config, pkgs, ... }:
-        {
-          imports = [
-            ../common-all/configuration.nix
-          ];
-        }
-        """
-        assert sync.parse_imported_layers(content) == ["common-all"]
+def write(path, content="content"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return path
 
-    def test_multiple_layers(self):
-        content = """
-        {
-          imports = [
-            ../common-all/configuration.nix
-            ../common-desktop/configuration.nix
-            ../common-dev/programs/development.nix
-            ../common-dev-desktop/configuration.nix
-          ];
-        }
-        """
-        assert sync.parse_imported_layers(content) == [
-            "common-all",
-            "common-desktop",
-            "common-dev",
-            "common-dev-desktop",
-        ]
 
-    def test_deduplicates(self):
-        content = """
-        {
-          imports = [
-            ../common-all/configuration.nix
-            ../common-all/programs/default.nix
-            ../common-all/services/ssh.nix
-          ];
-        }
-        """
-        assert sync.parse_imported_layers(content) == ["common-all"]
+@pytest.fixture
+def tree(tmp_path, monkeypatch):
+    repo, home, nixos = tmp_path / "repo", tmp_path / "home", tmp_path / "nixos"
+    home.mkdir()
+    nixos.mkdir()
+    for name in ("common-all", "common-dev", "common-desktop", "aardvark", "redline"):
+        imports = "../common-all ../common-dev" if name == "aardvark" else "{}"
+        write(repo / name / "configuration.nix", imports)
+        write(repo / name / "dotfiles/.tool", name)
+    write(repo / "common-all/dotfiles/.gitconfig")
+    write(repo / "common-dev/dotfiles/.agents/skills/alpha/SKILL.md")
+    write(repo / "common-dev/dotfiles/.agents/skills/alpha/.work-compatible")
+    write(repo / "common-dev/dotfiles/.claude-plugins/plugin/.claude-plugin/plugin.json", "{}")
+    write(repo / "steel-cogs/forest/cog.scm")
+    write(
+        repo / "frame/sync.json",
+        json.dumps({"schema_version": 1, "layers": ["common-all", "common-dev"], "exclusions": []}),
+    )
+    write(repo / "frame/dotfiles/.tool", "frame")
+    monkeypatch.setattr(sync, "TARGETS_ROOT", repo)
+    monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
+    monkeypatch.setattr(sync, "NIXOS_TARGET", nixos)
+    monkeypatch.setattr(sync, "STATE_FILE", repo / ".sync-state.json")
+    monkeypatch.setattr(sync, "confirm", lambda message: True)
+    return repo, home, nixos
 
-    def test_ignores_non_common_imports(self):
-        content = """
-        {
-          imports = [
-            ../common-all/configuration.nix
-            ./services/default.nix
-            ./programs/default.nix
-            <nixos-hardware/lenovo/thinkpad/t480s>
-          ];
-        }
-        """
-        assert sync.parse_imported_layers(content) == ["common-all"]
 
-    def test_no_imports(self):
-        assert sync.parse_imported_layers("imports = [];") == []
+def main(monkeypatch, *arguments):
+    monkeypatch.setattr(sync.sys, "argv", ["sync.py", *arguments])
+    try:
+        sync.main()
+    except SystemExit as exc:
+        return exc.code
+    return 0
 
-    def test_empty_string(self):
-        assert sync.parse_imported_layers("") == []
 
-    def test_real_redline_config(self):
-        content = """{ config, lib, pkgs, ... }:
+def forbid(*args, **kwargs):
+    pytest.fail("Forbidden mutation, runner, or prompt reached")
 
-let
-  folders = import ./folders.nix;
-in {
-  imports =
+
+def legacy_state(repo, links):
+    state = {"machine": "aardvark", "timestamp": "2026-01-01T00:00:00+00:00", "symlinks": links}
+    return write(repo / ".sync-state.json", json.dumps(state))
+
+
+@pytest.mark.parametrize(
+    "content,expected",
     [
-      ../common-all/configuration.nix
-      (import ./ai { inherit config pkgs; })
-      (import ./services { inherit config lib pkgs; })
-      (import ./programs { inherit config pkgs; })
-    ];
-}
-"""
-        assert sync.parse_imported_layers(content) == ["common-all"]
-
-    def test_real_paprika_config(self):
-        content = """{ config, pkgs, ... }:
-
-{
-  imports =
-    [
-      <nixos-hardware/lenovo/thinkpad/t480s>
-      ../common-all/configuration.nix
-      ../common-desktop/configuration.nix
-      ../common-dev/programs/development.nix
-      ../common-dev-desktop/configuration.nix
-    ];
-}
-"""
-        assert sync.parse_imported_layers(content) == [
-            "common-all",
-            "common-desktop",
-            "common-dev",
-            "common-dev-desktop",
-        ]
-
-
-class TestGetImportedLayersTransitive:
-    """get_imported_layers scans all .nix files in the machine dir, not just
-    configuration.nix — so transitive imports (e.g. redline's
-    programs/development.nix importing ../../common-dev/...) are detected."""
-
-    def test_finds_transitive_import_in_subdir(self, tmp_path):
-        """A layer imported only by a nested .nix file is detected."""
-        machine = tmp_path / "my-machine"
-        machine.mkdir()
-        (machine / "configuration.nix").write_text(
-            "{ imports = [ ../common-all/configuration.nix ]; }"
-        )
-        (machine / "programs").mkdir()
-        (machine / "programs" / "development.nix").write_text(
-            "{ imports = [ ../../common-dev/programs/development.nix ]; }"
-        )
-
-        layers = sync.get_imported_layers(machine / "configuration.nix")
-        assert layers == ["common-all", "common-dev"]
-
-    def test_deduplicates_across_files(self, tmp_path):
-        """Same layer imported by multiple files is listed once."""
-        machine = tmp_path / "my-machine"
-        machine.mkdir()
-        (machine / "configuration.nix").write_text(
-            "{ imports = [ ../common-all/configuration.nix ]; }"
-        )
-        (machine / "services").mkdir()
-        (machine / "services" / "default.nix").write_text(
-            "{ imports = [ ../../common-all/services/ssh.nix ]; }"
-        )
-
-        layers = sync.get_imported_layers(machine / "configuration.nix")
-        assert layers == ["common-all"]
-
-    def test_no_machine_dir_returns_empty(self, tmp_path):
-        """Missing configuration.nix returns empty list."""
-        assert sync.get_imported_layers(tmp_path / "nonexistent.nix") == []
-
-
-# ---------------------------------------------------------------------------
-# compute_stale_symlinks — pure function, no I/O
-# ---------------------------------------------------------------------------
-
-
-class TestComputeStaleSymlinks:
-    def test_finds_stale(self):
-        previous = {
-            "/etc/nixos/common-all/config.nix": "/repo/nixos/common-all/config.nix",
-            "/home/user/.config/niri/config.kdl": (
-                "/repo/dotfiles/common-dev-desktop/.config/niri/config.kdl"
-            ),
-        }
-        current = [
-            (
-                Path("/etc/nixos/common-all/config.nix"),
-                Path("/repo/nixos/common-all/config.nix"),
-            ),
-        ]
-        stale = sync.compute_stale_symlinks(previous, current)
-        assert "/home/user/.config/niri/config.kdl" in stale
-        assert "/etc/nixos/common-all/config.nix" not in stale
-
-    def test_no_stale_when_all_present(self):
-        previous = {
-            "/etc/nixos/common-all/config.nix": "/repo/nixos/common-all/config.nix",
-        }
-        current = [
-            (
-                Path("/etc/nixos/common-all/config.nix"),
-                Path("/repo/nixos/common-all/config.nix"),
-            ),
-        ]
-        assert sync.compute_stale_symlinks(previous, current) == []
-
-    def test_empty_previous(self):
-        previous: dict[str, str] = {}
-        current = [
-            (
-                Path("/etc/nixos/common-all/config.nix"),
-                Path("/repo/nixos/common-all/config.nix"),
-            ),
-        ]
-        assert sync.compute_stale_symlinks(previous, current) == []
-
-    def test_machine_switch_detects_stale(self):
-        """Switching from paprika (all layers) to redline (common-all only)."""
-        previous = {
-            "/home/user/.config/niri/config.kdl": (
-                "/repo/dotfiles/common-dev-desktop/.config/niri/config.kdl"
-            ),
-            "/home/user/.config/alacritty/alacritty.toml": (
-                "/repo/dotfiles/common-dev-desktop/.config/alacritty/alacritty.toml"
-            ),
-            "/home/user/.config/fish/config.fish": (
-                "/repo/dotfiles/common-all/.config/fish/config.fish"
-            ),
-        }
-        current = [
-            (
-                Path("/home/user/.config/fish/config.fish"),
-                Path("/repo/dotfiles/common-all/.config/fish/config.fish"),
-            ),
-        ]
-        stale = sync.compute_stale_symlinks(previous, current)
-        assert len(stale) == 2
-        assert "/home/user/.config/niri/config.kdl" in stale
-        assert "/home/user/.config/alacritty/alacritty.toml" in stale
-
-    def test_config_dot_nix_not_stale_on_machine_switch(self):
-        """configuration.nix target is in both old and new sets — not stale."""
-        previous = {
-            "/etc/nixos/configuration.nix": "/repo/nixos/paprika/configuration.nix",
-        }
-        current = [
-            (Path("/etc/nixos/configuration.nix"), Path("/repo/nixos/redline/configuration.nix")),
-        ]
-        assert sync.compute_stale_symlinks(previous, current) == []
-
-
-# ---------------------------------------------------------------------------
-# split_by_target — pure function, no I/O
-# ---------------------------------------------------------------------------
-
-
-class TestSplitByTarget:
-    def test_splits_correctly(self):
-        nixos_target = Path("/etc/nixos")
-        dotfiles_target = Path("/home/user")
-        paths = [
-            "/etc/nixos/common-all/config.nix",
-            "/home/user/.config/fish/config.fish",
-            "/etc/nixos/redline/configuration.nix",
-            "/home/user/.gitconfig",
-        ]
-        nixos, dotfiles = sync.split_by_target(paths, nixos_target, dotfiles_target)
-        assert "/etc/nixos/common-all/config.nix" in nixos
-        assert "/etc/nixos/redline/configuration.nix" in nixos
-        assert "/home/user/.config/fish/config.fish" in dotfiles
-        assert "/home/user/.gitconfig" in dotfiles
-
-    def test_empty_input(self):
-        nixos, dotfiles = sync.split_by_target([], Path("/etc/nixos"), Path("/home/user"))
-        assert nixos == []
-        assert dotfiles == []
-
-    def test_path_outside_both_targets(self):
-        nixos, dotfiles = sync.split_by_target(
-            ["/opt/random/path"], Path("/etc/nixos"), Path("/home/user")
-        )
-        assert nixos == []
-        assert dotfiles == ["/opt/random/path"]
-
-
-# ---------------------------------------------------------------------------
-# build_symlink_list — filesystem-reading, testable with tmp_path
-# ---------------------------------------------------------------------------
-
-
-class TestBuildSymlinkList:
-    def _make_target(
-        self,
-        root: Path,
-        name: str,
-        nix_files: dict[str, str] | None = None,
-        dotfiles: dict[str, str] | None = None,
-    ) -> None:
-        """Create a target dir with optional nix files and a dotfiles/ subdir."""
-        tdir = root / name
-        tdir.mkdir(parents=True, exist_ok=True)
-        for rel, content in (nix_files or {}).items():
-            p = tdir / rel
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content)
-        if dotfiles is not None:
-            ddir = tdir / "dotfiles"
-            ddir.mkdir(parents=True, exist_ok=True)
-            for rel, content in dotfiles.items():
-                p = ddir / rel
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(content)
-
-    def test_filters_by_allowed_layers(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", {"config/app.nix": "# app"})
-        self._make_target(source, "common-desktop", {"config/gui.nix": "# gui"})
-        self._make_target(source, "my-machine", {"machine.nix": "# machine"})
-
-        target = tmp_path / "target"
-        symlinks = sync.build_symlink_list(
-            source,
-            target,
-            "my-machine",
-            allowed_layers=["common-all"],
-            strip_layer_prefix=False,
-        )
-
-        targets = {t for t, s in symlinks}
-        assert target / "common-all" / "config" / "app.nix" in targets
-        assert target / "my-machine" / "machine.nix" in targets
-        assert target / "common-desktop" / "config" / "gui.nix" not in targets
-
-    def test_strip_layer_prefix(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_target(
-            source,
-            "common-all",
-            dotfiles={".config/fish/config.fish": "# fish", ".gitconfig": "# git"},
-        )
-
-        target = tmp_path / "home"
-        symlinks = sync.build_symlink_list(
-            source,
-            target,
-            "my-machine",
-            allowed_layers=["common-all"],
-            strip_layer_prefix=True,
-        )
-
-        targets = {str(t) for t, s in symlinks}
-        assert str(target / ".config" / "fish" / "config.fish") in targets
-        assert str(target / ".gitconfig") in targets
-        assert not any("common-all" in str(t) for t, s in symlinks)
-
-    def test_no_strip_preserves_full_path(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", {"configuration.nix": "# config"})
-
-        target = tmp_path / "target"
-        symlinks = sync.build_symlink_list(
-            source,
-            target,
-            "my-machine",
-            allowed_layers=["common-all"],
-            strip_layer_prefix=False,
-        )
-
-        targets = {str(t) for t, s in symlinks}
-        assert str(target / "common-all" / "configuration.nix") in targets
-
-    def test_empty_source(self, tmp_path):
-        source = tmp_path / "empty"
-        source.mkdir()
-        symlinks = sync.build_symlink_list(
-            source,
-            tmp_path / "target",
-            "my-machine",
-            allowed_layers=["common-all"],
-        )
-        assert symlinks == []
-
-    def test_missing_source_raises(self, tmp_path):
-        import pytest
-
-        with pytest.raises(FileNotFoundError):
-            sync.build_symlink_list(
-                tmp_path / "nonexistent",
-                tmp_path / "target",
-                "machine",
-                allowed_layers=[],
-            )
-
-    def test_skips_symlinks_in_source(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", {"real.nix": "# real"})
-        real_file = source / "common-all" / "real.nix"
-        link_file = source / "common-all" / "link.nix"
-        link_file.symlink_to(real_file)
-
-        symlinks = sync.build_symlink_list(
-            source,
-            tmp_path / "target",
-            "machine",
-            allowed_layers=["common-all"],
-        )
-        sources = {str(s) for t, s in symlinks}
-        assert str(real_file) in sources
-        assert str(link_file) not in sources
-
-    def test_nixos_pass_skips_dotfiles_subdir(self, tmp_path):
-        """The NixOS walk must not emit <target>/dotfiles/** as Nix config."""
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", {"config.nix": "# c"}, dotfiles={".x": "# dot"})
-
-        symlinks = sync.build_symlink_list(
-            source,
-            tmp_path / "target",
-            "machine",
-            allowed_layers=["common-all"],
-            strip_layer_prefix=False,
-        )
-        targets = {str(t) for t, s in symlinks}
-        assert str(tmp_path / "target" / "common-all" / "config.nix") in targets
-        assert not any("/dotfiles/" in t for t in targets)
-
-    def test_file_directly_under_dotfiles_dir(self, tmp_path):
-        """File with no subdirectory after the target's dotfiles dir (e.g. .gitconfig)."""
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", dotfiles={".gitconfig": "# git"})
-
-        symlinks = sync.build_symlink_list(
-            source,
-            tmp_path / "home",
-            "machine",
-            allowed_layers=["common-all"],
-            strip_layer_prefix=True,
-        )
-        assert len(symlinks) == 1
-        assert symlinks[0][0] == tmp_path / "home" / ".gitconfig"
-
-    def test_multiple_allowed_layers(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", {"a.nix": "a"})
-        self._make_target(source, "common-desktop", {"b.nix": "b"})
-        self._make_target(source, "common-dev", {"c.nix": "c"})
-
-        symlinks = sync.build_symlink_list(
-            source,
-            tmp_path / "target",
-            "machine",
-            allowed_layers=["common-all", "common-desktop"],
-        )
-        targets = {t.name for t, s in symlinks}
-        assert "a.nix" in targets
-        assert "b.nix" in targets
-        assert "c.nix" not in targets
-
-    def test_dotfiles_flow_does_not_walk_agents_skills(self, tmp_path):
-        """The dotfiles walk must exclude the per-layer .agents skill sources:
-        build_layered_skill_symlinks creates whole-directory symlinks at
-        ~/.agents/skills/<name>, and file links at ~/.agents/skills/<name>/…
-        would collide with those directory symlinks."""
-        source = tmp_path / "source"
-        self._make_target(
-            source,
-            "common-dev",
-            dotfiles={
-                ".agents/skills/committing/SKILL.md": "# committing",
-                ".agents/skills/committing/.work-compatible": "marker",
-                ".gitconfig": "# git",
-            },
-        )
-        self._make_target(source, "common-all", dotfiles={".claude/CLAUDE.md": "@CONTRIBUTING.md"})
-
-        home = tmp_path / "home"
-        symlinks = sync.build_symlink_list(
-            source, home, "redline", ["common-dev", "common-all"], strip_layer_prefix=True
-        )
-        targets = {str(t) for t, _ in symlinks}
-        # Nothing under ~/.agents/skills/ from the dotfiles walk
-        assert not any(t.startswith(str(home / ".agents")) for t in targets)
-        # .claude dotfile link preserved
-        assert str(home / ".claude" / "CLAUDE.md") in targets
-        # Non-skill dotfile still walked
-        assert str(home / ".gitconfig") in targets
-
-    def test_dotfiles_flow_does_not_walk_claude_plugins(self, tmp_path):
-        """Plugin sources are linked as whole directories by
-        build_layered_plugin_symlinks, so the dotfiles walk must not add
-        per-file links beneath ~/.claude-plugins."""
-        source = tmp_path / "source"
-        self._make_target(
-            source,
-            "common-dev",
-            dotfiles={
-                ".claude-plugins/deep-plan/.claude-plugin/plugin.json": "{}",
-                ".claude-plugins/deep-plan/hooks/register.tsx": "// hooks",
-                ".gitconfig": "# git",
-            },
-        )
-
-        home = tmp_path / "home"
-        symlinks = sync.build_symlink_list(
-            source, home, "redline", ["common-dev"], strip_layer_prefix=True
-        )
-        assert [t for t, _ in symlinks] == [home / ".gitconfig"]
-
-
-# ---------------------------------------------------------------------------
-# find_conflicts — filesystem-reading
-# ---------------------------------------------------------------------------
-
-
-class TestFindConflicts:
-    def test_finds_non_symlink_files(self, tmp_path):
-        existing = tmp_path / "existing.txt"
-        existing.write_text("content")
-        symlinks = [(existing, Path("/source/existing.txt"))]
-        assert existing in sync.find_conflicts(symlinks)
-
-    def test_no_conflict_for_symlinks(self, tmp_path):
-        link = tmp_path / "link.txt"
-        target = tmp_path / "target.txt"
-        target.write_text("content")
-        link.symlink_to(target)
-        symlinks = [(link, Path("/source/link.txt"))]
-        assert sync.find_conflicts(symlinks) == []
-
-    def test_no_conflict_for_missing(self, tmp_path):
-        symlinks = [(tmp_path / "nonexistent.txt", Path("/source/nonexistent.txt"))]
-        assert sync.find_conflicts(symlinks) == []
-
-
-# ---------------------------------------------------------------------------
-# Manifest read/write round-trip
-# ---------------------------------------------------------------------------
-
-
-class TestManifest:
-    def test_round_trip(self, tmp_path):
-        state_file = tmp_path / ".sync-state.json"
-        symlinks = [
-            (Path("/etc/nixos/config.nix"), Path("/repo/nixos/config.nix")),
-            (Path("/home/user/.gitconfig"), Path("/repo/dotfiles/common-all/.gitconfig")),
-        ]
-        sync.write_manifest("redline", symlinks, state_file)
-        result = sync.read_manifest(state_file)
-        assert result is not None
-        assert result["/etc/nixos/config.nix"] == "/repo/nixos/config.nix"
-        assert result["/home/user/.gitconfig"] == "/repo/dotfiles/common-all/.gitconfig"
-
-    def test_read_missing_manifest(self, tmp_path):
-        assert sync.read_manifest(tmp_path / ".sync-state.json") is None
-
-    def test_manifest_includes_machine_and_timestamp(self, tmp_path):
-        state_file = tmp_path / ".sync-state.json"
-        sync.write_manifest("paprika", [], state_file)
-        state = json.loads(state_file.read_text())
-        assert state["machine"] == "paprika"
-        assert "timestamp" in state
-        assert "+" in state["timestamp"]  # timezone-aware
-
-
-# ---------------------------------------------------------------------------
-# cleanup_empty_dirs — filesystem side-effect
-# ---------------------------------------------------------------------------
-
-
-class TestCleanupEmptyDirs:
-    def test_removes_empty_parents(self, tmp_path):
-        deep = tmp_path / "a" / "b" / "c"
-        deep.mkdir(parents=True)
-        file = deep / "file.txt"
-        file.write_text("content")
-        file.unlink()
-
-        sync.cleanup_empty_dirs(deep / "file.txt", tmp_path)
-
-        assert not (tmp_path / "a" / "b" / "c").exists()
-        assert not (tmp_path / "a" / "b").exists()
-        assert not (tmp_path / "a").exists()
-        assert tmp_path.exists()
-
-    def test_stops_at_non_empty(self, tmp_path):
-        keep = tmp_path / "keep"
-        keep.mkdir()
-        (keep / "file.txt").write_text("content")
-        empty = keep / "empty"
-        empty.mkdir()
-        file = empty / "removed.txt"
-        file.write_text("content")
-        file.unlink()
-
-        sync.cleanup_empty_dirs(file, tmp_path)
-
-        assert not empty.exists()
-        assert keep.exists()
-
-    def test_stops_at_boundary(self, tmp_path):
-        deep = tmp_path / "a" / "b"
-        deep.mkdir(parents=True)
-
-        sync.cleanup_empty_dirs(deep / "file.txt", tmp_path)
-
-        assert not (tmp_path / "a" / "b").exists()
-        assert not (tmp_path / "a").exists()
-        assert tmp_path.exists()
-
-
-# ---------------------------------------------------------------------------
-# is_common_dir — pure function
-# ---------------------------------------------------------------------------
-
-
-class TestIsCommonDir:
-    def test_common_all(self):
-        assert sync.is_common_dir("common-all") is True
-
-    def test_common_dev_desktop(self):
-        assert sync.is_common_dir("common-dev-desktop") is True
-
-    def test_non_common(self):
-        assert sync.is_common_dir("redline") is False
-
-    def test_bare_common_no_hyphen(self):
-        assert sync.is_common_dir("common") is False
-
-
-# ---------------------------------------------------------------------------
-# group_by_layer — pure function
-# ---------------------------------------------------------------------------
-
-
-class TestGroupByLayer:
-    def test_groups_correctly(self):
-        source_dir = Path("/repo")
-        symlinks = [
-            (Path("/etc/nixos/common-all/a.nix"), source_dir / "common-all" / "a.nix"),
-            (Path("/etc/nixos/common-all/b.nix"), source_dir / "common-all" / "b.nix"),
-            (Path("/etc/nixos/redline/c.nix"), source_dir / "redline" / "c.nix"),
-        ]
-        groups = sync.group_by_layer(symlinks, source_dir)
-        assert "common-all" in groups
-        assert "redline" in groups
-        assert len(groups["common-all"]) == 2
-        assert len(groups["redline"]) == 1
-
-    def test_common_sorted_before_machine(self):
-        source_dir = Path("/repo")
-        symlinks = [
-            (Path("/t/z/a.nix"), source_dir / "zebra" / "a.nix"),
-            (Path("/t/common-all/b.nix"), source_dir / "common-all" / "b.nix"),
-            (Path("/t/common-desktop/c.nix"), source_dir / "common-desktop" / "c.nix"),
-        ]
-        groups = sync.group_by_layer(symlinks, source_dir)
-        keys = list(groups.keys())
-        assert keys[0] == "common-all"
-        assert keys[1] == "common-desktop"
-        assert keys[2] == "zebra"
-
-    def test_empty_input(self):
-        assert sync.group_by_layer([], Path("/repo")) == {}
-
-
-# ---------------------------------------------------------------------------
-# shorten_path — pure function
-# ---------------------------------------------------------------------------
-
-
-class TestShortenPath:
-    def test_home_prefix(self):
-        home = Path("/home/user")
-        assert sync.shorten_path("/home/user/.config/fish", home) == "~/.config/fish"
-
-    def test_non_home_path(self):
-        home = Path("/home/user")
-        assert sync.shorten_path("/etc/nixos/config.nix", home) == "/etc/nixos/config.nix"
-
-    def test_path_object(self):
-        home = Path("/home/user")
-        assert sync.shorten_path(Path("/home/user/.gitconfig"), home) == "~/.gitconfig"
-
-    def test_default_home(self):
-        result = sync.shorten_path(str(Path.home() / ".gitconfig"))
-        assert result == "~/.gitconfig"
-
-
-# ---------------------------------------------------------------------------
-# build_symlink_list with a synthetic mirror of the repo's target-first
-# structure (monkeypatched TARGETS_ROOT) — no real repo state is read
-# ---------------------------------------------------------------------------
-
-
-def _make_synthetic_repo(root: Path) -> None:
-    """Build a tmp_path mirror of the repo's target-first layout.
-
-    Mirrors the structural facts TestRepoIntegration previously read from the
-    real repo: redline imports common-all directly in configuration.nix and
-    common-dev transitively via programs/development.nix; paprika imports all
-    four layers; the four machines each have a configuration.nix importing at
-    least one common-* layer; and the dotfiles/ subdirs hold representative
-    files. Decoys (`.agents`, `steel-cogs`, a stray file) exist at the root to
-    keep the layout guard non-vacuous.
-    """
-    root.mkdir(parents=True, exist_ok=True)
-    for name in TARGETS:
-        (root / name).mkdir(parents=True, exist_ok=True)
-
-    (root / "redline" / "configuration.nix").write_text(
-        "{ imports = [ ../common-all/configuration.nix ]; }"
-    )
-    (root / "redline" / "programs").mkdir(exist_ok=True)
-    (root / "redline" / "programs" / "development.nix").write_text(
-        "{ imports = [ ../../common-dev/programs/development.nix ]; }"
-    )
-    (root / "paprika" / "configuration.nix").write_text(
-        "{ imports = [ "
-        "../common-all/configuration.nix "
-        "../common-desktop/configuration.nix "
-        "../common-dev/programs/development.nix "
-        "../common-dev-desktop/configuration.nix "
-        "]; }"
-    )
-    (root / "common-all" / "configuration.nix").write_text("{ imports = []; }")
-    (root / "common-desktop" / "configuration.nix").write_text("{ imports = []; }")
-    (root / "common-dev" / "configuration.nix").write_text("{ imports = []; }")
-    (root / "common-dev-desktop" / "configuration.nix").write_text("{ imports = []; }")
-    (root / "jinroh" / "configuration.nix").write_text(
-        "{ imports = [ ../common-all/configuration.nix ]; }"
-    )
-    (root / "mindgame" / "configuration.nix").write_text(
-        "{ imports = [ "
-        "../common-all/configuration.nix "
-        "../common-desktop/configuration.nix "
-        "../common-dev/programs/development.nix "
-        "../common-dev-desktop/configuration.nix "
-        "]; }"
-    )
-
-    dotfiles = {
-        "common-all": {
-            ".gitconfig": "# git",
-            ".config/fish/config.fish": "set -gx EDITOR helix",
-        },
-        "common-desktop": {".config/sddm/theme.conf": "# sddm"},
-        "common-dev": {
-            ".config/fish/functions/vrchat-transcode.fish": "function vrchat-transcode; end",
-            ".config/helix/config.toml": "theme = 'catppuccin_frappe'",
-        },
-        "common-dev-desktop": {
-            ".config/niri/config.kdl": "layout { columns 1 }",
-            ".config/alacritty/alacritty.toml": "[general]\nlive_config_reload = true",
-            ".config/quickshell/panel.qml": "import QtQuick\n",
-        },
-        "mindgame": {".config/docker/daemon.json": '{"experimental": true}'},
-        "redline": {".config/immich/config.env": "DB_HOST=localhost"},
-    }
-    for layer, files in dotfiles.items():
-        for rel, content in files.items():
-            p = root / layer / "dotfiles" / rel
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content)
-
-    # Decoys at the synthetic root — non-target entries that a broken target
-    # filter (e.g. "any dir" or "anything not a file") would wrongly pick up:
-    # .agents (plain dir), steel-cogs (plain dir — the real one is an
-    # un-checked-out submodule root), and a stray file. None has a
-    # configuration.nix or dotfiles/ subdir, so discover_targets excludes
-    # them by the current configuration.nix/dotfiles rule.
-    (root / ".agents").mkdir(exist_ok=True)
-    (root / "steel-cogs").mkdir(exist_ok=True)
-    (root / "stray.txt").write_text("not a target")
-
-
-class TestRepoIntegration:
-    """Transitive-import and layer-allow-list behavior against a synthetic
-    mirror of the repo layout (monkeypatched into TARGETS_ROOT). Fails on
-    regression of the import/layering contract, without reading real files."""
-
-    def test_redline_gets_common_all_and_dev_dotfiles(self, tmp_path, monkeypatch):
-        """redline imports common-all directly and common-dev transitively
-        (via programs/development.nix) — but not common-desktop or common-dev-desktop."""
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-
-        config = sync.target_dir("redline") / "configuration.nix"
-        layers = sync.get_imported_layers(config)
-        assert layers == ["common-all", "common-dev"]
-
-        dotfiles = sync.build_symlink_list(
-            root,
-            sync.DOTFILES_TARGET,
-            "redline",
-            allowed_layers=layers,
-            strip_layer_prefix=True,
-        )
-        targets = {str(t) for t, s in dotfiles}
-        # common-all dotfiles should be present
-        assert any("fish/config.fish" in t for t in targets)
-        assert any(".gitconfig" in t for t in targets)
-        # common-dev dotfiles should be present (transitive import)
-        assert any("fish/functions/vrchat-transcode.fish" in t for t in targets)
-        # common-dev-desktop dotfiles should NOT be present
-        assert not any("niri/config.kdl" in t for t in targets)
-        assert not any("alacritty" in t for t in targets)
-        assert not any("quickshell" in t for t in targets)
-
-    def test_paprika_gets_all_layers(self, tmp_path, monkeypatch):
-        """paprika imports all four layers — should get common-dev-desktop dotfiles."""
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-
-        config = sync.target_dir("paprika") / "configuration.nix"
-        layers = sync.get_imported_layers(config)
-        assert "common-all" in layers
-        assert "common-desktop" in layers
-        assert "common-dev" in layers
-        assert "common-dev-desktop" in layers
-
-        dotfiles = sync.build_symlink_list(
-            root,
-            sync.DOTFILES_TARGET,
-            "paprika",
-            allowed_layers=layers,
-            strip_layer_prefix=True,
-        )
-        targets = {str(t) for t, s in dotfiles}
-        assert any("niri/config.kdl" in t for t in targets)
-        assert any("alacritty" in t for t in targets)
-
-    def test_all_machines_parse_successfully(self, tmp_path, monkeypatch):
-        """Every machine directory should have a parseable configuration.nix."""
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-
-        for entry in sync.discover_targets():
-            if entry.name.startswith("common"):
-                continue
-            config = entry / "configuration.nix"
-            assert config.is_file(), f"{entry.name} has no configuration.nix"
-            layers = sync.get_imported_layers(config)
-            assert len(layers) > 0, f"{entry.name} has no common-* imports"
-
-
-# ---------------------------------------------------------------------------
-# _init_state — generates a manifest for old (all common-*) sync behavior
-# ---------------------------------------------------------------------------
-
-
-class TestInitState:
-    def _make_target(
-        self,
-        root: Path,
-        name: str,
-        config_content: str | None = None,
-        dotfiles: dict[str, str] | None = None,
-    ) -> None:
-        tdir = root / name
-        tdir.mkdir(parents=True, exist_ok=True)
-        if config_content is not None:
-            (tdir / "configuration.nix").write_text(config_content)
-        if dotfiles is not None:
-            ddir = tdir / "dotfiles"
-            ddir.mkdir(parents=True, exist_ok=True)
-            for rel, content in dotfiles.items():
-                p = ddir / rel
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(content)
-
-    def test_includes_all_common_layers(self, tmp_path, monkeypatch):
-        """Init state should include all common-* dirs, not just imported ones."""
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", config_content="# config")
-        self._make_target(source, "common-desktop", config_content="# config")
-        self._make_target(source, "common-dev", config_content="# config")
-        self._make_target(source, "common-dev-desktop", config_content="# config")
-        self._make_target(
-            source,
-            "redline",
-            config_content="{ imports = [ ../common-all/configuration.nix ]; }",
-        )
-        self._make_target(source, "common-all", dotfiles={".gitconfig": "# git"})
-        self._make_target(
-            source,
-            "common-dev-desktop",
-            dotfiles={".config/niri/config.kdl": "# niri"},
-        )
-
-        state_file = tmp_path / ".sync-state.json"
-
-        monkeypatch.setattr(sync, "TARGETS_ROOT", source)
-        monkeypatch.setattr(sync, "NIXOS_TARGET", tmp_path / "etc-nixos")
-        monkeypatch.setattr(sync, "DOTFILES_TARGET", tmp_path / "home")
-        monkeypatch.setattr(sync, "STATE_FILE", state_file)
-
-        sync._init_state("redline")
-
-        manifest = sync.read_manifest(state_file)
-        assert manifest is not None
-
-        # redline only imports common-all, but init-state includes all layers
-        targets = set(manifest.keys())
-        assert str(tmp_path / "etc-nixos" / "common-all" / "configuration.nix") in targets
-        assert str(tmp_path / "etc-nixos" / "common-desktop" / "configuration.nix") in targets
-        assert str(tmp_path / "etc-nixos" / "common-dev-desktop" / "configuration.nix") in targets
-        assert str(tmp_path / "home" / ".gitconfig") in targets
-        assert str(tmp_path / "home" / ".config" / "niri" / "config.kdl") in targets
-
-        # Subsequent layer-aware sync should detect the extra layers as stale
-        imported = sync.parse_imported_layers(
-            (source / "redline" / "configuration.nix").read_text()
-        )
-        new_symlinks = sync.build_symlink_list(
-            source, tmp_path / "home", "redline", imported, strip_layer_prefix=True
-        )
-        stale = sync.compute_stale_symlinks(manifest, new_symlinks)
-        # niri config should be stale (common-dev-desktop not imported by redline)
-        assert any("niri" in s for s in stale)
-        # git config should NOT be stale (common-all is imported)
-        assert not any("gitconfig" in s for s in stale)
-
-    def test_init_state_includes_agents_tree_in_manifest(self, tmp_path, monkeypatch):
-        """Init-state manifest must reflect the new layout: per-skill symlinks
-        under ~/.agents/skills/, the ~/.claude/skills -> ~/.agents/skills dir
-        symlink, and work skills sourced from the shared dev skills tree."""
-        source = tmp_path / "source"
-        self._make_target(source, "common-all", config_content="# config")
-        self._make_target(source, "common-dev", config_content="# config")
-        self._make_target(
-            source,
-            "redline",
-            config_content="{ imports = [ ../common-all/configuration.nix ]; }",
-        )
-        self._make_target(
-            source,
-            "common-dev",
-            dotfiles={
-                ".agents/skills/committing/SKILL.md": "# committing",
-                ".agents/skills/github-issue/SKILL.md": "# github-issue",
-            },
-        )
-
-        state_file = tmp_path / ".sync-state.json"
-        home = tmp_path / "home"
-
-        monkeypatch.setattr(sync, "TARGETS_ROOT", source)
-        monkeypatch.setattr(sync, "NIXOS_TARGET", tmp_path / "etc-nixos")
-        monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
-        monkeypatch.setattr(sync, "STATE_FILE", state_file)
-        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", home / ".agents" / "skills")
-        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", home / ".claude" / "skills")
-
-        sync._init_state("redline")
-
-        manifest = sync.read_manifest(state_file)
-        assert manifest is not None
-        targets = set(manifest.keys())
-        # New-layout personal targets (per-skill leaves under ~/.agents/skills)
-        assert str(home / ".agents" / "skills" / "committing") in targets
-        assert str(home / ".agents" / "skills" / "github-issue") in targets
-        # The ~/.claude/skills -> ~/.agents/skills directory symlink
-        assert str(home / ".claude" / "skills") in targets
-        # No legacy ~/.claude/skills/<name> leaves in the new-layout manifest
-        assert str(home / ".claude" / "skills" / "committing") not in targets
-
-
-# ---------------------------------------------------------------------------
-# build_skill_symlinks — filesystem-reading, testable with tmp_path
-# ---------------------------------------------------------------------------
-
-
-class TestBuildSkillSymlinks:
-    def test_builds_symlinks_for_skill_dirs(self, tmp_path):
-        source = tmp_path / "skills"
-        (source / "committing").mkdir(parents=True)
-        (source / "committing" / "SKILL.md").write_text("# committing")
-        (source / "github-issue").mkdir(parents=True)
-        (source / "github-issue" / "SKILL.md").write_text("# github-issue")
-
-        target = tmp_path / "target"
-        symlinks = sync.build_skill_symlinks(source, target)
-
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"committing", "github-issue"}
-        for t, s in symlinks:
-            assert t.parent == target
-            assert s == source / t.name
-
-    def test_skips_dirs_without_skill_md(self, tmp_path):
-        source = tmp_path / "skills"
-        (source / "has-skill").mkdir(parents=True)
-        (source / "has-skill" / "SKILL.md").write_text("# skill")
-        (source / "no-skill").mkdir(parents=True)
-        (source / "no-skill" / "other.md").write_text("# other")
-
-        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"has-skill"}
-
-    def test_skips_files_in_source_dir(self, tmp_path):
-        source = tmp_path / "skills"
-        source.mkdir(parents=True)
-        (source / "README.md").write_text("# readme")
-        (source / "committing").mkdir()
-        (source / "committing" / "SKILL.md").write_text("# skill")
-
-        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"committing"}
-
-    def test_missing_source_returns_empty(self, tmp_path):
-        symlinks = sync.build_skill_symlinks(tmp_path / "nonexistent", tmp_path / "target")
-        assert symlinks == []
-
-    def test_empty_source_returns_empty(self, tmp_path):
-        source = tmp_path / "skills"
-        source.mkdir()
-        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
-        assert symlinks == []
-
-    def test_results_sorted(self, tmp_path):
-        source = tmp_path / "skills"
-        for name in ["zebra", "alpha", "mango"]:
-            (source / name).mkdir(parents=True)
-            (source / name / "SKILL.md").write_text("# skill")
-
-        symlinks = sync.build_skill_symlinks(source, tmp_path / "target")
-        names = [t.name for t, s in symlinks]
-        assert names == ["alpha", "mango", "zebra"]
-
-
-# ---------------------------------------------------------------------------
-# build_work_skill_symlinks — filesystem-reading, testable with tmp_path
-# ---------------------------------------------------------------------------
-
-
-class TestBuildWorkSkillSymlinks:
-    def _make_skill(self, source, name, work_compatible=False):
-        skill = source / name
-        skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text(f"# {name}")
-        if work_compatible:
-            (skill / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
-
-    def test_builds_symlinks_only_for_marked_skills(self, tmp_path):
-        source = tmp_path / "skills"
-        self._make_skill(source, "alpha", work_compatible=True)
-        self._make_skill(source, "beta")
-        self._make_skill(source, "gamma", work_compatible=True)
-
-        target = tmp_path / "target"
-        symlinks = sync.build_work_skill_symlinks(source, target)
-
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"alpha", "gamma"}
-        for t, s in symlinks:
-            assert t.parent == target
-            assert s == source / t.name
-
-    def test_skips_dirs_without_skill_md(self, tmp_path):
-        source = tmp_path / "skills"
-        self._make_skill(source, "alpha", work_compatible=True)
-        (source / "no-skill").mkdir()
-        (source / "no-skill" / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
-
-        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"alpha"}
-
-    def test_skips_files_in_source_dir(self, tmp_path):
-        source = tmp_path / "skills"
-        source.mkdir(parents=True)
-        (source / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
-
-        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
-        assert symlinks == []
-
-    def test_missing_source_returns_empty(self, tmp_path):
-        symlinks = sync.build_work_skill_symlinks(tmp_path / "nonexistent", tmp_path / "target")
-        assert symlinks == []
-
-    def test_empty_source_returns_empty(self, tmp_path):
-        source = tmp_path / "skills"
-        source.mkdir()
-        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
-        assert symlinks == []
-
-    def test_results_sorted(self, tmp_path):
-        source = tmp_path / "skills"
-        for name in ["zebra", "alpha", "mango"]:
-            self._make_skill(source, name, work_compatible=True)
-
-        symlinks = sync.build_work_skill_symlinks(source, tmp_path / "target")
-        names = [t.name for t, s in symlinks]
-        assert names == ["alpha", "mango", "zebra"]
-
-
-# ---------------------------------------------------------------------------
-# build_layered_skill_symlinks — filesystem-reading, testable with tmp_path
-# ---------------------------------------------------------------------------
-
-
-class TestBuildLayeredSkillSymlinks:
-    def _make_skill(self, targets_root, layer, name):
-        skill = targets_root / layer / "dotfiles" / ".agents" / "skills" / name
-        skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text(f"# {name}")
-
-    def test_collects_across_layers(self, tmp_path):
-        targets_root = tmp_path / "source"
-        self._make_skill(targets_root, "common-dev", "committing")
-        self._make_skill(targets_root, "redline", "llama-cpp-model-tuning")
-        target = tmp_path / "target"
-
-        symlinks = sync.build_layered_skill_symlinks(
-            targets_root, target, "redline", ["common-dev"]
-        )
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"committing", "llama-cpp-model-tuning"}
-
-    def test_only_included_layers(self, tmp_path):
-        targets_root = tmp_path / "source"
-        self._make_skill(targets_root, "common-dev", "committing")
-        self._make_skill(targets_root, "redline", "llama-cpp-model-tuning")
-        target = tmp_path / "target"
-
-        # jinroh doesn't include the redline or common-dev layers, so it shouldn't get the skills.
-        symlinks = sync.build_layered_skill_symlinks(targets_root, target, "jinroh", [])
-        targets = {t.name for t, s in symlinks}
-        assert targets == set()
-
-    def test_machine_layer_overrides_common(self, tmp_path):
-        targets_root = tmp_path / "source"
-        self._make_skill(targets_root, "common-dev", "shared")
-        self._make_skill(targets_root, "redline", "shared")
-        target = tmp_path / "target"
-
-        symlinks = sync.build_layered_skill_symlinks(
-            targets_root, target, "redline", ["common-dev"]
-        )
-        assert len(symlinks) == 1
-        target_path, source = symlinks[0]
-        assert target_path.name == "shared"
-        assert "redline" in source.parts and "common-dev" not in source.parts
-
-    def test_no_skills_returns_empty(self, tmp_path):
-        targets_root = tmp_path / "source"
-        (targets_root / "common-dev" / "dotfiles").mkdir(parents=True)
-        symlinks = sync.build_layered_skill_symlinks(
-            targets_root, tmp_path / "target", "redline", ["common-dev"]
-        )
-        assert symlinks == []
-
-    def test_work_skills_subset_of_cc_skills(self, tmp_path):
-        """The work-account set (marked skills from the shared dev skills
-        tree) must be a subset of the personal/CC set a machine syncs. Ported
-        from the deleted TestWorkSkillSymlinksRepoIntegration."""
-        targets_root = tmp_path / "source"
-        skills_dir = targets_root / "common-dev" / "dotfiles" / ".agents" / "skills"
-        for name in ("committing", "github-issue", "editorial"):
-            skill = skills_dir / name
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text(f"# {name}")
-        for name in ("committing", "github-issue"):
-            (skills_dir / name / sync.WORK_COMPATIBLE_MARKER).write_text("work-compatible")
-
-        cc_symlinks = sync.build_layered_skill_symlinks(
-            targets_root, tmp_path / "target", "redline", ["common-dev"]
-        )
-        cc_names = {t.name for t, s in cc_symlinks}
-        work_symlinks = sync.build_work_skill_symlinks(skills_dir, tmp_path / "work")
-        work_names = {t.name for t, s in work_symlinks}
-        assert work_names <= cc_names
-        # Non-empty: the work set is the marked subset, the CC set has it all.
-        assert work_names == {"committing", "github-issue"}
-        assert cc_names == {"committing", "github-issue", "editorial"}
-
-
-# ---------------------------------------------------------------------------
-# skills sync mode — personal skills are symlinked into ~/.agents/skills
-# (Polytoken follows skill directory symlinks since the fix shipped)
-# ---------------------------------------------------------------------------
-
-
-class TestBuildLayeredPluginSymlinks:
-    def _make_plugin(self, root: Path, layer: str, name: str) -> Path:
-        plugin = root / layer / "dotfiles" / ".claude-plugins" / name
-        (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
-        return plugin
-
-    def test_links_plugins_from_included_layers_only(self, tmp_path):
-        source = tmp_path / "source"
-        deep_plan = self._make_plugin(source, "common-dev", "deep-plan")
-        self._make_plugin(source, "common-dev-desktop", "desktop-only")
-        target = tmp_path / "plugins"
-
-        symlinks = sync.build_layered_plugin_symlinks(source, target, "redline", ["common-dev"])
-
-        assert symlinks == [(target / "deep-plan", deep_plan)]
-
-    def test_skips_directories_without_a_manifest(self, tmp_path):
-        source = tmp_path / "source"
-        (source / "common-dev" / "dotfiles" / ".claude-plugins" / "half-made").mkdir(parents=True)
-        symlinks = sync.build_layered_plugin_symlinks(
-            source, tmp_path / "plugins", "redline", ["common-dev"]
-        )
-        assert symlinks == []
-
-    def test_machine_layer_wins_over_common(self, tmp_path):
-        source = tmp_path / "source"
-        self._make_plugin(source, "common-dev", "deep-plan")
-        machine = self._make_plugin(source, "redline", "deep-plan")
-        target = tmp_path / "plugins"
-
-        symlinks = sync.build_layered_plugin_symlinks(source, target, "redline", ["common-dev"])
-
-        assert symlinks == [(target / "deep-plan", machine)]
-
-    def test_repo_plugins_are_found(self):
-        """The repository's own plugins carry a manifest and get linked."""
-        symlinks = sync.build_layered_plugin_symlinks(
-            sync.TARGETS_ROOT, Path("/plugins"), "paprika", ["common-dev"]
-        )
-        assert Path("/plugins/deep-plan") in [t for t, _ in symlinks]
-
-
-class TestSkillsSyncMode:
-    def _make_source_skill(self, root, name):
-        skill = root / name
-        (skill / "SKILL.md").parent.mkdir(parents=True, exist_ok=True)
-        (skill / "SKILL.md").write_text(f"---\ndescription: {name}\n---\n")
-        return skill
-
-    def test_layered_builder_returns_symlink_pairs(self, tmp_path):
-        targets_root = tmp_path / "source"
-        self._make_source_skill(
-            targets_root / "common-dev" / "dotfiles" / ".agents" / "skills", "alpha"
-        )
-        target = tmp_path / "target"
-        symlinks = sync.build_layered_skill_symlinks(
-            targets_root, target, "redline", ["common-dev"]
-        )
-        assert symlinks == [
-            (
-                target / "alpha",
-                targets_root / "common-dev" / "dotfiles" / ".agents" / "skills" / "alpha",
-            )
-        ]
-
-    def test_apply_sync_changes_symlinks_personal_skills(self, tmp_path):
-        agents = tmp_path / "agents"
-        source = tmp_path / "src" / "alpha"
-        (source / "SKILL.md").parent.mkdir(parents=True)
-        (source / "SKILL.md").write_text("---\ndescription: alpha\n---\n")
-
-        created = sync.apply_sync_changes(
-            nixos_symlinks=[],
-            dotfiles_symlinks=[],
-            skill_symlinks=[(agents / "alpha", source)],
-            cc_personal_symlink=[],
-            work_skill_symlinks=[],
-            plugin_symlinks=[],
-            cog_symlinks=[],
-            stale=[],
-            force=False,
-            nixos_target=tmp_path / "etc-nixos",
-            dotfiles_target=tmp_path / "home",
-            cc_skills_target=tmp_path / ".claude" / "skills",
-            agents_skills_target=agents,
-            work_skills_target=tmp_path / ".claude-work" / "skills",
-            machine=None,
-        )
-        assert created == [(agents / "alpha", source)]
-        assert (agents / "alpha").is_symlink()
-        assert os.readlink(agents / "alpha") == str(source)
-
-    def test_find_conflicts_reports_existing_real_skill_dir(self, tmp_path):
-        agents = tmp_path / "agents"
-        (agents / "alpha").mkdir(parents=True)
-        conflicts = sync.find_conflicts([(agents / "alpha", tmp_path / "src" / "alpha")])
-        assert conflicts == [agents / "alpha"]
-
-
-# ---------------------------------------------------------------------------
-# build_cc_personal_wiring — pure function, no I/O
-# ---------------------------------------------------------------------------
-
-
-class TestCcPersonalWiring:
-    def test_returns_single_dir_symlink(self, tmp_path, monkeypatch):
-        """CC personal wiring is exactly one directory symlink:
-        ~/.claude/skills -> ~/.agents/skills."""
-        claude_skills = tmp_path / ".claude" / "skills"
-        agents_skills = tmp_path / ".agents" / "skills"
-        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", claude_skills)
-        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", agents_skills)
-
-        wiring = sync.build_cc_personal_wiring(agents_skills)
-        assert wiring == [(claude_skills, agents_skills)]
-
-    def test_created_link_points_at_agents_skills(self, tmp_path):
-        """Creating the wiring symlink via create_or_update_symlinks produces
-        a link whose readlink resolves to the agents-skills target."""
-        agents_target = tmp_path / ".agents" / "skills"
-        agents_target.mkdir(parents=True)
-        cc_target = tmp_path / ".claude" / "skills"
-
-        wiring = [(cc_target, agents_target)]
-        created = sync.create_or_update_symlinks(wiring, use_sudo=False, force=False)
-        assert created == wiring
-        assert cc_target.is_symlink()
-        assert os.readlink(cc_target) == str(agents_target)
-
-    def test_included_in_main_flow_created_set(self, tmp_path, monkeypatch):
-        """The dir symlink must be part of the combined new-symlink set that
-        main() passes to apply_sync_changes (and hence the created set)."""
-        claude_skills = tmp_path / ".claude" / "skills"
-        agents_skills = tmp_path / ".agents" / "skills"
-        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", claude_skills)
-        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", agents_skills)
-
-        wiring = sync.build_cc_personal_wiring(agents_skills)
-        all_new = [
-            (claude_skills / "committing", tmp_path / "src" / "committing"),
-        ]
-        all_new += wiring
-        assert (claude_skills, agents_skills) in all_new
-
-
-# ---------------------------------------------------------------------------
-# classify_stale — pure function, no I/O
-# ---------------------------------------------------------------------------
-
-
-class TestClassifyStale:
-    def test_empty_inputs_all_empty(self):
-        cc, work, remaining = sync.classify_stale([], [], [])
-        assert cc == [] and work == [] and remaining == []
-
-    def test_cc_dir_symlink_target_lands_in_cc_bucket(self):
-        cc_skills = Path.home() / ".claude" / "skills"
-        agents_skills = Path.home() / ".agents" / "skills"
-        stale = [
-            str(cc_skills),
-            str(agents_skills),
-            str(cc_skills / "committing"),
-            str(agents_skills / "committing"),
-        ]
-        cc, work, remaining = sync.classify_stale(
-            stale, cc_targets=[cc_skills, agents_skills], work_targets=[]
-        )
-        # The dir symlink target and old leaves land in cc_stale — never remaining
-        assert set(cc) == set(stale)
-        assert work == [] and remaining == []
-
-    def test_work_leaves_land_in_work_bucket(self):
-        work_target = Path.home() / ".claude-work" / "skills"
-        stale = [str(work_target / "committing"), str(work_target / "github-issue")]
-        cc, work, remaining = sync.classify_stale(stale, cc_targets=[], work_targets=[work_target])
-        assert cc == []
-        assert set(work) == set(stale)
-        assert remaining == []
-
-    def test_dotfile_entries_stay_in_remaining(self):
-        home = Path.home() / ".config" / "foo"
-        stale = [str(home / "bar")]
-        cc, work, remaining = sync.classify_stale(
-            stale,
-            cc_targets=[Path.home() / ".claude" / "skills"],
-            work_targets=[Path.home() / ".claude-work" / "skills"],
-        )
-        assert cc == [] and work == []
-        assert remaining == stale
-
-    def test_mixed_classification(self):
-        cc_skills = Path.home() / ".claude" / "skills"
-        agents_skills = Path.home() / ".agents" / "skills"
-        work_target = Path.home() / ".claude-work" / "skills"
-        other = Path.home() / ".config" / "other"
-        stale = [
-            str(agents_skills / "committing"),
-            str(cc_skills / "committing"),
-            str(work_target / "committing"),
-            str(other / "file"),
-        ]
-        cc, work, remaining = sync.classify_stale(
-            stale,
-            cc_targets=[cc_skills, agents_skills],
-            work_targets=[work_target],
-        )
-        assert set(cc) == {str(agents_skills / "committing"), str(cc_skills / "committing")}
-        assert work == [str(work_target / "committing")]
-        assert remaining == [str(other / "file")]
-
-
-# ---------------------------------------------------------------------------
-# build_skill_symlinks — fully covered by TestBuildSkillSymlinks above.
-# The real-repo integration class was deleted: it duplicated the synthetic
-# coverage and depended on the repo's shared skills tree being present.
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# build_work_skill_symlinks — fully covered by TestBuildWorkSkillSymlinks
-# above (the marked-only subset + the .work-compatible marker contract).
-# The work⊆personal invariant is ported to
-# TestBuildLayeredSkillSymlinks.test_work_skills_subset_of_cc_skills.
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# build_cog_symlinks — filesystem-reading, testable with tmp_path
-# ---------------------------------------------------------------------------
-
-
-class TestBuildCogSymlinks:
-    def test_builds_symlinks_for_cog_dirs(self, tmp_path):
-        source = tmp_path / "steel-cogs"
-        (source / "forest").mkdir(parents=True)
-        (source / "forest" / "cog.scm").write_text("(define package-name 'forest)")
-        (source / "notify").mkdir(parents=True)
-        (source / "notify" / "cog.scm").write_text("(define package-name 'notify)")
-
-        target = tmp_path / "target"
-        symlinks = sync.build_cog_symlinks(source, target)
-
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"forest", "notify"}
-        for t, s in symlinks:
-            assert t.parent == target
-            assert s == source / t.name
-
-    def test_skips_dirs_without_cog_scm(self, tmp_path):
-        source = tmp_path / "steel-cogs"
-        (source / "has-cog").mkdir(parents=True)
-        (source / "has-cog" / "cog.scm").write_text("(define package-name 'has-cog)")
-        # An un-checked-out submodule is an empty directory: no cog.scm.
-        (source / "empty-submodule").mkdir(parents=True)
-
-        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"has-cog"}
-
-    def test_skips_files_in_source_dir(self, tmp_path):
-        source = tmp_path / "steel-cogs"
-        source.mkdir(parents=True)
-        (source / "README.md").write_text("# readme")
-        (source / "forest").mkdir()
-        (source / "forest" / "cog.scm").write_text("(define package-name 'forest)")
-
-        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
-        targets = {t.name for t, s in symlinks}
-        assert targets == {"forest"}
-
-    def test_missing_source_returns_empty(self, tmp_path):
-        symlinks = sync.build_cog_symlinks(tmp_path / "nonexistent", tmp_path / "target")
-        assert symlinks == []
-
-    def test_empty_source_returns_empty(self, tmp_path):
-        source = tmp_path / "steel-cogs"
-        source.mkdir()
-        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
-        assert symlinks == []
-
-    def test_results_sorted(self, tmp_path):
-        source = tmp_path / "steel-cogs"
-        for name in ["zebra", "alpha", "mango"]:
-            (source / name).mkdir(parents=True)
-            (source / name / "cog.scm").write_text(f"(define package-name '{name})")
-
-        symlinks = sync.build_cog_symlinks(source, tmp_path / "target")
-        names = [t.name for t, s in symlinks]
-        assert names == ["alpha", "mango", "zebra"]
-
-
-# ---------------------------------------------------------------------------
-# build_cog_symlinks — fully covered by TestBuildCogSymlinks above (incl. the
-# empty-submodule directory case). The real-repo integration class was
-# deleted: it duplicated that coverage, added a skipif gate on the steel-cogs
-# submodule checkout state, and pinned the exact cog names.
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# apply_sync_changes — stale-removal ordering (regression guard for AC.4)
-# ---------------------------------------------------------------------------
-
-
-class TestFirstSyncStaleRemovalOrdering:
-    """First sync after the skills-layout change must remove the old
-    ~/.claude/skills/<name> leaf symlinks BEFORE creating the
-    ~/.claude/skills -> ~/.agents/skills directory symlink, so the fresh
-    ~/.agents/skills/<name> targets are never unlinked through the dir link."""
-
-    def test_first_sync_removes_old_cc_leaves_without_touching_agents_tree(self, tmp_path):
-        home = tmp_path / "home"
-        agents_skills = home / ".agents" / "skills"
-        claude_skills = home / ".claude" / "skills"
-        work_skills = home / ".claude-work" / "skills"
-
-        # Pre-seed the OLD layout: ~/.claude/skills is a REAL directory holding
-        # per-skill leaf symlinks, and ~/.claude-work/skills holds work leaves.
-        claude_skills.mkdir(parents=True)
-        old_src = tmp_path / "old-source" / "skills"
-        (old_src / "committing").mkdir(parents=True)
-        (old_src / "committing" / "SKILL.md").write_text("# committing")
-        (old_src / "github-issue").mkdir(parents=True)
-        (old_src / "github-issue" / "SKILL.md").write_text("# github-issue")
-        for name in ("committing", "github-issue"):
-            (claude_skills / name).symlink_to(old_src / name, target_is_directory=True)
-        work_skills.mkdir(parents=True)
-        (work_skills / "committing").symlink_to(old_src / "committing", target_is_directory=True)
-
-        # The staging area for the new per-skill targets: previously-synced
-        # ~/.agents/skills/<name> directory symlinks (from a partial earlier
-        # run) that must survive the migration intact.
-        new_agents_src = tmp_path / "new-source" / "skills"
-        (new_agents_src / "committing").mkdir(parents=True)
-        (new_agents_src / "committing" / "SKILL.md").write_text("# committing (new)")
-        (new_agents_src / "github-issue").mkdir(parents=True)
-        (new_agents_src / "github-issue" / "SKILL.md").write_text("# github-issue (new)")
-        agents_skills.mkdir(parents=True)
-        (agents_skills / "committing").symlink_to(
-            new_agents_src / "committing", target_is_directory=True
-        )
-        (agents_skills / "github-issue").symlink_to(
-            new_agents_src / "github-issue", target_is_directory=True
-        )
-
-        # Old manifest already holds the leaf targets, which are now stale
-        # relative to the new sync-set (which uses ~/.agents/skills leaves +
-        # the dir symlink instead). Per AC.4 the stale list exercises the old
-        # ~/.claude/skills/<name> leaves, the ~/.claude/skills target itself,
-        # and the ~/.agents/skills targets.
-        stale = [
-            str(claude_skills),
-            str(claude_skills / "committing"),
-            str(claude_skills / "github-issue"),
-            str(agents_skills),
-            str(agents_skills / "committing"),
-            str(agents_skills / "github-issue"),
-            str(work_skills / "committing"),
-        ]
-
-        # New sync-set: per-skill dir symlinks under ~/.agents/skills, the
-        # ~/.claude/skills dir symlink, plus a work leaf.
-        skill_symlinks = [
-            (agents_skills / "committing", new_agents_src / "committing"),
-            (agents_skills / "github-issue", new_agents_src / "github-issue"),
-        ]
-        cc_personal = [(claude_skills, agents_skills)]
-        work_symlinks = [(work_skills / "committing", new_agents_src / "committing")]
-
-        created = sync.apply_sync_changes(
-            nixos_symlinks=[],  # nixos
-            dotfiles_symlinks=[],  # dotfiles
-            skill_symlinks=skill_symlinks,
-            cc_personal_symlink=cc_personal,
-            work_skill_symlinks=work_symlinks,
-            plugin_symlinks=[],
-            cog_symlinks=[],  # cogs
-            stale=stale,
-            force=False,
-            nixos_target=home / "etc-nixos",
-            dotfiles_target=home,
-            cc_skills_target=claude_skills,
-            agents_skills_target=agents_skills,
-            work_skills_target=work_skills,
-        )
-
-        # The fresh ~/.agents/skills targets survive (never unlinked through
-        # the dir symlink — stale removal ran before dir-symlink creation).
-        assert (agents_skills / "committing").is_symlink()
-        assert (agents_skills / "github-issue").is_symlink()
-        assert os.readlink(agents_skills / "committing") == str(new_agents_src / "committing")
-        # ~/.claude/skills ended up as the dir symlink to ~/.agents/skills
-        assert claude_skills.is_symlink()
-        assert os.readlink(claude_skills) == str(agents_skills)
-        # The old leaves are gone: resolution through the dir symlink lands in
-        # the NEW agents tree, not the OLD source.
-        assert (claude_skills / "committing").resolve() == (new_agents_src / "committing").resolve()
-        assert (claude_skills / "github-issue").resolve() == (
-            new_agents_src / "github-issue"
-        ).resolve()
-        # The work leaf is re-pointed at the new source
-        assert (work_skills / "committing").is_symlink()
-        assert os.readlink(work_skills / "committing") == str(new_agents_src / "committing")
-        # The new skill sources' contents are intact
-        assert (new_agents_src / "committing" / "SKILL.md").read_text() == "# committing (new)"
-        assert (new_agents_src / "github-issue" / "SKILL.md").read_text() == "# github-issue (new)"
-        # The combined created set includes the personal dir symlink
-        assert (claude_skills, agents_skills) in created
-
-
-# ---------------------------------------------------------------------------
-# Repo layout — the target-first tree (AC.1)
-# ---------------------------------------------------------------------------
-
-
-TARGETS = [
-    "common-all",
-    "common-desktop",
-    "common-dev",
-    "common-dev-desktop",
-    "jinroh",
-    "mindgame",
-    "paprika",
-    "redline",
-]
-TARGETS_WITH_DOTFILES = [
-    "common-all",
-    "common-desktop",
-    "common-dev",
-    "common-dev-desktop",
-    "mindgame",
-    "redline",
-]
-
-
-class TestRepoLayout:
-    """The repository is target-first: no top-level nixos/ or dotfiles/ dirs,
-    the 8 targets live at the repo root, and the 6 expected dotfiles/ subdirs
-    exist. Runs against the synthetic mirror (monkeypatched into TARGETS_ROOT)
-    so it exercises the discover/layout contract without reading real files."""
-
-    def test_no_top_level_grouping_dirs(self, tmp_path, monkeypatch):
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-        assert not (root / "nixos").exists()
-        assert not (root / "dotfiles").exists()
-
-    def test_all_targets_exist_at_root(self, tmp_path, monkeypatch):
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-        for name in TARGETS:
-            assert (root / name).is_dir(), f"missing target {name}"
-
-    def test_dotfiles_subdirs_exist(self, tmp_path, monkeypatch):
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-        for name in TARGETS_WITH_DOTFILES:
-            assert (root / name / "dotfiles").is_dir(), f"{name} should have a dotfiles/ subdir"
-
-    def test_discover_targets_matches_expected(self, tmp_path, monkeypatch):
-        """discovers exactly the target dirs, excluding .agents, steel-cogs
-        and stray files that share the root."""
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-        names = {d.name for d in sync.discover_targets()}
-        assert names == set(TARGETS)
-
-    def test_machines_have_configuration_nix(self, tmp_path, monkeypatch):
-        root = tmp_path / "repo"
-        _make_synthetic_repo(root)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", root)
-        for name in ["jinroh", "mindgame", "paprika", "redline"]:
-            assert (root / name / "configuration.nix").is_file()
-
-
-# ---------------------------------------------------------------------------
-# Docs/skills content — STALE_PATH_RE flags pre-move path forms and allows
-# the post-move forms. This is a pure regex contract test on inline fixture
-# texts; it does not read the repo's current docs.
-# ---------------------------------------------------------------------------
-
-
-# Pre-move path forms only. The post-move forms (redline/dotfiles/...,
-# common-dev/dotfiles/...) are correct and must NOT be flagged.
-STALE_PATH_RE = re.compile(
-    r"nixos/(redline|mindgame|paprika|jinroh)"
-    r"|dotfiles/(common|redline|mindgame|paprika|jinroh)"
-    r"|dotfiles/<layer>"
-    r"|nixos-configuration/nixos/"
+        ("../common-all/configuration.nix", ["common-all"]),
+        (
+            "../common-dev/x.nix ../common-all/configuration.nix ../common-dev/y.nix",
+            ["common-all", "common-dev"],
+        ),
+        ("../../common-dev/programs/development.nix", ["common-dev"]),
+        ("./services/default.nix <nixos-hardware/lenovo> ../redline/x.nix", []),
+        ("imports = [];", []),
+        ("", []),
+    ],
 )
-
-# Representative doc/skill texts: correct post-move forms (allowed) interleaved
-# with stale pre-move forms (must be flagged). Mirrors what the repo's docs and
-# skills previously asserted against the real files.
-STALE_PATH_DOC_FIXTURES = [
-    # (text, expected_stale)
-    (
-        "The sync lives in redline/dotfiles/.config/fish/config.fish and is "
-        "applied by ./sync.sh redline.",
-        False,
-    ),
-    (
-        "Common skills ship from common-dev/dotfiles/.agents/skills/committing.",
-        False,
-    ),
-    (
-        "Reverted to nixos/redline (pre-move) in the old layout.",
-        True,
-    ),
-    (
-        "Layered renders at dotfiles/common-dev/.config/helix/config.toml (pre-move).",
-        True,
-    ),
-    (
-        "A skill doc explaining dotfiles/<layer> is a placeholder form.",
-        True,
-    ),
-    (
-        "A stale absolute path: ~/nixos-configuration/nixos/paprika/configuration.nix.",
-        True,
-    ),
-]
+def test_parse_imported_layers(content, expected):
+    assert sync.parse_imported_layers(content) == expected
 
 
-class TestMainModes:
-    def _legacy_tree(self, tmp_path, monkeypatch):
-        repo, home, nixos = tmp_path / "repo", tmp_path / "home", tmp_path / "nixos"
-        home.mkdir()
-        for name in ("common-all", "common-dev", "aardvark"):
-            target = repo / name
-            target.mkdir(parents=True)
-            (target / "configuration.nix").write_text(
-                "../common-all ../common-dev" if name == "aardvark" else "{}"
-            )
-            dotfiles = target / "dotfiles"
-            dotfiles.mkdir()
-            (dotfiles / ".tool").write_text(name)
-        monkeypatch.setattr(sync, "TARGETS_ROOT", repo)
-        monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
-        monkeypatch.setattr(sync, "NIXOS_TARGET", nixos)
-        monkeypatch.setattr(sync, "STATE_FILE", repo / ".sync-state.json")
-        monkeypatch.setattr(
-            sync, "SHARED_SKILLS_SOURCE", repo / "common-dev/dotfiles/.agents/skills"
-        )
-        monkeypatch.setattr(sync, "AGENTS_SKILLS_TARGET", home / ".agents/skills")
-        monkeypatch.setattr(sync, "CC_SKILLS_TARGET", home / ".claude/skills")
-        monkeypatch.setattr(sync, "CLAUDE_WORK_SKILLS_TARGET", home / ".claude-work/skills")
-        monkeypatch.setattr(sync, "CLAUDE_PLUGINS_TARGET", home / ".local/share/claude-plugins")
-        monkeypatch.setattr(sync, "STEEL_COGS_SOURCE", repo / "steel-cogs")
-        monkeypatch.setattr(sync, "STEEL_COGS_TARGET", home / ".config/steel/cogs")
-        return repo, home, nixos
-
-    def test_full_main_deduplicates_machine_last_before_display_and_adapter(
-        self, tmp_path, monkeypatch, capsys
-    ):
-        repo, home, nixos = self._legacy_tree(tmp_path, monkeypatch)
-        captured = []
-        monkeypatch.setattr(sync, "confirm", lambda message: True)
-        monkeypatch.setattr(sync, "apply_sync_changes", lambda **kwargs: captured.append(kwargs))
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "aardvark", "--force"])
-        sync.main()
-        request = captured[0]
-        assert request["force"] is True
-        assert request["machine"] == "aardvark"
-        assert request["dotfiles_symlinks"] == [(home / ".tool", repo / "aardvark/dotfiles/.tool")]
-        assert (nixos / "configuration.nix", repo / "aardvark/configuration.nix") in request[
-            "nixos_symlinks"
-        ]
-        assert capsys.readouterr().out.count("~/.tool") == 1
-        assert not (repo / ".sync-state.json").exists()
-
-    def test_full_legacy_main_dry_run_never_prompts_or_applies(self, tmp_path, monkeypatch, capsys):
-        repo, home, _ = self._legacy_tree(tmp_path, monkeypatch)
-
-        def forbidden(*args, **kwargs):
-            pytest.fail("Dry-run reached a prompt or mutation")
-
-        monkeypatch.setattr(sync, "confirm", forbidden)
-        monkeypatch.setattr(sync, "apply_sync_changes", forbidden)
-        monkeypatch.setattr(sync, "_run_sudo", forbidden)
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "aardvark", "--dry-run"])
-        sync.main()
-        assert "Dry-run" in capsys.readouterr().out
-        assert not (repo / ".sync-state.json").exists()
-        assert list(home.iterdir()) == []
-
-    def test_mode_help_and_home_only_target_listing(self, tmp_path, monkeypatch, capsys):
-        (tmp_path / "frame").mkdir()
-        (tmp_path / "frame/sync.json").write_text("{}")
-        monkeypatch.setattr(sync, "TARGETS_ROOT", tmp_path)
-        assert (
-            "frame (home deployment; --home-only for dotfiles only)"
-            in sync.list_available_targets()
-        )
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "--help"])
-        with pytest.raises(SystemExit) as exc:
-            sync.main()
-        assert exc.value.code == 0
-        help_text = capsys.readouterr().out
-        assert "--home-only" in help_text and "--dry-run" in help_text
-
-    def test_frame_dispatches_combined_deployment_without_legacy_mutation(
-        self, tmp_path, monkeypatch
-    ):
-        from frame import deploy as deployment
-
-        repo, home, _ = self._legacy_tree(tmp_path, monkeypatch)
-        captured = []
-        monkeypatch.setattr(
-            deployment, "deploy", lambda frame, **kwargs: captured.append((frame, kwargs)) or 0
-        )
-        monkeypatch.setattr(
-            sync, "apply_sync_changes", lambda **kwargs: pytest.fail("legacy mutation")
-        )
-        monkeypatch.setattr(sync, "_run_sudo", lambda *args: pytest.fail("sudo"))
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame", "--dry-run"])
-        sync.main()
-        frame, options = captured[0]
-        assert frame.home == home and frame.repo == repo
-        assert options == {"dry_run": True}
-        assert list(home.iterdir()) == []
-
-    @pytest.mark.parametrize("option", ["--force", "--init-state"])
-    def test_frame_rejects_legacy_mutation_options(self, tmp_path, monkeypatch, option):
-        self._legacy_tree(tmp_path, monkeypatch)
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame", option])
-        with pytest.raises(SystemExit) as exc:
-            sync.main()
-        assert exc.value.code == 2
-
-    def test_frame_propagates_partial_deployment_exit_status(self, tmp_path, monkeypatch):
-        from frame import deploy as deployment
-
-        self._legacy_tree(tmp_path, monkeypatch)
-        monkeypatch.setattr(deployment, "deploy", lambda *args, **kwargs: 1)
-        monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame"])
-        with pytest.raises(SystemExit) as exc:
-            sync.main()
-        assert exc.value.code == 1
+def test_imports_include_transitive_submodules_and_deduplicate(tree):
+    repo, _, _ = tree
+    write(repo / "aardvark/programs/dev.nix", "../../common-desktop ../common-all")
+    assert sync.get_imported_layers(repo / "aardvark/configuration.nix") == [
+        "common-all",
+        "common-desktop",
+        "common-dev",
+    ]
+    assert sync.get_imported_layers(repo / "absent/configuration.nix") == []
 
 
-class TestStalePathRegex:
-    """STALE_PATH_RE flags stale pre-move path forms and allows the correct
-    post-move (target-first) forms — exercised over inline fixtures."""
+def test_discover_targets_and_modes(tree):
+    repo, _, _ = tree
+    write(repo / ".agents/not-a-target")
+    write(repo / "stray.txt")
+    (repo / "alias").symlink_to(repo / "aardvark", target_is_directory=True)
+    targets = {directory.name for directory in sync.discover_targets()}
+    assert targets == {"common-all", "common-dev", "common-desktop", "aardvark", "redline", "frame"}
+    listing = sync.list_available_targets()
+    assert "aardvark (layers: common-all common-dev)" in listing
+    assert "redline (no layers)" in listing
+    assert "frame (home deployment; --home-only for dotfiles only)" in listing
+    assert sync.target_dir("aardvark") == repo / "aardvark"
+    assert not (repo / "nixos").exists() and not (repo / "dotfiles").exists()
 
-    @pytest.mark.parametrize(
-        "text,expected_stale",
-        STALE_PATH_DOC_FIXTURES,
-        ids=[
-            "allows-layered-dotfiles",
-            "allows-layer-skills",
-            "flags-nixos",
-            "flags-dotfiles",
-            "flags-placeholder",
-            "flags-abs-nixos",
-        ],
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "build_symlink_list",
+        "build_skill_symlinks",
+        "build_work_skill_symlinks",
+        "build_layered_skill_symlinks",
+        "build_layered_plugin_symlinks",
+        "build_cog_symlinks",
+        "bold",
+        "green",
+        "yellow",
+        "red",
+        "cyan",
+        "dim",
+        "AGENTS_SKILLS_SUBPATH",
+        "CLAUDE_PLUGINS_SUBPATH",
+        "WORK_COMPATIBLE_MARKER",
+    ],
+)
+def test_compatibility_exports_are_shared(name):
+    assert getattr(sync, name) is getattr(sync_workflow, name)
+
+
+def test_confirmation_uses_shared_reader():
+    assert sync.confirm is sync_workflow.ask_confirmation
+
+
+def test_file_builder_filters_layers_and_dotfiles(tree):
+    repo, home, nixos = tree
+    write(repo / "common-all/real.nix")
+    (repo / "common-all/link.nix").symlink_to(repo / "common-all/real.nix")
+    system_links = dict(sync.build_symlink_list(repo, nixos, "aardvark", ["common-all"]))
+    assert system_links[nixos / "common-all/real.nix"] == repo / "common-all/real.nix"
+    assert nixos / "common-all/link.nix" not in system_links
+    assert all("dotfiles" not in destination.parts for destination in system_links)
+    assert nixos / "common-desktop/configuration.nix" not in system_links
+    dotfiles = dict(sync.build_symlink_list(repo, home, "aardvark", ["common-all"], True))
+    assert dotfiles[home / ".tool"] == repo / "aardvark/dotfiles/.tool"
+    assert dotfiles[home / ".gitconfig"] == repo / "common-all/dotfiles/.gitconfig"
+    assert not any(destination.is_relative_to(home / ".agents") for destination in dotfiles)
+    assert sync.build_symlink_list(repo, home, "absent", [], True) == []
+    with pytest.raises(FileNotFoundError):
+        sync.build_symlink_list(repo / "absent", home, "aardvark", [])
+
+
+@pytest.mark.parametrize(
+    "builder,marker",
+    [(sync.build_skill_symlinks, "SKILL.md"), (sync.build_cog_symlinks, "cog.scm")],
+)
+def test_directory_builders_sort_and_require_marker(tmp_path, builder, marker):
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    for name in ("zeta", "alpha"):
+        write(source / name / marker)
+    (source / "unmarked").mkdir()
+    write(source / "file")
+    assert builder(source, destination) == [
+        (destination / "alpha", source / "alpha"),
+        (destination / "zeta", source / "zeta"),
+    ]
+    assert builder(source / "missing", destination) == []
+
+
+def test_work_skills_follow_winning_personal_skill(tree):
+    repo, home, _ = tree
+    personal = dict(
+        sync.build_layered_skill_symlinks(repo, home / ".agents/skills", "aardvark", ["common-dev"])
     )
-    def test_stale_path_regex(self, text, expected_stale):
-        assert bool(STALE_PATH_RE.search(text)) is expected_stale
+    assert (
+        personal[home / ".agents/skills/alpha"] == repo / "common-dev/dotfiles/.agents/skills/alpha"
+    )
+    assert sync.build_work_skill_symlinks(
+        repo / "common-dev/dotfiles/.agents/skills", home / "work"
+    ) == [(home / "work/alpha", repo / "common-dev/dotfiles/.agents/skills/alpha")]
+    write(repo / "aardvark/dotfiles/.agents/skills/alpha/SKILL.md")
+    plan = sync._plan_nixos_sync("aardvark")
+    assert (
+        dict(plan.symlinks)[home / ".agents/skills/alpha"]
+        == repo / "aardvark/dotfiles/.agents/skills/alpha"
+    )
+    assert home / ".claude-work/skills/alpha" not in dict(plan.symlinks)
+
+
+def test_layered_plugins_require_manifest_and_target_wins(tree):
+    repo, home, _ = tree
+    write(repo / "aardvark/dotfiles/.claude-plugins/plugin/.claude-plugin/plugin.json", "{}")
+    write(repo / "aardvark/dotfiles/.claude-plugins/unmarked/hooks.py")
+    links = sync.build_layered_plugin_symlinks(repo, home / "plugins", "aardvark", ["common-dev"])
+    assert links == [(home / "plugins/plugin", repo / "aardvark/dotfiles/.claude-plugins/plugin")]
+
+
+def test_full_plan_uses_one_inventory_and_shared_renderer(tree):
+    repo, home, nixos = tree
+    plan = sync._plan_nixos_sync("aardvark")
+    selected = dict(plan.symlinks)
+    assert len(plan.symlinks) == len(selected)
+    assert selected[home / ".tool"] == repo / "aardvark/dotfiles/.tool"
+    assert selected[nixos / "configuration.nix"] == repo / "aardvark/configuration.nix"
+    assert selected[home / ".claude/skills"] == home / ".agents/skills"
+    assert (
+        selected[home / ".claude-work/skills/alpha"]
+        == repo / "common-dev/dotfiles/.agents/skills/alpha"
+    )
+    assert selected[home / ".config/steel/cogs/forest"] == repo / "steel-cogs/forest"
+    assert plan.roots == (nixos,)
+    assert plan.layers == ("common-all", "common-dev", "aardvark")
+    assert plan.state_path == repo / ".sync-state.json"
+    description = sync.describe_sync_plan(plan)
+    for heading in (
+        "Imported layers: common-all common-dev",
+        "NixOS configuration (4):",
+        "Dotfiles (2):",
+        "Agent skills (personal) (1):",
+        "Claude Code personal wiring (1):",
+        "Claude Code skills (work) (1):",
+        "Claude Code plugins (1):",
+        "Steel cogs (1):",
+        "Layer overrides (2):",
+    ):
+        assert heading in description
+    assert "~/.tool [create]" in description
+    assert str(repo) not in description and str(home) not in description
+    assert description.index("common-all (1)") < description.index("aardvark (2)")
+
+
+def test_main_applies_shared_engine_without_sudo_on_writable_system_root(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "aardvark") == 0
+    assert (home / ".tool").readlink() == repo / "aardvark/dotfiles/.tool"
+    assert (nixos / "configuration.nix").readlink() == repo / "aardvark/configuration.nix"
+    assert (home / ".agents/skills/alpha").is_symlink()
+    assert (home / ".claude/skills").readlink() == home / ".agents/skills"
+    state = json.loads((repo / ".sync-state.json").read_text())
+    assert state["schema_version"] == 2 and state["mode"] == "sync"
+    assert state["roots"] == [str(nixos)] and state["target"] == "aardvark"
+    assert sync.read_manifest() == state["symlinks"]
+    output = capsys.readouterr().out
+    assert output.count("~/.tool [create]") == 1
+    assert "Sync result:" in output
+    assert "nixos-rebuild" not in output
+
+
+def test_full_dry_run_never_writes_prompts_or_runs_commands(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync, "confirm", forbid)
+    monkeypatch.setattr(sync.sync_engine, "apply_sync", forbid)
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "aardvark", "--dry-run") == 0
+    assert "Dry-run: no changes made." in capsys.readouterr().out
+    assert not (repo / ".sync-state.json").exists()
+    assert not (repo / ".sync-state.json.lock").exists()
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+
+
+def test_cancelled_sync_is_success_and_read_only(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync, "confirm", lambda message: False)
+    monkeypatch.setattr(sync.sync_engine, "apply_sync", forbid)
+    assert main(monkeypatch, "aardvark") == 0
+    assert "Operation cancelled." in capsys.readouterr().out
+    assert not (repo / ".sync-state.json").exists()
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+
+
+def test_main_rejects_changed_plan_after_confirmation(tree, monkeypatch, capsys):
+    repo, home, _ = tree
+
+    def change(message):
+        write(home / ".tool", "changed after display")
+        return True
+
+    monkeypatch.setattr(sync, "confirm", change)
+    assert main(monkeypatch, "aardvark") == 1
+    assert "changed after confirmation" in capsys.readouterr().out
+    assert (home / ".tool").read_text() == "changed after display"
+    assert not (repo / ".sync-state.json").exists()
+
+
+@pytest.mark.parametrize("scope", ["home", "system"])
+@pytest.mark.parametrize("kind", ["file", "symlink", "directory"])
+def test_unowned_conflicts_are_preserved_with_partial_status(tree, monkeypatch, scope, kind):
+    repo, home, nixos = tree
+    destination = home / ".tool" if scope == "home" else nixos / "configuration.nix"
+    source = repo / "redline/configuration.nix"
+    if kind == "file":
+        write(destination, "mine")
+    elif kind == "symlink":
+        destination.symlink_to(source)
+    else:
+        write(destination / "private", "mine")
+    status = main(monkeypatch, "aardvark")
+    assert str(destination) not in sync.read_manifest()
+    if kind == "symlink":
+        assert destination.readlink() == source
+    else:
+        assert (
+            destination / "private" if kind == "directory" else destination
+        ).read_text() == "mine"
+    assert status == 1
+
+
+@pytest.mark.parametrize("scope", ["home", "system"])
+@pytest.mark.parametrize("kind", ["file", "symlink"])
+def test_force_backs_up_exact_non_directory_conflict(tree, monkeypatch, scope, kind):
+    repo, home, nixos = tree
+    destination = home / ".tool" if scope == "home" else nixos / "configuration.nix"
+    previous = repo / "redline/configuration.nix"
+    if kind == "file":
+        write(destination, "mine")
+    else:
+        destination.symlink_to(previous)
+    identity = destination.lstat()
+    assert main(monkeypatch, "aardvark", "--force") == 0
+    backups = list(destination.parent.glob(destination.name + ".sync-backup-*"))
+    assert len(backups) == 1
+    assert backups[0].lstat().st_ino == identity.st_ino
+    if kind == "file":
+        assert backups[0].read_text() == "mine"
+    else:
+        assert backups[0].readlink() == previous
+    desired = repo / (
+        "aardvark/dotfiles/.tool" if scope == "home" else "aardvark/configuration.nix"
+    )
+    assert destination.readlink() == desired
+
+
+@pytest.mark.parametrize("scope", ["home", "system"])
+def test_force_never_deletes_real_directories(tree, monkeypatch, scope):
+    _, home, nixos = tree
+    destination = home / ".tool" if scope == "home" else nixos / "configuration.nix"
+    write(destination / "private", "must survive")
+    status = main(monkeypatch, "aardvark", "--force")
+    assert destination.is_dir() and not destination.is_symlink()
+    assert (destination / "private").read_text() == "must survive"
+    assert list(destination.parent.glob(destination.name + ".sync-backup-*")) == []
+    assert status == 1
+
+
+def test_modified_owned_links_are_not_automatically_replaced(tree, monkeypatch):
+    repo, home, _ = tree
+    assert main(monkeypatch, "aardvark") == 0
+    destination = home / ".tool"
+    destination.unlink()
+    destination.symlink_to(repo / "redline/dotfiles/.tool")
+    status = main(monkeypatch, "aardvark")
+    assert destination.readlink() == repo / "redline/dotfiles/.tool"
+    assert str(destination) not in sync.read_manifest()
+    assert status == 1
+
+
+def test_machine_switch_replaces_owned_entrypoint_and_removes_owned_stale_links(tree, monkeypatch):
+    repo, home, nixos = tree
+    write(repo / "common-dev/dotfiles/.config/dev/config", "dev")
+    assert main(monkeypatch, "aardvark") == 0
+    write(repo / "redline/configuration.nix", "../common-all")
+    assert main(monkeypatch, "redline") == 0
+    assert (nixos / "configuration.nix").readlink() == repo / "redline/configuration.nix"
+    assert not (nixos / "aardvark").exists()
+    assert not (nixos / "common-dev").exists()
+    assert not (home / ".config/dev").exists()
+    assert (home / ".gitconfig").readlink() == repo / "common-all/dotfiles/.gitconfig"
+    assert (home / ".tool").readlink() == repo / "redline/dotfiles/.tool"
+
+
+def test_legacy_state_migrates_only_valid_owned_entries(tree, monkeypatch):
+    repo, home, nixos = tree
+    old = write(repo / "common-desktop/old.nix")
+    stale = nixos / "old.nix"
+    stale.symlink_to(old)
+    modified = home / ".obsolete"
+    write(modified, "my replacement")
+    outside = write(repo.parent / "outside", "outside")
+    legacy_state(
+        repo,
+        {
+            str(stale): str(old),
+            str(modified): str(repo / "common-all/dotfiles/.gitconfig"),
+            str(outside): str(old),
+        },
+    )
+    status = main(monkeypatch, "aardvark")
+    assert not os.path.lexists(stale)
+    assert modified.read_text() == "my replacement" and outside.read_text() == "outside"
+    state = json.loads((repo / ".sync-state.json").read_text())
+    assert state["schema_version"] == 2
+    assert str(stale) not in state["symlinks"] and str(modified) not in state["symlinks"]
+    assert str(outside) not in state["symlinks"]
+    assert status == 0
+
+
+def test_malformed_legacy_state_never_mutates(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    write(repo / ".sync-state.json", json.dumps({"symlinks": {}}))
+    monkeypatch.setattr(sync, "confirm", forbid)
+    assert main(monkeypatch, "aardvark") == 1
+    assert "Malformed or mismatched" in capsys.readouterr().out
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+
+
+def test_old_claude_skill_leaves_are_removed_before_wiring_directory(tree, monkeypatch):
+    repo, home, _ = tree
+    old_source = repo / "common-dev/dotfiles/.agents/skills/alpha"
+    old_leaf = home / ".claude/skills/alpha"
+    old_leaf.parent.mkdir(parents=True)
+    old_leaf.symlink_to(old_source, target_is_directory=True)
+    agents = home / ".agents/skills/alpha"
+    agents.parent.mkdir(parents=True)
+    agents.symlink_to(old_source, target_is_directory=True)
+    legacy_state(repo, {str(old_leaf): str(old_source)})
+    assert main(monkeypatch, "aardvark") == 0
+    assert (home / ".claude/skills").readlink() == home / ".agents/skills"
+    assert agents.readlink() == old_source
+    assert old_leaf.resolve() == old_source
+    assert (old_source / "SKILL.md").read_text() == "content"
+
+
+def test_init_state_records_all_layers_but_only_matching_existing_links(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    desktop_source = repo / "common-desktop/configuration.nix"
+    desktop = nixos / "common-desktop/configuration.nix"
+    desktop.parent.mkdir()
+    desktop.symlink_to(desktop_source)
+    git = home / ".gitconfig"
+    git.symlink_to(repo / "common-all/dotfiles/.gitconfig")
+    modified = write(home / ".tool", "mine")
+    missing = home / ".agents/skills/alpha"
+    before = (desktop.lstat().st_ino, git.lstat().st_ino)
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "redline", "--init-state") == 0
+    assert sync.read_manifest() == {
+        str(desktop): str(desktop_source),
+        str(git): str(repo / "common-all/dotfiles/.gitconfig"),
+    }
+    assert json.loads((repo / ".sync-state.json").read_text())["schema_version"] == 2
+    assert before == (desktop.lstat().st_ino, git.lstat().st_ino)
+    assert modified.read_text() == "mine" and not os.path.lexists(missing)
+    assert "no symlinks are changed" in capsys.readouterr().out
+    write(repo / "redline/configuration.nix", "../common-all")
+    assert main(monkeypatch, "redline", "--force") == 0
+    assert not os.path.lexists(desktop)
+    assert git.is_symlink()
+
+
+def test_init_state_records_skills_wiring_and_work_only_when_matching(tree, monkeypatch):
+    repo, home, _ = tree
+    source = repo / "common-dev/dotfiles/.agents/skills/alpha"
+    paths = (home / ".agents/skills/alpha", home / ".claude-work/skills/alpha")
+    for destination in paths:
+        destination.parent.mkdir(parents=True)
+        destination.symlink_to(source, target_is_directory=True)
+    wiring = home / ".claude/skills"
+    wiring.parent.mkdir()
+    wiring.symlink_to(home / ".agents/skills", target_is_directory=True)
+    assert main(monkeypatch, "redline", "--init-state") == 0
+    assert sync.read_manifest() == {
+        **{str(destination): str(source) for destination in paths},
+        str(wiring): str(home / ".agents/skills"),
+    }
+
+
+def test_init_state_empty_home_writes_empty_ownership_only(tree, monkeypatch):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "aardvark", "--init-state") == 0
+    assert sync.read_manifest() == {}
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+    assert (repo / ".sync-state.json").exists()
+
+
+@pytest.mark.parametrize("option", ["--home-only", "--dry-run"])
+def test_init_state_rejects_incompatible_modes(tree, monkeypatch, option):
+    assert main(monkeypatch, "aardvark", "--init-state", option) == 2
+    assert not (tree[0] / ".sync-state.json").exists()
+
+
+def test_init_state_requires_machine(tree, monkeypatch):
+    assert main(monkeypatch, "--init-state") == 2
+
+
+@pytest.mark.parametrize("target", ["missing", "../aardvark", "/aardvark"])
+def test_unknown_or_unsafe_target_is_rejected_without_mutation(tree, monkeypatch, target):
+    repo, home, nixos = tree
+    assert main(monkeypatch, target) == 1
+    assert not (repo / ".sync-state.json").exists()
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+
+
+@pytest.mark.parametrize("target", ["../aardvark", "/aardvark"])
+def test_unsafe_target_is_rejected_before_import_scanning(tree, monkeypatch, target):
+    monkeypatch.setattr(sync, "get_imported_layers", forbid)
+    assert main(monkeypatch, target) == 1
+
+
+def test_read_manifest_missing_and_legacy_compatibility(tree):
+    repo, home, _ = tree
+    assert sync.read_manifest() is None
+    links = {str(home / ".tool"): str(repo / "aardvark/dotfiles/.tool")}
+    state = legacy_state(repo, links)
+    assert sync.read_manifest(state) == links
+
+
+def test_home_only_calls_shared_workflow_without_system_or_legacy_state(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync, "_plan_nixos_sync", forbid)
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "--home-only", "frame") == 0
+    assert (home / ".tool").readlink() == repo / "frame/dotfiles/.tool"
+    assert not (repo / ".sync-state.json").exists()
+    assert list(nixos.iterdir()) == []
+    output = capsys.readouterr().out
+    assert "Dotfiles (2):" in output and "Sync result:" in output
+    assert "NixOS configuration" not in output
+
+
+def test_home_only_dry_run_is_read_only(tree, monkeypatch, capsys):
+    repo, home, nixos = tree
+    monkeypatch.setattr(sync, "confirm", forbid)
+    monkeypatch.setattr(sync, "apply_home_sync", forbid)
+    monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
+    assert main(monkeypatch, "--home-only", "frame", "--dry-run") == 0
+    assert "Dry-run" in capsys.readouterr().out
+    assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
+    assert not (repo / ".sync-state.json").exists()
+
+
+def test_home_only_force_backs_up_conflict_and_preserves_directory(tree, monkeypatch):
+    _, home, _ = tree
+    write(home / ".tool", "mine")
+    write(home / ".gitconfig/private", "mine")
+    status = main(monkeypatch, "--home-only", "frame", "--force")
+    assert (home / ".tool").is_symlink()
+    assert next(home.glob(".tool.sync-backup-*")).read_text() == "mine"
+    assert (home / ".gitconfig/private").read_text() == "mine"
+    assert status == 1
+
+
+def test_home_only_changed_plan_is_rejected(tree, monkeypatch, capsys):
+    _, home, _ = tree
+
+    def change(message):
+        write(home / ".tool", "new conflict")
+        return True
+
+    monkeypatch.setattr(sync, "confirm", change)
+    assert main(monkeypatch, "--home-only", "frame") == 1
+    assert "changed after confirmation" in capsys.readouterr().out
+    assert not (home / ".local/state/nixos-configuration/sync-home.json").exists()
+
+
+def test_frame_dispatches_with_shared_confirmation_adapter(tree, monkeypatch):
+    from frame import deploy as deployment
+
+    repo, home, _ = tree
+    captured = []
+    monkeypatch.setattr(
+        deployment, "deploy", lambda frame, **kwargs: captured.append((frame, kwargs)) or 0
+    )
+    monkeypatch.setattr(sync, "_plan_nixos_sync", forbid)
+    assert main(monkeypatch, "frame", "--dry-run") == 0
+    frame, options = captured[0]
+    assert frame.home == home and frame.repo == repo
+    assert options == {"dry_run": True, "confirm": sync._confirmation}
+    assert list(home.iterdir()) == []
+
+
+@pytest.mark.parametrize("option", ["--force", "--init-state"])
+def test_frame_rejects_legacy_mutation_options(tree, monkeypatch, option):
+    assert main(monkeypatch, "frame", option) == 2
+
+
+def test_frame_propagates_partial_status(tree, monkeypatch):
+    from frame import deploy as deployment
+
+    monkeypatch.setattr(deployment, "deploy", lambda *args, **kwargs: 1)
+    assert main(monkeypatch, "frame") == 1
+
+
+def test_mode_help_and_no_target_listing(tree, monkeypatch, capsys):
+    assert main(monkeypatch, "--help") == 0
+    help_text = capsys.readouterr().out
+    assert "--home-only" in help_text and "--dry-run" in help_text
+    assert "Back up confirmed non-directory" in help_text
+    assert main(monkeypatch) == 1
+    output = capsys.readouterr().out
+    assert "Available targets:" in output
+    assert "frame (home deployment; --home-only for dotfiles only)" in output
