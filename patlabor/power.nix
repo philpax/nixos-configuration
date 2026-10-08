@@ -32,7 +32,42 @@ let
 
   gfx = pkgs.writeShellScriptBin "gfx" ''
     set -eu
-    PATH=${lib.makeBinPath [ pkgs.supergfxctl pkgs.power-profiles-daemon pkgs.coreutils ]}:$PATH
+    PATH=${
+      lib.makeBinPath [
+        pkgs.supergfxctl
+        pkgs.power-profiles-daemon
+        pkgs.coreutils
+        pkgs.lsof
+      ]
+    }:$PATH
+
+    dgpu=/sys/bus/pci/devices/0000:01:00.0
+
+    # supergfxd answers D-Bus from the same thread that runs mode changes, so a
+    # removal wedged on a held card leaves every later call hanging for good.
+    # Bound them all and say what that means instead.
+    sgfx() {
+      timeout 5 supergfxctl "$@" 2>/dev/null ||
+        echo "unknown (supergfxd not answering; reboot to clear it)"
+    }
+
+    # Processes with the dGPU open. niri opens /dev/nvidia0 and /dev/nvidiactl
+    # through EGL as well as the card's DRM nodes, and keeps them until it
+    # exits, so any of these pins the driver. lsof only sees our own processes
+    # unprivileged, which covers the session.
+    holders() {
+      nodes=""
+      for n in /dev/nvidia[0-9]* /dev/nvidiactl; do
+        if [ -e "$n" ]; then nodes="$nodes $n"; fi
+      done
+      for d in "$dgpu"/drm/*; do
+        if [ -e "$d" ]; then nodes="$nodes /dev/dri/''${d##*/}"; fi
+      done
+      [ -n "$nodes" ] || return 0
+      for pid in $(lsof -t -w $nodes 2>/dev/null | sort -u); do
+        echo "$(cat /proc/"$pid"/comm 2>/dev/null) ($pid)"
+      done
+    }
 
     case "''${1:-status}" in
       perf|on|hybrid)
@@ -40,15 +75,27 @@ let
         powerprofilesctl set performance
         ;;
       battery|off|integrated)
-        # With no_logind set there is no logout gate left to catch this, and
-        # niri is still holding card1, so say so rather than let it look clean.
-        echo "note: niri holds the dGPU; reboot if the card does not go away." >&2
-        supergfxctl --mode Integrated
         powerprofilesctl set balanced
+        held=$(holders)
+        if [ -e "$dgpu" ] && [ -n "$held" ]; then
+          # Asking supergfxd to switch now gets the card half removed: the
+          # driver unbinds from under the holder, rmmod fails, and the daemon
+          # blocks in the PCI removal until the holder exits, answering nothing
+          # meanwhile. supergfxd-boot-integrated pins Integrated on every boot,
+          # so a reboot is the switch; leave the daemon alone until then.
+          echo "dGPU held by: $(echo $held)" >&2
+          echo "not switching live; reboot to drop the dGPU (boot is always Integrated)." >&2
+          exit 1
+        fi
+        supergfxctl --mode Integrated
         ;;
       status)
-        echo "graphics: $(supergfxctl --get)"
+        echo "graphics: $(sgfx --get)"
         echo "profile:  $(powerprofilesctl get)"
+        if [ -e "$dgpu" ]; then
+          held=$(holders)
+          [ -z "$held" ] || echo "dGPU held by: $(echo $held)"
+        fi
         # current_now is the charge current while plugged in, not consumption,
         # so a draw figure is only meaningful while discharging.
         if [ "$(cat /sys/class/power_supply/BAT1/status 2>/dev/null)" = Discharging ]; then
@@ -64,10 +111,9 @@ let
         ;;
     esac
 
-    # Dropping back to Integrated needs whoever holds the card to let go, which
-    # in practice means niri; supergfxd reports that as a pending action rather
-    # than failing, so surface it instead of leaving the switch silently queued.
-    pend=$(supergfxctl --pend-action 2>/dev/null || true)
+    # supergfxd reports a switch it cannot finish yet as a pending action
+    # rather than failing, so surface it instead of leaving it silently queued.
+    pend=$(sgfx --pend-action)
     [ -z "$pend" ] || [ "$pend" = "None" ] || echo "pending: $pend"
   '';
 in
