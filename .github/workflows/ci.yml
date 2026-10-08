@@ -6,8 +6,11 @@ on:
       - "*.py"
       - "*.md"
       - "pyproject.toml"
-      - ".github/workflows/ci.yml"
+      - "uv.lock"
+      - "sync.sh"
+      - "frame/**"
       - "tests/**"
+      - ".github/workflows/ci.yml"
       # Target-first layout: each target dir owns Nix files (+ dotfiles/).
       - "common-all/**"
       - "common-desktop/**"
@@ -23,8 +26,11 @@ on:
       - "*.py"
       - "*.md"
       - "pyproject.toml"
-      - ".github/workflows/ci.yml"
+      - "uv.lock"
+      - "sync.sh"
+      - "frame/**"
       - "tests/**"
+      - ".github/workflows/ci.yml"
       - "common-all/**"
       - "common-desktop/**"
       - "common-dev/**"
@@ -47,12 +53,66 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # Steel cogs are git submodules. test_sync.py now builds synthetic
-      # tmp_path trees and no longer reads the real steel-cogs checkout, so
-      # the tests pass without the submodules; the checkout is kept for a
-      # complete working tree, not for the tests.
       - uses: actions/checkout@v4
         with:
           submodules: true
       - uses: astral-sh/setup-uv@v6
       - run: uv run pytest -v
+
+  nix-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.28.5/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            sandbox = true
+            require-sigs = true
+      - name: Evaluate shared packages, fonts, options and ARM64 profile metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          for system in x86_64-linux aarch64-linux; do
+            nix eval --impure --json --expr \
+              "let e = import ./frame/environment.nix { system = \"$system\"; }; in import ./tests/nix/cli-packages.nix { system = \"$system\"; nixpkgs = e.source; }"
+            nix eval --impure --json --expr \
+              "(import ./frame/environment.nix { system = \"$system\"; }).buildInfo"
+            nix eval --impure --json --expr \
+              "(import ./tests/nix/terminal-loaders.nix { system = \"$system\"; }).metadata"
+          done
+      - name: Build and run real terminal loaders and lightweight CLI profile
+        run: nix-build --no-out-link tests/nix/terminal-loaders.nix -A checks --argstr system x86_64-linux
+      - name: Export host-visible fonts and Ocean bell through activation
+        id: fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact=$(nix-build --no-out-link tests/nix/terminal-loaders.nix -A hostFontArtifact --argstr system x86_64-linux)
+          echo "path=$artifact" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frame-host-fonts
+          path: ${{ steps.fonts.outputs.path }}/
+          if-no-files-found: error
+          retention-days: 3
+
+  host-fonts:
+    needs: nix-tests
+    runs-on: ubuntu-24.04
+    # This job never installs Nix and never mounts the producer's store.
+    timeout-minutes: 10
+    steps:
+      - name: Require a non-Nix host before downloading font bytes
+        run: test ! -e /nix && test ! -L /nix
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: frame-host-fonts
+          path: host font artifact
+      - name: Install host Fontconfig only
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y fontconfig
+      - name: Validate every entry, exact family matches and namespace-link rejection
+        run: python3 tests/host_fontconfig.py "host font artifact"

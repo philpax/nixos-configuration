@@ -1,0 +1,2 @@
+command = @COMMAND@
+bell-audio-path = @BELL@

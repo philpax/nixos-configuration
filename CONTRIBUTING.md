@@ -12,6 +12,34 @@ Personal NixOS configuration managing multiple machines with shared configuratio
 sudo nixos-rebuild switch
 ```
 
+### Steam Frame
+
+`frame/` is a non-NixOS, home-directory-only target. Its `sync.json` declares ordered dotfile layers and exclusions rather than NixOS imports. `./sync.sh --home-only --dry-run frame` plans only home links; this mode never creates NixOS links, runs sudo, or uses the repository's legacy sync state. Production sync is part of the separately confirmed `frame-cli activate` operation. See [frame/README.md](frame/README.md) for installation, namespace entry, source/package overrides, generated assets, SSH-agent handling, recovery, and scope limits.
+
+CLI package lists are functions accepting `pkgs` under `common-all/packages/` and `common-dev/packages/`. Explicit font packages are in `common-desktop/packages/fonts.nix`. NixOS modules call them with the host's existing package set; Frame uses its independent pin and the existing Helix Steel overlay. Package functions must remain outside auto-imported `programs/` directories. Services, shell enablement, firewall rules, implicit NixOS fonts, and font defaults remain in their NixOS modules.
+
+Frame selects CLI and passive desktop dotfiles but excludes credentials, automatic desktop startup, user services/environment startup, MIME associations, host GTK settings, and NixOS cleanup. It does not provide a supported replacement desktop session or install GUI terminals. Generated terminal/Fontconfig files are owned by activation, not generic sync. Tests never invoke bespoke agent binaries or their installers.
+
+### Current-host build-only verification
+
+`tests/check-current-nixos.py` captures a bounded baseline and compares the refactored configuration using the same resolved host nixpkgs source, real hardware file, and canonical checkout target. Every evaluation/build sets `NIXOS_CONFIG` to that target and supplies matching `-I nixos-config=...`, replacing a conflicting inherited target without changing the host store/settings. Baselines are temporary artifacts, not a production package inventory.
+
+The verification entry point accepts `baseline`, `evaluate --baseline <artifact>`, and `build --baseline <artifact> --timeout 14400`. Capture the baseline before changing affected modules; compare and build after the extraction. For the current `mindgame` host:
+
+```bash
+uv run tests/check-current-nixos.py baseline
+uv run tests/check-current-nixos.py evaluate --baseline <printed-baseline-artifact>
+uv run tests/check-current-nixos.py build --baseline <printed-baseline-artifact> --timeout 14400
+```
+
+The non-activating build command is equivalent to:
+
+```bash
+NIXOS_CONFIG=<canonical-checkout>/mindgame/configuration.nix nix-build --no-out-link <resolved-host-nixpkgs>/nixos -A system -I nixos-config=<canonical-checkout>/mindgame/configuration.nix
+```
+
+The verification entry point uses subprocess argument arrays and an explicit environment rather than shell interpolation. It checks the realized system and compares `/run/current-system` and the system-profile generation before/after. It never executes `switch-to-configuration`, `nixos-rebuild switch/test/boot`, or `sync.sh mindgame`. A baseline or unrelated build failure is an unresolved gate, not evidence of successful regression validation.
+
 Machines synced before 2026-08-09 (the target-first inversion) need the migration steps in [MIGRATION.md](MIGRATION.md). The file covers the stale-symlink sweep for old `nixos/` and `dotfiles/` paths, root-owned dangling links, the mindgame nixpkgs-config rebuild failure, and the redline secrets relocation.
 
 ## Architecture

@@ -1,6 +1,10 @@
 # NixOS configuration
 
-My NixOS configuration. Clone somewhere, then run `./sync.sh` to create symlinks to the relevant locations.
+Personal NixOS configuration with shared layers and dotfiles. Run `./sync.sh <machine>` to sync a NixOS target before rebuilding. The [Steam Frame target](frame/README.md) provides a separate home-directory-only CLI environment on ARM64 SteamOS; it does not import NixOS services or change the host system.
+
+Frame installation and activation are separate operations. `frame-cli install` creates the private namespace/store/profile and host wrapper. `frame-cli activate --dry-run` reports dotfile, asset, terminal, and Bash-hook changes without mutation. Production activation requires reviewed output and explicit consent. The shared CLI and explicit desktop-font definitions live under the layers' `packages/` directories; Frame's source pin does not change NixOS version selection.
+
+Current-host regression validation uses `tests/check-current-nixos.py` to bind the checkout's actual machine configuration and existing host nixpkgs/hardware inputs. Its full system build does not activate the result or sync `/etc/nixos`. See [Frame verification](frame/README.md#verification-and-removal) and the contributing instructions.
 
 ## Scripts
 
