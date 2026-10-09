@@ -1,3 +1,5 @@
 .sync-state.json
+/.sync-state.json.lock
+/.sync-state.json.worker-lock
 __pycache__/
 result
