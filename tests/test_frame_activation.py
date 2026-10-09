@@ -49,7 +49,7 @@ def setup(tmp_path, monkeypatch):
     home.mkdir()
     frame = FakeFrame(home, Path(__file__).resolve().parents[1])
     activation = Activation(frame)
-    monkeypatch.setattr(Activation, "refresh_fonts", lambda self, path: None)
+    monkeypatch.setattr(Activation, "refresh_fonts", fake_refresh_fonts)
     frame.current = str(make_profile(home, "one"))
     return frame, activation
 
@@ -105,6 +105,12 @@ def install_fake_wrapper(frame, *, ready=True):
 
 def apply(activation):
     return activation.apply(activation.plan(), confirmed=True)
+
+
+def fake_refresh_fonts(activation, path):
+    manifest = activation.read_manifest()
+    manifest["font_refresh_pending"] = False
+    activation._json(activation.manifest_path, manifest)
 
 
 def snapshot(home):
@@ -430,6 +436,155 @@ def test_font_export_dereferences_and_confines(setup):
     assert (directory / "fonts/one/truetype/family/alias.ttf").read_bytes() == b"font-one"
 
 
+def test_unchanged_update_and_activation_reuse_assets(setup, monkeypatch):
+    frame, activation = setup
+    apply(activation)
+    pointer = os.readlink(activation.assets / "current")
+    before = snapshot(frame.home)
+
+    def unexpected(*args):
+        pytest.fail("unchanged integration must not copy assets or refresh Fontconfig")
+
+    monkeypatch.setattr(Activation, "export", unexpected)
+    monkeypatch.setattr(Activation, "refresh_fonts", unexpected)
+    manager = Activation(frame)
+    assert manager.prepare(frame.current) is None
+    result = apply(manager)
+    assert result["complete"]
+    assert os.readlink(manager.assets / "current") == pointer
+    assert snapshot(frame.home) == before
+    assert not manager.journal_path.exists()
+
+
+@pytest.mark.parametrize("operation", ["activation", "update", "template"])
+def test_pending_font_refresh_retries_without_copying_assets(setup, monkeypatch, operation):
+    frame, activation = setup
+    apply(activation)
+    if operation == "update":
+        candidate = str(make_profile(frame.home, "two"))
+        prepared = activation.prepare(candidate)
+        frame.current = candidate
+    elif operation == "template":
+        template = activation._template
+        monkeypatch.setattr(
+            activation,
+            "_template",
+            lambda name: template(name) + ("\n" if name == "fontconfig.conf" else ""),
+        )
+    else:
+        manifest = activation.read_manifest()
+        manifest["font_refresh_pending"] = True
+        activation._json(activation.manifest_path, manifest)
+
+    def interrupt(path):
+        raise RuntimeError("interrupted before Fontconfig refresh")
+
+    monkeypatch.setattr(activation, "refresh_fonts", interrupt)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        if operation == "update":
+            activation.publish(prepared)
+        elif operation == "template":
+            activation.prepare(frame.current)
+        else:
+            apply(activation)
+    assert activation.read_manifest()["font_refresh_pending"]
+    assert not activation.journal_path.exists()
+    pointer = os.readlink(activation.assets / "current")
+    monkeypatch.setattr(Activation, "export", lambda *args: pytest.fail("assets should be reused"))
+    monkeypatch.setattr(
+        subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="")
+    )
+    monkeypatch.setattr(shutil, "which", lambda name, **kwargs: "/usr/bin/" + name)
+    retry = Activation(frame)
+    monkeypatch.setattr(retry, "refresh_fonts", lambda path: REFRESH_FONTS(retry, path))
+    assert retry.prepare(frame.current) is None
+    assert not retry.read_manifest()["font_refresh_pending"]
+    monkeypatch.setattr(retry, "refresh_fonts", lambda *args: pytest.fail("already refreshed"))
+    assert apply(retry)["complete"]
+    assert os.readlink(activation.assets / "current") == pointer
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["legacy", "missing", "modified", "link", "extra", "root-permissions", "metadata-permissions"],
+)
+def test_invalid_asset_generation_is_reexported(setup, damage):
+    frame, activation = setup
+    apply(activation)
+    original = os.readlink(activation.assets / "current")
+    directory = activation.assets / original
+    font = directory / "fonts/one/truetype/family/font.ttf"
+    if damage == "legacy":
+        write(directory / "generation.json", json.dumps({"version": 1, "profile": frame.current}))
+    elif damage == "missing":
+        font.unlink()
+    elif damage == "modified":
+        previous = font.stat()
+        font.write_bytes(b"tampered")
+        os.utime(font, ns=(previous.st_atime_ns, previous.st_mtime_ns))
+    elif damage == "link":
+        font.unlink()
+        font.symlink_to(frame.home / "sources/font-one/share/fonts/truetype/family/font.ttf")
+    elif damage == "root-permissions":
+        directory.chmod(0o777)
+    elif damage == "metadata-permissions":
+        (directory / "generation.json").chmod(0o666)
+    else:
+        write(directory / "extra.ttf", "unrecorded")
+    prepared = activation.prepare(frame.current)
+    assert prepared is not None
+    activation.publish(prepared)
+    result = apply(activation)
+    assert os.readlink(activation.assets / "current") != original
+    assert result["generation"] == prepared.generation
+    assert not activation.status()["mismatch"]
+    assert (activation.assets / "current/fonts/one/truetype/family/font.ttf").read_bytes() == (
+        b"font-one"
+    )
+
+
+@pytest.mark.parametrize("font_change", [False, True])
+def test_unchanged_profile_updates_generated_templates_without_export(
+    setup, monkeypatch, font_change
+):
+    frame, activation = setup
+    apply(activation)
+    original_template = activation._template
+    template = "fontconfig.conf" if font_change else "ghostty.machine"
+    refreshes = []
+    monkeypatch.setattr(
+        activation,
+        "_template",
+        lambda name: original_template(name) + ("\n" if name == template else ""),
+    )
+    monkeypatch.setattr(activation, "export", lambda _: pytest.fail("assets should be reused"))
+    monkeypatch.setattr(activation, "refresh_fonts", refreshes.append)
+    assert activation.prepare(frame.current) is None
+    assert bool(refreshes) == font_change
+    generated = next(
+        op for op in activation.generated(activation.policy()) if op.source == template
+    )
+    assert generated.path.read_bytes() == generated.content
+    assert activation.status()["complete"]
+
+
+@pytest.mark.parametrize("command", ["prepare", "apply"])
+def test_reused_assets_do_not_hide_generated_conflicts(setup, command):
+    frame, activation = setup
+    apply(activation)
+    machine = frame.home / ".config/ghostty/machine"
+    machine.write_text("user modification")
+    pointer = os.readlink(activation.assets / "current")
+    if command == "prepare":
+        with pytest.raises(ActivationError, match="changed"):
+            activation.prepare(frame.current)
+    else:
+        assert not apply(activation)["complete"]
+    assert machine.read_text() == "user modification"
+    assert os.readlink(activation.assets / "current") == pointer
+    assert not activation.journal_path.exists()
+
+
 def test_asset_publication_failure_keeps_old_generation(setup, monkeypatch):
     frame, activation = setup
     apply(activation)
@@ -662,6 +817,30 @@ def test_cli_confirmation_change_rejected(setup):
     assert any("changed after confirmation" in message for message in messages)
     assert (frame.home / ".bashrc").read_text() == "user added this after review\n"
     assert not (frame.state / "activation.json").exists()
+
+
+@pytest.mark.parametrize("failure", ["cache", "query", "timeout"])
+def test_failed_font_refresh_remains_pending(setup, monkeypatch, failure):
+    frame, activation = setup
+    apply(activation)
+
+    def run(argv, **kwargs):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, 30)
+        failed = argv[0].endswith("fc-" + ("cache" if failure == "cache" else "list"))
+        return SimpleNamespace(returncode=1 if failed else 0, stdout="")
+
+    monkeypatch.setattr(shutil, "which", lambda name, **kwargs: "/usr/bin/" + name)
+    monkeypatch.setattr(subprocess, "run", run)
+    REFRESH_FONTS(activation, activation.policy())
+    assert activation.read_manifest()["font_refresh_pending"]
+    monkeypatch.setattr(
+        subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="")
+    )
+    monkeypatch.setattr(activation, "refresh_fonts", lambda path: REFRESH_FONTS(activation, path))
+    monkeypatch.setattr(activation, "export", lambda *args: pytest.fail("assets should be reused"))
+    assert activation.prepare(frame.current) is None
+    assert not activation.read_manifest()["font_refresh_pending"]
 
 
 def test_font_validation_records_host_query_without_claiming_required_families(setup, monkeypatch):

@@ -600,6 +600,102 @@ class Activation:
             )
         return count
 
+    def _asset_inventory(self, generation: Path) -> dict:
+        """Check every exported entry without following links or rereading font bytes."""
+        inventory = {}
+
+        def visit(directory, prefix):
+            for name in sorted(os.listdir(directory)):
+                if not prefix and name == "generation.json":
+                    continue
+                relative = f"{prefix}/{name}" if prefix else name
+                info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                    raise ActivationError("asset entry is not safely user-owned")
+                identity = [info.st_mode, info.st_uid, info.st_dev, info.st_ino]
+                if stat.S_ISDIR(info.st_mode):
+                    child = os.open(
+                        name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+                    )
+                    try:
+                        if os.fstat(child) != info:
+                            raise ActivationError("asset directory changed during validation")
+                        inventory[relative] = identity
+                        visit(child, relative)
+                    finally:
+                        os.close(child)
+                elif stat.S_ISREG(info.st_mode):
+                    inventory[relative] = identity + [
+                        info.st_size,
+                        info.st_mtime_ns,
+                        info.st_ctime_ns,
+                        info.st_nlink,
+                    ]
+                else:
+                    raise ActivationError("asset generation contains a link or special file")
+
+        with self._parent_fd(generation) as parent:
+            directory = os.open(
+                generation.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent
+            )
+            try:
+                info = os.fstat(directory)
+                if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                    raise ActivationError("asset generation is not safely user-owned")
+                visit(directory, "")
+            finally:
+                os.close(directory)
+        return inventory
+
+    def _reusable_generation(self, profile: str, manifest: dict) -> str | None:
+        if manifest["profile"] != profile or not manifest["generation"]:
+            return None
+        pointer = self._safe(self.assets / "current")
+        if not pointer.is_symlink() or os.readlink(pointer) != (
+            "generations/" + manifest["generation"]
+        ):
+            return None
+        generation = self._generation(manifest["generation"])
+        try:
+            metadata_path = self._safe(generation / "generation.json")
+            info = metadata_path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+                return None
+            metadata = self._read_json(metadata_path)
+            if (
+                not metadata
+                or metadata.get("version") != 2
+                or metadata.get("profile") != profile
+                or not isinstance(metadata.get("inventory"), dict)
+            ):
+                return None
+            inventory = self._asset_inventory(generation)
+            if (
+                inventory != metadata["inventory"]
+                or "fonts" not in inventory
+                or "bell-window-system.oga" not in inventory
+            ):
+                return None
+        except (OSError, ActivationError):
+            return None
+        return manifest["generation"]
+
+    def _fonts_changed(self, operations: list[Operation], manifest: dict) -> bool:
+        if manifest.get("font_refresh_pending", False):
+            return True
+        for op in operations:
+            if op.source not in ("fontconfig.conf", "profile font assets"):
+                continue
+            record = manifest["owned"].get(str(op.path))
+            desired = {"kind": op.kind, "source": op.source}
+            if op.kind == "link":
+                desired["target"] = op.content
+            else:
+                desired["sha256"] = _digest(op.content)
+            if record != desired or not self._matches(op.path, record):
+                return True
+        return False
+
     def export(self, profile: str) -> str:
         self.policy()
         profile_root = self._source(Path(profile))
@@ -686,7 +782,10 @@ class Activation:
                 raise ActivationError("Ocean bell is not a regular file")
             self._copy_asset(bell, generation / "bell-window-system.oga")
             self._asset_destination(generation / "generation.json")
-            self._json(generation / "generation.json", {"profile": profile, "version": 1})
+            self._json(
+                generation / "generation.json",
+                {"profile": profile, "version": 2, "inventory": self._asset_inventory(generation)},
+            )
             return name
         except BaseException:
             self._asset_destination(generation)
@@ -794,20 +893,25 @@ class Activation:
             raise ActivationError("profile changed after activation planning")
         sync_result = sync_apply(plan.sync_plan) if sync_apply else None
         manifest = self.read_manifest() or self._empty_manifest(plan.font_dir)
-        generation = self.export(plan.profile)
-        self._json(self.manifest_path, manifest)
-        self._json(
-            self.journal_path,
-            {
-                "version": 1,
-                "profile": plan.profile,
-                "generation": generation,
-                "previous_profile": manifest["profile"],
-                "previous_generation": manifest["generation"],
-            },
-        )
-        self._pointer(generation)
+        generation = self._reusable_generation(plan.profile, manifest)
+        refresh = generation is None or self._fonts_changed(plan.operations, manifest)
+        if generation is None:
+            generation = self.export(plan.profile)
+            self._json(self.manifest_path, manifest)
+            self._json(
+                self.journal_path,
+                {
+                    "version": 1,
+                    "profile": plan.profile,
+                    "generation": generation,
+                    "previous_profile": manifest["profile"],
+                    "previous_generation": manifest["generation"],
+                },
+            )
+            self._pointer(generation)
         manifest.update(profile=plan.profile, generation=generation, complete=False)
+        if refresh:
+            manifest["font_refresh_pending"] = True
         self._json(self.manifest_path, manifest)
         for op in plan.operations:
             if op.kind != "startup" and not op.conflict:
@@ -837,8 +941,10 @@ class Activation:
         conflicts.extend(prerequisite_conflicts)
         manifest["complete"] = not conflicts
         self._json(self.manifest_path, manifest)
-        self._unlink(self.journal_path)
-        self.refresh_fonts(plan.font_dir)
+        if os.path.lexists(self.journal_path):
+            self._unlink(self.journal_path)
+        if refresh:
+            self.refresh_fonts(plan.font_dir)
         return {"complete": not conflicts, "conflicts": conflicts, "generation": generation}
 
     def refresh_fonts(self, font_dir: Path) -> None:
@@ -890,6 +996,11 @@ class Activation:
         manifest = self.read_manifest()
         if manifest:
             manifest["font_validation"] = report
+            manifest["font_refresh_pending"] = (
+                "error" in report
+                or report.get("cache_returncode", 0) != 0
+                or report.get("query_returncode", 0) != 0
+            )
             self._json(self.manifest_path, manifest)
 
     def prepare(self, profile: str | Path) -> Prepared | None:
@@ -906,6 +1017,17 @@ class Activation:
             raise ActivationError(
                 "generated integration changed; resolve conflicts before profile switch"
             )
+        if self._reusable_generation(str(profile), manifest):
+            refresh = self._fonts_changed(operations, manifest)
+            if refresh:
+                manifest["font_refresh_pending"] = True
+                self._json(self.manifest_path, manifest)
+            conflicts = self._apply_operations(operations, manifest)
+            if conflicts:
+                raise ActivationError("generated integration changed during update")
+            if refresh:
+                self.refresh_fonts(font_dir)
+            return None
         generation = self.export(str(profile))
         prepared = Prepared(str(profile), generation, manifest["profile"], manifest["generation"])
         self._json(self.journal_path, {"version": 1, **prepared.__dict__})
@@ -924,7 +1046,9 @@ class Activation:
         if not manifest:
             raise ActivationError("activation manifest missing during publication")
         self._pointer(prepared.generation)
-        manifest.update(profile=prepared.profile, generation=prepared.generation)
+        manifest.update(
+            profile=prepared.profile, generation=prepared.generation, font_refresh_pending=True
+        )
         self._json(self.manifest_path, manifest)
         conflicts = self._apply_operations(self.generated(Path(manifest["font_dir"])), manifest)
         if conflicts:

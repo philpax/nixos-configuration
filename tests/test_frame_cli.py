@@ -333,6 +333,18 @@ def test_activation_xdg_rule_does_not_affect_pure_enter(installed):
         frame.readiness(activation=True)
 
 
+def test_unchanged_update_evaluates_without_republishing_profile(installed):
+    frame, runner = installed
+    runner.build = STORE_ONE
+    before = os.readlink(frame.profile)
+    generations = sorted(frame.state.glob("profile-*-link"))
+    frame.update()
+    assert any("nix-build" in argv for argv, _ in runner.calls)
+    assert not any("nix-env" in argv for argv, _ in runner.calls)
+    assert os.readlink(frame.profile) == before
+    assert sorted(frame.state.glob("profile-*-link")) == generations
+
+
 def test_update_failure_keeps_profile(installed):
     frame, runner = installed
     runner.fail_build = True

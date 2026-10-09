@@ -13,7 +13,7 @@ import pytest
 from frame.core import Frame
 from frame.deploy import deploy
 from frame.paths import FrameError, Paths
-from tests.test_frame_activation import make_profile
+from tests.test_frame_activation import fake_refresh_fonts, make_profile
 
 PIN = {"rev": "1" * 40, "sha256": "sha256-" + "A" * 43 + "="}
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +78,7 @@ def deployment(tmp_path, monkeypatch):
     for template in (ROOT / "frame/templates").iterdir():
         (repo / "frame/templates" / template.name).write_bytes(template.read_bytes())
     frame = DeploymentFrame(home, repo)
-    monkeypatch.setattr("frame.activation.Activation.refresh_fonts", lambda *args: None)
+    monkeypatch.setattr("frame.activation.Activation.refresh_fonts", fake_refresh_fonts)
     return frame
 
 
@@ -140,6 +140,45 @@ def test_profile_stage_precedes_single_confirmed_activation(deployment, installe
     assert (frame.state / "activation.json").is_file()
     assert (frame.home / ".bash_profile").is_file()
     assert frame.events.index("update" if installed else "install") < frame.events.index("lock")
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_repeated_combined_sync_reuses_assets(deployment, monkeypatch, conflict):
+    from frame.activation import Activation
+
+    frame = deployment
+    if conflict:
+        (frame.home / ".tool").write_text("preserved")
+    expected = 1 if conflict else 0
+    assert deploy(frame, confirm=lambda _: True, output=lambda _: None) == expected
+    pointer = os.readlink(frame.state / "host-assets/current")
+    before = snapshot(frame.home)
+
+    def update():
+        frame.events.append("update")
+        manager = Activation(frame)
+        prepared = manager.prepare(frame.validate_profile())
+        manager.publish(prepared)
+
+    monkeypatch.setattr(frame, "update", update)
+    monkeypatch.setattr(
+        Activation, "export", lambda *args: pytest.fail("repeat sync must not export assets")
+    )
+    monkeypatch.setattr(
+        Activation,
+        "refresh_fonts",
+        lambda *args: pytest.fail("repeat sync must not refresh Fontconfig"),
+    )
+    assert deploy(frame, confirm=lambda _: True, output=lambda _: None) == expected
+    assert os.readlink(frame.state / "host-assets/current") == pointer
+    after = snapshot(frame.home)
+    manifest = ".local/state/nixos-configuration/sync-home.json"
+    before_state = json.loads(before.pop(manifest)[1])
+    after_state = json.loads(after.pop(manifest)[1])
+    before_state.pop("timestamp")
+    after_state.pop("timestamp")
+    assert before_state == after_state
+    assert after == before
 
 
 def test_declined_activation_keeps_profile_but_not_home_integration(deployment):

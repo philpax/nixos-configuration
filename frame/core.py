@@ -798,7 +798,7 @@ class Frame:
             self.namespace_run(
                 ["nix-env", "--profile", self.profile, "--switch-generation", candidate]
             )
-        else:
+        elif not self.profile.is_symlink() or self.validate_profile() != candidate:
             self.namespace_run(["nix-env", "--profile", self.profile, "--set", candidate])
         self.validate_profile()
         if plugin:
