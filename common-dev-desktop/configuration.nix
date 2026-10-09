@@ -80,6 +80,7 @@ in
     vesktop
     zed-editor
     foliate
+    shotcut
 
     chromium
 
