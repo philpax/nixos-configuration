@@ -1,9 +1,9 @@
 version: 3
 config_command_substitution: true
 defaults:
-  full: codex/gpt-6-astra(high)
-  mini: codex/gpt-5.6-luna(xhigh)
-  nano: codex/gpt-5.6-luna(low)
+  full: codex/gpt-6.1-sol(xhigh)
+  mini: codex/gpt-6-luna(xhigh)
+  nano: codex/gpt-6-luna(low)
 providers:
   umans:
     kind:
@@ -40,94 +40,101 @@ providers:
       key: $(cat ~/.tokens/synthetic-token)
       format: bearer_token
     protocol: openai_chat_completions
+  ocgo-c:
+    kind:
+      type: catalog
+      name: ocgo-c
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/opencode-go-token)
 models:
   ananke-mindgame/qwen3.6-27b-ninfer-mtp3:
     provider_name: qwen3.6-27b-ninfer-mtp3
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 196608
-    max_output_tokens_per_turn: 32768
     supports_vision: false
   ananke-mindgame/qwen3.6-27b-ninfer-mtp3-vision:
     provider_name: qwen3.6-27b-ninfer-mtp3-vision
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 147456
-    max_output_tokens_per_turn: 32768
     supports_vision: true
   ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7:
     provider_name: qwen3.6-35b-a3b-ninfer-dflash7
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 262144
-    max_output_tokens_per_turn: 32768
     supports_vision: false
   ananke-mindgame/qwen3.6-35b-a3b-ninfer-dflash7-c2:
     provider_name: qwen3.6-35b-a3b-ninfer-dflash7-c2
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 131072
-    max_output_tokens_per_turn: 32768
     supports_vision: false
   ananke-mindgame/qwen3.6-35b-a3b-ninfer-mtp3-vision:
     provider_name: qwen3.6-35b-a3b-ninfer-mtp3-vision
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 163840
-    max_output_tokens_per_turn: 32768
     supports_vision: true
   ananke-mindgame/ornith-1.5-35b-a3b-ninfer-dflash7:
     provider_name: ornith-1.5-35b-a3b-ninfer-dflash7
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 262144
-    max_output_tokens_per_turn: 32768
     supports_vision: false
   ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3:
     provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 180224
-    max_output_tokens_per_turn: 32768
     supports_vision: false
   ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3-vision:
     provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3-vision
     variant: other
     class: mini
+    max_output_tokens_per_turn: 32768
     provider: ananke-mindgame
     reasoning:
       type: thinking
       can_disable: true
     context_window: 122880
-    max_output_tokens_per_turn: 32768
     supports_vision: true
   ananke-redline/qwen3.6-27b:
     provider_name: qwen3.6-27b
@@ -156,6 +163,15 @@ models:
       type: no_reasoning
     context_window: 512000
     compaction_threshold: 0.8
+  synthetic/hf:zai-org/GLM-5.3-Flash:
+    provider_name: hf:zai-org/GLM-5.3-Flash
+    variant: other
+    class: full
+    provider: synthetic
+    reasoning:
+      type: no_reasoning
+    context_window: 512000
+    supports_vision: true
 default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
