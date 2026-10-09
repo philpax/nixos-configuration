@@ -76,6 +76,9 @@ INDEX_SINK = "alsa_output.pci-0000_01_00.1.pro-output-8"
 # pro-audio machinery applies. Prefix-matched: the node name is generated from
 # the USB descriptors.
 BEYOND_SINK_PREFIX = "alsa_output.usb-Bigscreen_Beyond_Audio_Strap"
+# The microphone is on the headset, not the audio strap. Its node name includes
+# the headset serial, so match only the USB product prefix.
+BEYOND_SOURCE_PREFIX = "alsa_input.usb-Bigscreen_Beyond_"
 
 # Beyond HID, for fan control and telemetry. Protocol recovered from
 # BeyondHID.exe: feature report [0]=report id 0, [1]=opcode, [2..]=args.
@@ -96,6 +99,7 @@ CONFIG_DIR = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"
 ACTIVE_RUNTIME = os.path.join(CONFIG_DIR, "openxr/1/active_runtime.json")
 ENV_FILE = os.path.join(RUNTIME_DIR, "vr-mode.env")
 PREV_SINK_FILE = os.path.join(RUNTIME_DIR, "vr-mode.prev-sink")
+PREV_SOURCE_FILE = os.path.join(RUNTIME_DIR, "vr-mode.prev-source")
 BEYOND_MARKER = "# headset=beyond"
 
 
@@ -268,7 +272,49 @@ def remember_sink(new_sink):
             f.write(cur + "\n")
 
 
+def beyond_source_on():
+    for line in pactl("list", "short", "sources").stdout.splitlines():
+        fields = line.split("\t")
+        if len(fields) > 1 and fields[1].startswith(BEYOND_SOURCE_PREFIX):
+            source = fields[1]
+            break
+    else:
+        say("Beyond microphone source not found (is the headset attached?)", err=True)
+        return
+
+    current = pactl("get-default-source")
+    cur = current.stdout.strip()
+    if current.returncode or not cur:
+        say("could not read the default microphone; leaving it unchanged", err=True)
+        return
+    # Save before switching, but retain the original input on repeated activation.
+    saved = cur != source and not os.path.exists(PREV_SOURCE_FILE)
+    if saved:
+        with open(PREV_SOURCE_FILE, "w") as f:
+            f.write(cur + "\n")
+    if pactl("set-default-source", source).returncode == 0:
+        say("microphone routed to Beyond")
+    else:
+        if saved:
+            os.unlink(PREV_SOURCE_FILE)
+        say(f"could not route microphone to {source}", err=True)
+
+
+def restore_source():
+    try:
+        with open(PREV_SOURCE_FILE) as f:
+            prev = f.read().strip()
+    except FileNotFoundError:
+        return
+    if prev and pactl("set-default-source", prev).returncode:
+        say(f"could not restore microphone to {prev}", err=True)
+        return  # Keep the saved input so a later invocation can retry.
+    os.unlink(PREV_SOURCE_FILE)
+
+
 def index_audio_on():
+    # Index microphone discovery is not configured. Restore any Beyond input.
+    restore_source()
     remember_sink(INDEX_SINK)
     if pactl("set-card-profile", INDEX_CARD, "pro-audio").returncode:
         say(f"could not put {INDEX_CARD} into pro-audio", err=True)
@@ -282,6 +328,8 @@ def index_audio_on():
 
 
 def beyond_audio_on():
+    # The headset microphone works without the optional audio strap.
+    beyond_source_on()
     for line in pactl("list", "short", "sinks").stdout.splitlines():
         if BEYOND_SINK_PREFIX in line:
             sink = line.split("\t")[1]
@@ -297,8 +345,8 @@ def beyond_audio_on():
 
 
 def audio_off():
-    """Shared by both headsets; the card-profile reset is a no-op when the Index
-    isn't the one in use."""
+    """Restore the desktop audio devices and disable the Index output card."""
+    restore_source()
     try:
         with open(PREV_SINK_FILE) as f:
             prev = f.read().strip()
@@ -479,7 +527,7 @@ def mode_wivrn(no_audio=False):
     stop_monado()
     stop_extras()  # WiVRn launches its own WayVR on session start
     if not no_audio:
-        audio_off()  # Quest uses its own audio; give the desktop sink back
+        audio_off()  # Quest uses its own audio; restore the desktop devices.
     set_active_runtime(WIVRN_JSON)
     write_openvrpaths()
     sysctl("start", "wivrn.service")
@@ -562,6 +610,8 @@ def mode_status():
         print(f"  {unit + ':':<23}{sysctl('is-active', unit).stdout.strip()}")
     sink = pactl("get-default-sink").stdout.strip() or "unknown"
     print(f"  {'default sink:':<23}{sink}")
+    source = pactl("get-default-source").stdout.strip() or "unknown"
+    print(f"  {'default source:':<23}{source}")
     return 0
 
 
@@ -572,14 +622,14 @@ def main():
     sub = ap.add_subparsers(dest="mode")
     idx = sub.add_parser("index", help="Valve Index via Monado (+ WayVR)")
     idx.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
-    idx.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    idx.add_argument("--no-audio", action="store_true", help="skip switching audio input/output")
     bdy = sub.add_parser("beyond", help="Bigscreen Beyond 2e via Monado (+ WayVR)")
     bdy.add_argument("--no-wayvr", action="store_true", help="skip launching WayVR overlay")
-    bdy.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    bdy.add_argument("--no-audio", action="store_true", help="skip switching audio input/output")
     wiv = sub.add_parser("wivrn", help="Quest via WiVRn")
-    wiv.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    wiv.add_argument("--no-audio", action="store_true", help="skip switching audio input/output")
     off = sub.add_parser("off", help="stop everything, no runtime active")
-    off.add_argument("--no-audio", action="store_true", help="skip switching the audio device")
+    off.add_argument("--no-audio", action="store_true", help="skip switching audio input/output")
     sub.add_parser("quiesce", help="wake headsets just long enough to sleep")
     sub.add_parser("status", help="show current runtime + service state")
     fan = sub.add_parser("fan", help="set the Beyond's fan speed")
