@@ -110,6 +110,10 @@
     listenOptions = [ "/run/docker.sock" ];
     daemon.settings.live-restore = true;
   };
+  # CDI spec for `--device nvidia.com/gpu=all` in Docker and Podman. The
+  # generator reads the driver, so with the dGPU powered down at boot it has
+  # to be restarted once the GPU is up.
+  hardware.nvidia-container-toolkit.enable = true;
   # Root-equivalent; see the note on extraGroups in ../common-all/configuration.nix.
   users.users.${config.mainUser}.extraGroups = [ "docker" ];
 }
