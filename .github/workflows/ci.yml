@@ -71,13 +71,11 @@ jobs:
             experimental-features = nix-command flakes
             sandbox = true
             require-sigs = true
-      - name: Evaluate shared packages, fonts, options and ARM64 profile metadata
+      - name: Evaluate profile and terminal-loader metadata for both architectures
         shell: bash
         run: |
           set -euo pipefail
           for system in x86_64-linux aarch64-linux; do
-            nix eval --impure --json --expr \
-              "let e = import ./frame/environment.nix { system = \"$system\"; }; in import ./tests/nix/cli-packages.nix { system = \"$system\"; nixpkgs = e.source; }"
             nix eval --impure --json --expr \
               "(import ./frame/environment.nix { system = \"$system\"; }).buildInfo"
             nix eval --impure --json --expr \
