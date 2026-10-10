@@ -19,6 +19,7 @@ with pkgs; [
   gnumake
   cmake
   gh
+  (pkgs.callPackage ./ttt.nix { })
 
   # Build dependencies and toolchain
   openssl
