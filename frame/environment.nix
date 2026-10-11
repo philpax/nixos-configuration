@@ -17,7 +17,14 @@ let
   pkgs = import source {
     inherit system;
     config.allowUnfree = true;
-    overlays = [ (import ../common-all/overlays/helix-steel.nix) ];
+    overlays = [
+      (import ../common-all/overlays/helix-steel.nix)
+      (_final: prev: {
+        openssh = prev.openssh.override {
+          etcDir = toString (prev.writeTextDir "ssh_config" "");
+        };
+      })
+    ];
   };
   lib = pkgs.lib;
   runtimePackages = import ../common-all/packages/runtime.nix { inherit pkgs; };

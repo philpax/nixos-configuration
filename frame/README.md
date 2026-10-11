@@ -78,6 +78,12 @@ ssh steamos@frame '~/.local/bin/frame-cli enter -- git --version'
 
 Activation exports fonts and bell audio to host-visible files and owns generated Fontconfig, Ghostty, and Alacritty configuration. Terminal commands use the host wrapper. Updates and rollbacks prepare matching assets without editing startup files. Host font discovery is checked when Fontconfig tools are available. Rendering and audio need manual checks after installing a GUI terminal.
 
+## SSH client
+
+Frame's OpenSSH reads `~/.ssh/config` and an empty system configuration in the Nix store. It does not read SteamOS's `/etc/ssh/ssh_config` or its included files. The private namespace maps only the current user's UID; host root-owned files appear as `nobody`, which OpenSSH rejects for included configuration. The Frame-only package overlay avoids those files without disabling permission checks or changing host SSH configuration. Host SSH settings needed inside Frame belong in `~/.ssh/config`.
+
+An existing generation with this error can use `git -c core.sshCommand='ssh -F ~/.ssh/config' pull`. If that file does not exist, use `-F /dev/null`. Apply the package fix with `frame-cli update` and enter a new session.
+
 ## SSH agent
 
 Interactive TTY entry reuses a responding inherited or forwarded agent, otherwise starts or reuses a managed local agent. Explicit commands never start the fallback. Keys are never loaded automatically:
