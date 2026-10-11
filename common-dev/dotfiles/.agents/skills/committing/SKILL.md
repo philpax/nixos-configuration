@@ -1,14 +1,14 @@
 ---
-description: Apply whenever staging or committing git work. Propose before committing, get per-batch consent, verify CI passes first, and split changes into clean atomic commits via partial staging.
+description: Apply whenever staging or committing git work. Propose and get per-batch consent unless the user explicitly authorises scoped autocommits. Verify CI for the final commit; intermediate commits need not be CI-safe. Stage atomic commits and write bodies of 2-3 brief paragraphs.
 ---
 
 # Committing responsibly
 
 ## Core principles
 
-- **Propose before committing.** Never run `git commit` without first showing the user exactly what will be committed and getting consent for that specific change.
-- **Consent is per-batch.** Permission to commit one set of changes is not permission to commit anything else. Each independent batch of work needs its own explicit go-ahead. Do not infer broader consent from a narrow approval.
-- **Never commit unprompted.** Don't commit on your own initiative. Commit only when the user asks you to, or after they've consented to a specific proposed commit.
+- **Propose before committing.** Show the user exactly what will be committed and get consent for that specific change, unless explicit autocommit authorisation covers it (see *Authorised autocommits*).
+- **Consent is per-batch by default.** Permission to commit one set of changes is not permission to commit anything else. Each independent batch needs its own explicit go-ahead unless covered by scoped autocommit authorisation. Do not infer broader consent from a narrow approval.
+- **Never commit unprompted.** Commit only at the user's request, after approval of a specific proposed commit, or under explicit autocommit authorisation.
 - **Prefer atomic commits.** Even when many changes are in flight at once, each commit should be one coherent, independently reviewable change. Always consider whether the current changes can be split into separate independent commits before proposing.
 
 ## Workflow
@@ -23,31 +23,41 @@ description: Apply whenever staging or committing git work. Propose before commi
 
 3. **Consider splitting before proposing.** Before settling on a plan, ask whether each proposed commit can itself be split further — including by partial staging (`git add -p`, `git add <path>`) or by selectively reverting/unstaging parts of the working tree. Prefer more, smaller, coherent commits over fewer mixed ones.
 
-4. **Stage and verify CI.** For each batch, in order:
+4. **Stage and determine CI status.** For each batch, in order:
    - **Stage atomically** — exactly what this commit will contain, no more. Use `git add -p` / `git add <path>` for partial staging; avoid `git add -A` or `git add .` unless you intend to commit everything in the tree. Leave unrelated changes unstaged for their own commits.
-   - **Verify CI** — run the repo's check commands against the staged content (see *Verify CI passes before committing*). If checks fail, fix and re-verify before proposing — don't propose a batch you know will fail CI.
+   - **Determine CI status** — intermediate commits need not pass CI, and checks may be deferred until the final commit. Before the final commit, run the repo's check commands against its staged content (see *Verify CI for the final commit*). Fix failures and re-verify before proposing or autocommitting the final state.
 
-5. **Propose the plan.** Present the commit plan before committing anything:
+5. **Propose the plan.** Unless scoped autocommit authorisation applies, present the commit plan before committing anything:
    - The list of commits, in the order you'll make them.
-   - For each: the scope (which files/hunks), a draft commit message, the staging approach, and **CI verification status** (passed / couldn't verify, with what was run).
+   - For each: the scope (which files/hunks), a draft commit message, the staging approach, and **CI verification status** (passed / failed / deferred until the final commit / couldn't verify, with what was run).
    - If you'd recommend splitting, say so explicitly and show the split.
 
-6. **Get per-batch consent.** Wait for the user to approve a specific commit before committing it. If the user approves only part of the plan, commit only that part. Approval of commit N is not approval of commit N+1 — re-confirm, or rely only on the scope of consent they actually gave.
+6. **Get per-batch consent.** Unless scoped autocommit authorisation applies, wait for the user to approve a specific commit before committing it. If the user approves only part of the plan, commit only that part. Approval of commit N is not approval of commit N+1 unless the user explicitly approved both.
 
-7. **Commit.** Run `git commit` with the approved message. Show the resulting commit (`git show --stat HEAD` or similar).
+7. **Commit.** Run `git commit` with the approved message, or a message prepared under scoped autocommit authorisation. Include the required body in either case. Show the resulting commit (`git show --stat HEAD` or similar).
 
-8. **Repeat for the next batch.** Return to step 1 for the remaining changes; do not assume earlier consent carries over.
+8. **Repeat for the next batch.** Return to step 1 for the remaining changes. Re-check whether consent or autocommit authorisation covers the next batch.
 
 ## Consent in detail
 
 - "Commit this" means *this* set of changes — not everything in the working tree.
 - If the user says "commit the fix" and the working tree also contains unrelated WIP, commit only the fix. Propose the WIP separately, or leave it alone.
-- If the user approved a plan of three commits, you may proceed through the three *as described*; if you discover the split needs to change, stop and re-propose.
+- Approval of a three-commit plan covers those commits as described. If the split needs to change, stop and re-propose unless explicit autocommit authorisation covers the revised split.
 - A "yes" to a proposed commit message is consent to commit that specific staged content with that message — not a standing OK to commit the rest of the tree.
 
-## Verify CI passes before committing
+## Authorised autocommits
 
-Before committing a batch, confirm the end result will pass CI — using whatever instructions the repo provides. The goal is: **if you commit this now, CI goes green.** Find and follow the repo's own check instructions; don't invent commands.
+Explicit user authorisation, such as "autocommit changes for this task" or "commit as you go during this session", permits commits within the stated scope without a separate proposal or confirmation for each batch. A request to implement a change does not authorise autocommits. If the scope or duration is unclear, ask before committing.
+
+Authorisation applies only to the specified task, changes, or session. It ends when that scope is complete, the stated duration expires, or the user revokes it. Unrelated working-tree changes remain outside that authorisation. A change to a previously approved commit split still requires a new proposal unless autocommit authorisation covers it.
+
+Autocommits still require state inspection, atomic staging, CI verification for the final commit, and the commit-message format below. Intermediate autocommits need not be CI-safe. Report the resulting commits and verification status. Autocommit authorisation does not authorise pushing, rewriting history, skipping hooks, or bypassing the final-commit CI requirement. If required final-state checks cannot be run, disclose the limitation and obtain explicit permission to commit with that verification gap unless the user already authorised that specific gap.
+
+## Verify CI for the final commit
+
+Only the final commit in a task or commit series must be CI-safe. Intermediate commits may fail CI or remain unchecked while the work is in progress. This applies to both individually approved commits and authorised autocommits. A standalone commit is also the final commit and must meet this requirement.
+
+Before creating the final commit, verify the cumulative result using the repo's own check instructions. Do not declare the task complete with a failing final state or an unverified final state unless the user explicitly permits the disclosed verification gap. Report any deferred checks or known failures for intermediate commits and resolve them before the final commit. If the intended final commit fails checks, continue fixing the work rather than treating it as complete.
 
 ### Finding CI instructions
 
@@ -60,14 +70,14 @@ Common forms: `make ci` / `make test`, `just ci`, `cargo test` (+ `cargo fmt --c
 
 ### Running checks against the right state
 
-- Run checks against **the exact content that will be committed** — i.e. what you've staged for this batch, not the whole working tree. Easiest: stage first (step 6), then run the checks. If checks need a clean tree (no unstaged WIP), use `git stash -k` to temporarily set aside unstaged changes, run the checks, then `git stash pop`.
-- Run checks before you propose the commit, and again if the staged content changes.
+- Run required final-state checks against the exact content of the final commit, including all earlier commits in the series, not unrelated working-tree changes. Stage first (step 4), then run the checks. If checks need a clean tree (no unstaged WIP), use `git stash -k` to temporarily set aside unstaged changes, run the checks, then `git stash pop`.
+- Run checks before proposing or autocommitting the final commit, and again if its staged content changes. Checks on intermediate commits are optional.
 - If a check is slow, tell the user how long it's taking rather than skipping it silently.
 
 ### When checks fail
 
-- Do not commit a batch you know will fail CI. Fix the issue, or split the batch so the failing part is excluded, or tell the user you can't verify and let them decide.
-- If a check is genuinely impossible to run locally (needs secrets, special hardware, a remote service), say so explicitly and note it in the commit proposal — don't silently skip it.
+- Intermediate commits may contain known CI failures. Disclose them and resolve them by the final commit. Do not create a final commit with known failures; fix and re-verify the cumulative result.
+- If a required final-state check is genuinely impossible to run locally (needs secrets, special hardware, a remote service), disclose the limitation and obtain explicit permission to commit with that verification gap. Do not claim that the unverified final state is CI-safe.
 - If CI is currently red on `main`/the base branch for unrelated reasons, call that out too, so the user isn't surprised when their commit doesn't go green.
 
 ### "Will this pass CI" vs "does this pass locally"
@@ -86,7 +96,7 @@ Use `git add -p` to stage hunks selectively; `git restore --staged <path>` to un
 
 ## Commit messages
 
-Follow the repo's existing convention (check `git log --oneline`). Default to a concise imperative summary line (`Add …`, `Fix …`, `Refactor …`) under ~72 chars, optionally followed by a blank line and a body explaining *why*, not *what*. Reference issues with `#NN` only when genuinely related.
+Follow the repo's existing convention (check `git log --oneline`). Default to a concise imperative summary line (`Add …`, `Fix …`, `Refactor …`) under ~72 chars. Every commit must include a blank line followed by a body of 2-3 brief paragraphs explaining what the commit does and why. Describe the main changes and their effect; include relevant rationale or constraints without repeating the diff. This requirement also applies to autocommits. Reference issues with `#NN` only when genuinely related. Issue-closing trailers do not count toward the 2-3 explanatory paragraphs.
 
 Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, no bold or emphasis constructions. A commit message states what changed and why it changed, without selling the change.
 
@@ -95,16 +105,17 @@ Write the body in the register the `plain-technical-prose` skill defines: short 
 ```
 Fix off-by-one in token refresh window
 
-The expiry check compared against the wrong bound, causing premature
-refresh under load.
+The expiry check now compares against the correct bound. Tokens remain valid until the intended refresh window.
+
+The previous bound caused premature refresh under load. The corrected comparison avoids unnecessary refresh requests.
 
 Closes #142
 ```
 
 ## Don't
 
-- Don't commit before proposing.
-- Don't commit a batch you haven't verified against CI (or, if it's unverifiable locally, without telling the user).
+- Don't commit before proposing unless explicit autocommit authorisation covers the change.
+- Don't create the final commit without CI verification, unless the user explicitly permits a disclosed verification gap. Intermediate commits need not be CI-safe.
 - Don't let one consent cover unrelated commits.
 - Don't bundle unrelated changes to save a step.
 - Don't use `git add -A` to commit everything when only part of the tree is approved.
