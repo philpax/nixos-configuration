@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tarfile
 from pathlib import Path
@@ -11,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from frame import cli, core
+from frame.agent import AgentStatus
 from frame.core import NIX_CONFIG, Frame
 from frame.paths import FrameError, Paths
 
@@ -586,11 +588,159 @@ def test_tar_removes_special_permissions(tmp_path):
 
 def test_cli_agent_status_serializes_manager_result(installed, monkeypatch, capsys):
     frame, _ = installed
-    manager = SimpleNamespace(status=lambda env: SimpleNamespace(as_dict=lambda: {"kind": "none"}))
+    manager = SimpleNamespace(
+        status=lambda env: SimpleNamespace(kind="none", as_dict=lambda: {"kind": "none"})
+    )
     monkeypatch.setattr(frame, "make_agent_manager", lambda: manager)
     monkeypatch.setattr(cli, "Frame", lambda *args, **kwargs: frame)
     assert cli.main(["agent", "status"]) == 0
     assert json.loads(capsys.readouterr().out) == {"kind": "none"}
+
+
+@pytest.fixture
+def agent_cli(monkeypatch):
+    calls = []
+    status = AgentStatus("managed", "/tmp/agent.sock", "Managed local agent responds.")
+    frame = SimpleNamespace(environ={"SSH_AUTH_SOCK": "/tmp/inherited.sock"})
+
+    def prepare_environment(env):
+        assert env is frame.environ
+        calls.append("prepare")
+        return {"SSH_AUTH_SOCK": "/tmp/prepared.sock"}
+
+    def get_status(env):
+        assert env is frame.environ
+        calls.append("status")
+        return frame.agent_status
+
+    def stop():
+        calls.append("stop")
+        return frame.agent_status
+
+    frame.agent_status = status
+    frame.make_agent_manager = lambda: SimpleNamespace(
+        prepare_environment=prepare_environment, status=get_status, stop=stop
+    )
+    monkeypatch.setattr(cli, "Frame", lambda *args, **kwargs: frame)
+    return frame, calls
+
+
+@pytest.mark.parametrize("kind", ["managed", "inherited", "conflict"])
+def test_cli_agent_start_is_explicit(agent_cli, capsys, kind):
+    frame, calls = agent_cli
+    frame.agent_status = AgentStatus(kind, "/tmp/agent.sock", "Agent status.")
+    assert cli.main(["agent", "start"]) == (1 if kind == "conflict" else 0)
+    assert calls == ["prepare", "status"]
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == frame.agent_status.as_dict()
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize("kind", ["managed", "inherited"])
+def test_cli_agent_env_discovers_without_starting(agent_cli, capsys, kind):
+    frame, calls = agent_cli
+    frame.agent_status = AgentStatus(kind, "/tmp/existing.sock")
+    assert cli.main(["agent", "env"]) == 0
+    assert calls == ["status"]
+    captured = capsys.readouterr()
+    assert captured.out == "export SSH_AUTH_SOCK=/tmp/existing.sock;\nunset SSH_AGENT_PID;\n"
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize("shell", ["bash", "fish"])
+def test_cli_agent_env_quotes_shell_metacharacters(agent_cli, capsys, shell):
+    executable = shutil.which(shell)
+    if executable is None:
+        pytest.skip(f"{shell} is unavailable")
+    frame, calls = agent_cli
+    socket = "/tmp/agent 'quoted' \\\"$HOME $(echo injected); `echo injected` * ? [a]\n.sock"
+    frame.agent_status = AgentStatus("inherited", socket)
+    assert cli.main(["agent", "env", "--shell", shell]) == 0
+    assert calls == ["status"]
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    script = captured.out
+    if shell == "bash":
+        script += 'printf "%s\\0%s" "$SSH_AUTH_SOCK" "${SSH_AGENT_PID-unset}"'
+    else:
+        script += 'printf "%s\\0" "$SSH_AUTH_SOCK"; set -q SSH_AGENT_PID; or printf unset'
+    result = subprocess.run(
+        [executable, "--noprofile", "--norc", "-c", script]
+        if shell == "bash"
+        else [executable, "--no-config", "-c", script],
+        env={**os.environ, "SSH_AGENT_PID": "12345"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout == socket + "\0unset"
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        AgentStatus("stopped", detail="No managed agent."),
+        AgentStatus("conflict", "/tmp/conflicting.sock", "Socket ownership conflict."),
+        AgentStatus("managed", detail="Missing socket."),
+        AgentStatus("inherited"),
+    ],
+)
+def test_cli_agent_env_unavailable_is_error(agent_cli, capsys, status):
+    frame, calls = agent_cli
+    frame.agent_status = status
+    assert cli.main(["agent", "env"]) == 1
+    assert calls == ["status"]
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "frame-cli:" in captured.err
+    assert (status.detail or "No responding SSH agent socket.") in captured.err
+
+
+@pytest.mark.parametrize("action", ["status", "stop"])
+def test_cli_agent_conflict_is_nonzero(agent_cli, capsys, action):
+    frame, calls = agent_cli
+    frame.agent_status = AgentStatus("conflict", detail="Ownership conflict.")
+    assert cli.main(["agent", action]) == 1
+    assert calls == [action]
+    captured = capsys.readouterr()
+    if action == "status":
+        assert json.loads(captured.out) == frame.agent_status.as_dict()
+    else:
+        assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_cli_agent_stop_preserves_silent_output(agent_cli, capsys):
+    frame, calls = agent_cli
+    frame.agent_status = AgentStatus("stopped")
+    assert cli.main(["agent", "stop"]) == 0
+    assert calls == ["stop"]
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["agent", "env", "--shell", "zsh"],
+        ["agent", "env", "--shell"],
+        ["agent", "status", "--shell", "bash"],
+        ["agent", "start", "--shell", "fish"],
+        ["agent", "stop", "--shell", "bash"],
+        ["agent", "--shell", "fish", "env"],
+        ["agent", "restart"],
+        ["agent"],
+    ],
+)
+def test_cli_agent_rejects_unsupported_arguments(agent_cli, capsys, argv):
+    _, calls = agent_cli
+    with pytest.raises(SystemExit) as exc:
+        cli.main(argv)
+    assert exc.value.code == 2
+    assert calls == []
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error:" in captured.err
 
 
 def test_namespace_overlay_cannot_override_nix_policy(installed):

@@ -86,15 +86,32 @@ An existing generation with this error can use `git -c core.sshCommand='ssh -F ~
 
 ## SSH agent
 
-Interactive TTY entry reuses a responding inherited or forwarded agent, otherwise starts or reuses a managed local agent. Explicit commands never start the fallback. Keys are never loaded automatically:
+Interactive TTY entry reuses a responding inherited or forwarded agent, otherwise starts or reuses a managed local agent. After reboot, recovery removes validated prior-boot records, stale sockets, and generation roots without opening or signalling saved PIDs. Conflicting files, roots, or responding sockets remain protected. Explicit `enter -- <command>` never starts the fallback.
+
+`frame-cli agent start` explicitly starts or reuses an agent. `frame-cli agent env` attaches an existing shell to a responding inherited or managed agent; it does not start one. Bash:
+
+```bash
+frame-cli agent start && eval "$(frame-cli agent env --shell bash)"
+ssh-add -t 8h ~/.ssh/id_rsa
+maki
+```
+
+Fish:
+
+```fish
+frame-cli agent start; and frame-cli agent env --shell fish | source
+ssh-add -t 8h ~/.ssh/id_rsa
+maki
+```
+
+Keys are never loaded automatically. The passphrase must be entered locally after reboot or key expiry. Processes launched after shell attachment inherit the socket; already-running coding agents must be restarted or supplied the socket explicitly. No `SSH_AGENT_PID` export is needed.
 
 ```bash
 frame-cli agent status
-ssh-add ~/.ssh/<separately-provisioned-key>
 frame-cli agent stop
 ```
 
-The local agent can persist until stop or reboot. Stop never signals inherited agents. Recovery refuses numeric-PID cleanup; unresolved ownership preserves control state and generation roots. Do not delete unresolved control state.
+The local agent can persist until stop or reboot. Stop never signals inherited agents. Same-boot recovery still requires verified process identity and confirmed child exit. Unresolved ownership preserves control state and generation roots. Do not delete unresolved control state.
 
 ## Syncthing
 

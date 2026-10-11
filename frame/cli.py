@@ -4,6 +4,7 @@
 import argparse
 import importlib
 import json
+import shlex
 import sys
 from pathlib import Path
 
@@ -36,7 +37,11 @@ def parser():
     command = commands.add_parser("syncthing")
     command.add_argument("action", choices=("configure", "device-id"))
     command = commands.add_parser("agent")
-    command.add_argument("action", choices=("status", "stop"))
+    actions = command.add_subparsers(dest="action", required=True)
+    for name in ("status", "stop", "start"):
+        actions.add_parser(name)
+    action = actions.add_parser("env")
+    action.add_argument("--shell", choices=("bash", "fish"), default="bash")
     return result
 
 
@@ -85,10 +90,24 @@ def main(argv=None, *, runner=None, repo=None, environ=None, downloader=None, co
             )
         elif args.command == "agent":
             manager = frame.make_agent_manager()
-            if args.action == "status":
-                print(json.dumps(manager.status(frame.environ).as_dict(), indent=2, sort_keys=True))
+            if args.action == "stop":
+                return 1 if manager.stop().kind == "conflict" else 0
+            if args.action == "start":
+                manager.prepare_environment(frame.environ)
+            status = manager.status(frame.environ)
+            if args.action == "env":
+                if status.kind not in ("managed", "inherited") or not status.socket:
+                    raise FrameError(status.detail or "No responding SSH agent socket.")
+                if args.shell == "fish":
+                    socket = "'" + status.socket.replace("\\", "\\\\").replace("'", "\\'") + "'"
+                    print(f"set -gx SSH_AUTH_SOCK {socket};\nset -e SSH_AGENT_PID;")
+                else:
+                    print(
+                        f"export SSH_AUTH_SOCK={shlex.quote(status.socket)};\nunset SSH_AGENT_PID;"
+                    )
             else:
-                manager.stop()
+                print(json.dumps(status.as_dict(), indent=2, sort_keys=True))
+            return 1 if status.kind == "conflict" else 0
     except (FrameError, OSError, ValueError, RuntimeError) as exc:
         if not getattr(args, "quiet", False):
             print(f"frame-cli: {exc}", file=sys.stderr)
