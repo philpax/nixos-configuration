@@ -79,6 +79,7 @@ def deployment(tmp_path, monkeypatch):
         (repo / "frame/templates" / template.name).write_bytes(template.read_bytes())
     frame = DeploymentFrame(home, repo)
     monkeypatch.setattr("frame.activation.Activation.refresh_fonts", fake_refresh_fonts)
+    monkeypatch.setattr("frame.syncthing.start_service", lambda _frame: None)
     return frame
 
 
