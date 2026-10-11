@@ -84,7 +84,9 @@ def service_operations(frame) -> list[Operation]:
 def start_service(frame) -> None:
     account_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
     if Path(frame.home).resolve() != account_home:
-        raise FrameError("Syncthing service activation requires the account's actual home directory")
+        raise FrameError(
+            "Syncthing service activation requires the account's actual home directory"
+        )
     frame.run(["/usr/bin/systemctl", "--user", "daemon-reload"])
     frame.run(["/usr/bin/systemctl", "--user", "restart", SERVICE])
 

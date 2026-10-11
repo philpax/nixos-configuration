@@ -12,14 +12,18 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 import tomllib
 
+from frame import syncthing
 from frame.activation import BEGIN, END, Activation, ActivationError, handle_cli
+from frame.paths import FrameError
 
 BASH = shutil.which("bash")
 REFRESH_FONTS = Activation.refresh_fonts
+START_SERVICE = syncthing.start_service
 
 
 class FakeFrame:
@@ -44,7 +48,14 @@ class FakeFrame:
 
 
 @pytest.fixture
-def setup(tmp_path, monkeypatch):
+def service_start(monkeypatch):
+    start = Mock()
+    monkeypatch.setattr(syncthing, "start_service", start)
+    return start
+
+
+@pytest.fixture
+def setup(tmp_path, monkeypatch, service_start):
     home = tmp_path / "home with 'quotes' and spaces"
     home.mkdir()
     frame = FakeFrame(home, Path(__file__).resolve().parents[1])
@@ -195,17 +206,143 @@ def bash(frame, *, login=False, interactive=True, tty=True, extra=None):
     return result.returncode, result.stdout + result.stderr
 
 
-def test_activation_dry_run_no_mutation(setup):
+def test_activation_dry_run_no_mutation(setup, service_start):
     frame, activation = setup
     before = snapshot(frame.home)
     selected = SimpleNamespace(describe=lambda: "sync link plan")
     plan = activation.plan(sync_plan=selected)
     assert "sync link plan" in plan.describe()
-    assert len(plan.operations) == 7
+    assert len(plan.operations) == 9
+    assert [(op.kind, op.source) for op in plan.operations if op.source == syncthing.SERVICE] == [
+        ("file", syncthing.SERVICE),
+        ("link", syncthing.SERVICE),
+    ]
     assert snapshot(frame.home) == before
     with pytest.raises(ActivationError, match="confirmation"):
         activation.apply(plan)
     assert snapshot(frame.home) == before
+    service_start.assert_not_called()
+
+
+def test_service_starts_after_confirmed_integration(setup, monkeypatch, service_start):
+    frame, activation = setup
+    selected = SimpleNamespace(conflicts=())
+    events = []
+
+    def sync_apply(plan):
+        assert plan is selected
+        service_start.assert_not_called()
+        events.append("sync")
+        return SimpleNamespace(complete=True, warnings=())
+
+    def refresh(path):
+        service_start.assert_not_called()
+        fake_refresh_fonts(activation, path)
+        events.append("fonts")
+
+    def start(current):
+        assert current is frame
+        manifest = activation.read_manifest()
+        assert not manifest["complete"]
+        assert not manifest["font_refresh_pending"]
+        assert not activation.status()["changed"]
+        assert all(str(op.path) in manifest["owned"] for op in plan.operations)
+        assert (
+            os.readlink(
+                frame.home / ".config/systemd/user/default.target.wants" / syncthing.SERVICE
+            )
+            == "../" + syncthing.SERVICE
+        )
+        assert BEGIN in (frame.home / ".bashrc").read_bytes()
+        events.append("service")
+
+    monkeypatch.setattr(activation, "refresh_fonts", refresh)
+    service_start.side_effect = start
+    plan = activation.plan(sync_plan=selected)
+    service_start.assert_not_called()
+    with pytest.raises(ActivationError, match="confirmation"):
+        activation.apply(plan, sync_apply=sync_apply)
+    assert events == []
+    result = activation.apply(plan, confirmed=True, sync_apply=sync_apply)
+    assert result["complete"]
+    assert activation.status()["complete"]
+    assert events == ["sync", "fonts", "service"]
+    service_start.assert_called_once_with(frame)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        ".config/ghostty/machine",
+        ".config/systemd/user/" + syncthing.SERVICE,
+        ".config/systemd/user/default.target.wants/" + syncthing.SERVICE,
+        ".bashrc",
+    ],
+)
+def test_service_conflicts_prevent_startup(setup, service_start, relative):
+    frame, activation = setup
+    content = BEGIN + b"\nuser startup block\n" + END if relative == ".bashrc" else b"user file"
+    path = frame.home / relative
+    write(path, content)
+    result = apply(activation)
+    assert not result["complete"]
+    assert not activation.status()["complete"]
+    assert any(str(path) in conflict for conflict in result["conflicts"])
+    assert path.read_bytes() == content
+    service_start.assert_not_called()
+
+
+@pytest.mark.parametrize("prerequisite", ["sync", "fonts"])
+def test_service_incomplete_prerequisites_prevent_startup(
+    setup, monkeypatch, service_start, prerequisite
+):
+    _, activation = setup
+    if prerequisite == "fonts":
+        monkeypatch.setattr(activation, "refresh_fonts", lambda _: None)
+    result = activation.apply(
+        activation.plan(),
+        confirmed=True,
+        sync_apply=lambda _: SimpleNamespace(complete=prerequisite != "sync", warnings=()),
+    )
+    assert not result["complete"]
+    assert not activation.status()["complete"]
+    assert any("incomplete" in conflict for conflict in result["conflicts"])
+    service_start.assert_not_called()
+
+
+@pytest.mark.parametrize("error", [FrameError, OSError, RuntimeError])
+def test_service_start_failure_leaves_activation_incomplete(setup, service_start, error):
+    frame, activation = setup
+    service_start.side_effect = error("injected service startup failure")
+    result = apply(activation)
+    assert not result["complete"]
+    assert result["conflicts"] == ["frame-syncthing.service: injected service startup failure"]
+    assert not activation.status()["complete"]
+    service_start.assert_called_once_with(frame)
+    service_start.reset_mock(side_effect=True)
+    assert apply(activation)["complete"]
+    assert activation.status()["complete"]
+    service_start.assert_called_once_with(frame)
+
+
+@pytest.mark.parametrize("matches_account", [False, True])
+def test_start_service_account_guard_and_command_order(setup, monkeypatch, matches_account):
+    frame, _ = setup
+    account = frame.home if matches_account else frame.home.parent / "account home"
+    account_lookup = Mock(return_value=SimpleNamespace(pw_dir=str(account)))
+    monkeypatch.setattr(syncthing.pwd, "getpwuid", account_lookup)
+    frame.run = Mock()
+    if matches_account:
+        START_SERVICE(frame)
+        assert [call.args[0] for call in frame.run.call_args_list] == [
+            ["/usr/bin/systemctl", "--user", "daemon-reload"],
+            ["/usr/bin/systemctl", "--user", "restart", syncthing.SERVICE],
+        ]
+    else:
+        with pytest.raises(FrameError, match="actual home directory"):
+            START_SERVICE(frame)
+        frame.run.assert_not_called()
+    account_lookup.assert_called_once_with(os.getuid())
 
 
 def test_activation_single_confirmation(setup, monkeypatch):
@@ -758,7 +895,7 @@ def test_selected_store_absolute_symlink_export(setup, companion_link):
     assert not font.is_symlink() and font.read_bytes() == expected
 
 
-def test_cli_combines_real_sync_dryrun_and_declined_confirmation(setup):
+def test_cli_combines_real_sync_dryrun_and_declined_confirmation(setup, service_start):
     frame, _ = setup
     before = snapshot(frame.home)
     lines = []
@@ -774,6 +911,7 @@ def test_cli_combines_real_sync_dryrun_and_declined_confirmation(setup):
     )
     assert len(prompts) == 1
     assert snapshot(frame.home) == before
+    service_start.assert_not_called()
 
 
 def test_initial_activation_publication_interruption_retry(setup, monkeypatch):
@@ -789,7 +927,7 @@ def test_initial_activation_publication_interruption_retry(setup, monkeypatch):
     assert activation.status()["complete"] and not activation.status()["mismatch"]
 
 
-def test_sync_conflicts_defer_startup_handoff(setup):
+def test_sync_conflicts_defer_startup_handoff(setup, service_start):
     frame, activation = setup
     selected = SimpleNamespace(
         conflicts=(
@@ -803,6 +941,10 @@ def test_sync_conflicts_defer_startup_handoff(setup):
     assert not result["complete"]
     assert not (frame.home / ".bashrc").exists()
     assert not (frame.home / ".bash_profile").exists()
+    assert not os.path.lexists(
+        frame.home / ".config/systemd/user/default.target.wants" / syncthing.SERVICE
+    )
+    service_start.assert_not_called()
 
 
 def test_cli_confirmation_change_rejected(setup):
