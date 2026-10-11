@@ -556,7 +556,7 @@ class AgentManager:
                         ) from None
                     select.select([], [], [], 0.02)
 
-    def _record(self):
+    def _record(self, *, allow_prior_boot=False):
         value = _read(self.control / "intent.json", self.uid)
         if value is None:
             return None
@@ -586,7 +586,9 @@ class AgentManager:
         if value["root"] != str(self._root_path(value["launch_id"])):
             raise AgentError("Managed-agent generation root escapes the selected store.")
         self._validate_socket_path(Path(value["socket"]), missing=True)
-        if value["boot"] != self.boot_reader():
+        if not isinstance(value["boot"], str) or not value["boot"]:
+            raise AgentError("Invalid managed-agent boot identity; preserving its state.")
+        if value["boot"] != self.boot_reader() and not allow_prior_boot:
             raise AgentError(
                 "Managed-agent record is from a prior boot; refusing to signal a saved PID."
             )
@@ -973,9 +975,36 @@ class AgentManager:
         self._cleanup(record)
         return True
 
+    def _expire_prior_boot(self, record, env):
+        socket = Path(record["socket"])
+        self._socket_info(socket)
+        if self.probe(socket, env):
+            raise AgentError("Prior-boot agent socket responds; preserving the conflicting state.")
+        try:
+            self._root_validate(record)
+        except FileNotFoundError:
+            pass
+        for name in (
+            "managed.json",
+            "candidate.json",
+            "ack.json",
+            "cancel.json",
+            "exited.json",
+            "supervisor.json",
+            "spawn.json",
+            "intent.json",
+        ):
+            value = _read(self.control / name, self.uid)
+            if value is not None and value.get("launch_id") != record["launch_id"]:
+                raise AgentError("Prior-boot agent metadata conflicts; preserving its state.")
+        self._cleanup(record)
+
     def _reconcile(self, env, *, stop=False):
-        record = self._record()
+        record = self._record(allow_prior_boot=True)
         if record is None:
+            return None
+        if record["boot"] != self.boot_reader():
+            self._expire_prior_boot(record, env)
             return None
         if self._cancel_unspawned(record):
             return None

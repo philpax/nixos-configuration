@@ -248,15 +248,13 @@ def test_agent_foreign_uid_socket(synthetic, monkeypatch):
 
 @pytest.mark.parametrize(
     "field",
-    ["start", "uid", "exe", "namespaces", "launch_id", "argv", "ppid", "association", "boot"],
+    ["start", "uid", "exe", "namespaces", "launch_id", "argv", "ppid", "association"],
 )
 def test_agent_stop_identity_validation(synthetic, field):
     managed = seed_managed(synthetic)
     process = synthetic.processes[managed["supervisor"]["pid"]]
     if field == "association":
         process["bad_association"] = True
-    elif field == "boot":
-        synthetic.manager.boot_reader = lambda: "different-boot"
     else:
         changed = dict(process["identity"])
         changed[field] = "foreign"
@@ -266,6 +264,82 @@ def test_agent_stop_identity_validation(synthetic, field):
     assert process["signals"] == []
     assert Path(managed["root"]).is_symlink()
     assert (synthetic.manager.control / "intent.json").exists()
+
+
+@pytest.mark.parametrize("action", ["status", "stop"])
+@pytest.mark.parametrize("candidate_only", [False, True])
+@pytest.mark.parametrize("socket_state", ["missing", "stale", "missing-directory"])
+@pytest.mark.parametrize("missing_root", [False, True])
+def test_agent_prior_boot_cleanup(
+    synthetic, monkeypatch, action, candidate_only, socket_state, missing_root
+):
+    managed = seed_managed(synthetic, candidate_only=candidate_only)
+    manager = synthetic.manager
+    manager.boot_reader = lambda: "new-boot"
+    path = Path(managed["socket"])
+    if socket_state == "stale":
+        with socket.socket(socket.AF_UNIX) as endpoint:
+            endpoint.bind(str(path))
+            path.chmod(0o600)
+    elif socket_state == "missing-directory":
+        path.parent.rmdir()
+    if missing_root:
+        Path(managed["root"]).unlink()
+    manager.handle_factory = lambda pid: pytest.fail("Prior-boot PIDs must not be opened")
+    monkeypatch.setattr(os, "kill", lambda *args: pytest.fail("Saved PIDs must not be signalled"))
+    status = manager.status({}) if action == "status" else manager.stop()
+    assert status.kind == "stopped"
+    assert not path.exists()
+    assert not Path(managed["root"]).is_symlink()
+    assert not list(manager.control.glob("*.json"))
+    assert all(not process["signals"] for process in synthetic.processes.values())
+    assert manager.status({}).kind == "stopped"
+
+
+@pytest.mark.parametrize("conflict", ["socket", "responding", "root", "metadata", "hardlink"])
+def test_agent_prior_boot_preserves_conflicts(synthetic, conflict):
+    managed = seed_managed(synthetic)
+    manager = synthetic.manager
+    manager.boot_reader = lambda: "new-boot"
+    path = Path(managed["socket"])
+    root = Path(managed["root"])
+    if conflict == "socket":
+        path.write_text("foreign")
+        path.chmod(0o600)
+    elif conflict == "responding":
+        manager.runner = lambda *args, **kwargs: SimpleNamespace(returncode=1)
+    elif conflict == "root":
+        root.unlink()
+        root.symlink_to("/nix/store/foreign-generation")
+    elif conflict == "metadata":
+        _write(manager.control / "ack.json", {"launch_id": "b" * 32}, manager.uid)
+    else:
+        os.link(manager.control / "ack.json", manager.control / "foreign.json")
+    manager.handle_factory = lambda pid: pytest.fail("Prior-boot PIDs must not be opened")
+    assert manager.status({}).kind == "conflict"
+    assert root.is_symlink()
+    assert (manager.control / "intent.json").exists()
+    assert (manager.control / "managed.json").exists()
+    assert all(not process["signals"] for process in synthetic.processes.values())
+
+
+@pytest.mark.parametrize("boot", [None, "", 123])
+def test_agent_invalid_boot_preserves_state(synthetic, boot):
+    managed = seed_managed(synthetic)
+    manager = synthetic.manager
+    record = _read(manager.control / "intent.json", manager.uid)
+    record["boot"] = boot
+    _write(manager.control / "intent.json", record, manager.uid)
+    assert manager.status({}).kind == "conflict"
+    assert Path(managed["root"]).is_symlink()
+    assert all(not process["signals"] for process in synthetic.processes.values())
+
+
+def test_agent_prior_boot_process_verification_remains_forbidden(synthetic):
+    seed_managed(synthetic)
+    synthetic.manager.boot_reader = lambda: "new-boot"
+    with pytest.raises(AgentError, match="prior boot"):
+        synthetic.manager._record()
 
 
 def test_agent_stop_no_numeric_signal_or_inherited_pid(synthetic, monkeypatch):
@@ -803,6 +877,32 @@ def test_agent_supervisor_cancel_after_fork_before_exec(real_agent, monkeypatch)
     assert not children[0].released
     assert not Path(record["socket"]).exists()
     _assert_gated_supervisor_cleanup(real_agent, record, children)
+
+
+def test_agent_real_restart_after_prior_boot(real_agent):
+    manager = real_agent.manager
+    manager._setup()
+    token = "a" * 32
+    record = {
+        "version": 1,
+        "home": str(manager.home),
+        "state": str(manager.state_dir),
+        "uid": manager.uid,
+        "boot": "prior-boot",
+        "launch_id": token,
+        "generation": GEN,
+        "socket": str(manager._socket_path(real_agent.env)),
+        "root": str(manager._root_path(token)),
+    }
+    manager._root(record)
+    _write(manager.control / "intent.json", record, manager.uid)
+    env = manager.prepare_environment(real_agent.env)
+    current = _read(manager.control / "intent.json", manager.uid)
+    assert current["boot"] == manager.boot_reader()
+    assert current["launch_id"] != token
+    assert not Path(record["root"]).is_symlink()
+    assert manager.status(env).kind == "managed"
+    assert manager.prepare_environment(real_agent.env)["SSH_AUTH_SOCK"] == env["SSH_AUTH_SOCK"]
 
 
 def test_agent_real_empty_reuse_and_private_transport(real_agent):
