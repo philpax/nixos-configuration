@@ -107,6 +107,17 @@ class Plan:
             )
             sections.append(Section(title, items))
         footer = list(self.warnings)
+        if self.conflicts or getattr(selected, "conflicts", ()):
+            footer.append(
+                "Syncthing: frame-syncthing.service uses ~/notes/Main. Conflicting unit or "
+                "enable links are skipped; service startup is deferred until integration "
+                "conflicts are resolved."
+            )
+        else:
+            footer.append(
+                "Activation enables/restarts frame-syncthing.service using ~/notes/Main "
+                "only after confirmation and successful integration."
+            )
         if not hasattr(selected, "home") and self.sync_plan is not None:
             describe = getattr(self.sync_plan, "describe", None)
             footer.append(describe() if describe else str(self.sync_plan))
@@ -475,11 +486,14 @@ class Activation:
         op.conflict = "existing unowned or user-modified object"
 
     def plan(self, profile: str | Path | None = None, *, sync_plan=None) -> Plan:
+        from .syncthing import service_operations
+
         font_dir = self.policy()
         profile = str(profile if profile is not None else self.active_profile())
         old = self.read_manifest()
         owned = old["owned"] if old else {}
         operations = self.generated(font_dir)
+        operations.extend(service_operations(self.frame))
         for op in operations:
             self._conflict(op, owned)
         operations.extend(self.startup())
@@ -835,7 +849,8 @@ class Activation:
     def _apply_operations(self, operations: list[Operation], manifest: dict) -> list[str]:
         conflicts = []
         for op in operations:
-            if op.kind == "startup" and conflicts and not op.conflict:
+            enables_service = op.kind == "link" and op.source == "frame-syncthing.service"
+            if (op.kind == "startup" or enables_service) and conflicts and not op.conflict:
                 op.conflict = "automatic startup deferred until integration conflicts are resolved"
             if not op.conflict:
                 try:
@@ -933,18 +948,29 @@ class Activation:
         startup_conflicts = any(op.kind == "startup" and op.conflict for op in plan.operations)
         if prerequisite_conflicts or startup_conflicts:
             for op in plan.operations:
-                if op.kind == "startup" and not op.conflict:
+                enables_service = op.kind == "link" and op.source == "frame-syncthing.service"
+                if (op.kind == "startup" or enables_service) and not op.conflict:
                     op.conflict = (
                         "automatic startup deferred until integration conflicts are resolved"
                     )
         conflicts = self._apply_operations(plan.operations, manifest)
         conflicts.extend(prerequisite_conflicts)
-        manifest["complete"] = not conflicts
-        self._json(self.manifest_path, manifest)
         if os.path.lexists(self.journal_path):
             self._unlink(self.journal_path)
         if refresh:
             self.refresh_fonts(plan.font_dir)
+        manifest = self.read_manifest()
+        if manifest.get("font_refresh_pending"):
+            conflicts.append("font refresh is incomplete; retry activation before service startup")
+        if not conflicts:
+            from .syncthing import start_service
+
+            try:
+                start_service(self.frame)
+            except (FrameError, OSError, RuntimeError) as exc:
+                conflicts.append(f"frame-syncthing.service: {exc}")
+        manifest["complete"] = not conflicts
+        self._json(self.manifest_path, manifest)
         return {"complete": not conflicts, "conflicts": conflicts, "generation": generation}
 
     def refresh_fonts(self, font_dir: Path) -> None:

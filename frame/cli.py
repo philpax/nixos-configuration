@@ -33,6 +33,8 @@ def parser():
     command.add_argument("--quiet", action="store_true")
     command = commands.add_parser("activate")
     command.add_argument("--dry-run", action="store_true")
+    command = commands.add_parser("syncthing")
+    command.add_argument("action", choices=("configure", "device-id"))
     command = commands.add_parser("agent")
     command.add_argument("action", choices=("status", "stop"))
     return result
@@ -70,6 +72,17 @@ def main(argv=None, *, runner=None, repo=None, environ=None, downloader=None, co
             frame.readiness(activation=True)
         elif args.command == "activate":
             return activate(frame, dry_run=args.dry_run, confirm=confirm)
+        elif args.command == "syncthing":
+            module = importlib.import_module("frame.syncthing")
+            if args.action == "configure":
+                return module.configure_service(frame)
+            return frame.enter(
+                [
+                    "syncthing",
+                    "device-id",
+                    "--home=" + str(frame.home / ".local/state/frame-syncthing"),
+                ]
+            )
         elif args.command == "agent":
             manager = frame.make_agent_manager()
             if args.action == "status":

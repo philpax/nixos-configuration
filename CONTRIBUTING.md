@@ -35,7 +35,7 @@ Modules must use `config.mainUser` and `config.users.users.${config.mainUser}.ho
 
 `programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files. Shared package functions belong in `packages/`, not those module directories. NixOS supplies its existing `pkgs`; Frame uses its independent pin and the shared Helix Steel overlay.
 
-Syncthing membership is declared in `common-all/syncthing-topology.nix`. Machines select `philpax.syncthing.device` and supply their folder paths.
+Syncthing membership is declared in `common-all/syncthing-topology.nix`. NixOS machines select `philpax.syncthing.device` and supply their folder paths. Frame snapshots the topology into its profile and runs a home-only systemd user service through `frame-cli`. A null device ID marks an unprovisioned peer; NixOS excludes it until the generated ID is recorded.
 
 ### Dotfiles and sync
 

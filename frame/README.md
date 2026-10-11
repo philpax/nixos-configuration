@@ -14,7 +14,7 @@ Deployment stays under home. It never uses sudo, unlocks the root filesystem, in
 
 The host needs `aarch64-linux`, `/usr/bin/python3`, Bash, curl, tar, xz, sha256sum, Git, and working unprivileged user/mount namespaces. The checkout must remain at a stable path, with Steel submodules initialized.
 
-State, the private store, profile, and exported assets default to `~/.local/share/frame-cli`; alternate state directories must remain beneath home. The host wrapper is `~/.local/bin/frame-cli`. Privileged operations, device access, and daemons are unsupported.
+State, the private store, profile, and exported assets default to `~/.local/share/frame-cli`; alternate state directories must remain beneath home. The host wrapper is `~/.local/bin/frame-cli`. Privileged operations and device access are unsupported. Activation manages a Syncthing user service through the host systemd user manager.
 
 ## Installation and entry
 
@@ -64,7 +64,7 @@ frame-cli activate --dry-run
 frame-cli activate
 ```
 
-Activation confirms home links, generated assets, and Bash startup hooks. Only unset/empty `XDG_CONFIG_HOME` or canonical `~/.config` is supported, including for dry-runs. Explicit entry preserves custom XDG paths but does not relocate shared dotfiles.
+Activation confirms home links, generated assets, Bash startup hooks, and the Syncthing user service. Successful activation reloads the user systemd manager and restarts `frame-syncthing.service`. Conflicts defer service startup. Only unset/empty `XDG_CONFIG_HOME` or canonical `~/.config` is supported, including for dry-runs. Explicit entry preserves custom XDG paths but does not relocate shared dotfiles.
 
 Automatic entry requires interactive Bash with TTY input/output. Noninteractive SSH and file transfers remain quiet. Keep a working SSH session during activation. Recovery bypasses automatic entry:
 
@@ -96,8 +96,34 @@ frame-cli agent stop
 
 The local agent can persist until stop or reboot. Stop never signals inherited agents. Recovery refuses numeric-PID cleanup; unresolved ownership preserves control state and generation roots. Do not delete unresolved control state.
 
+## Syncthing
+
+The Frame profile includes Syncthing. Activation installs `~/.config/systemd/user/frame-syncthing.service` and its `default.target.wants` link. The service enters the private Nix namespace through `frame-cli`; host systemd never executes private store paths directly. Install, update, and rollback do not enable or restart the service. After a profile update or rollback, activation restarts it with the selected generation.
+
+Each service start generates or reuses the local identity and applies peers and folders from the profile's snapshot of `common-all/syncthing-topology.nix`. This replaces folder and peer changes made through the web UI. Configuration, keys, and the database reside in `~/.local/state/frame-syncthing`. `Main` synchronizes `~/notes/Main`. Automatic binary upgrades are disabled; profile updates supply the binary.
+
+The topology records Frame's public device ID. For a new identity, set `devices.frame = null` before the first activation. NixOS machines omit unprovisioned devices from peers and folder sharing. After that activation, retrieve the generated ID:
+
+```bash
+frame-cli syncthing device-id
+systemctl --user status frame-syncthing.service
+journalctl --user -u frame-syncthing.service
+```
+
+Set `devices.frame` in `common-all/syncthing-topology.nix` to that ID. Run `./sync.sh frame` again and rebuild participating NixOS machines. Other peers require the device and folder share to be added manually. The private key remains on Frame and must not be committed. A configured ID that differs from the local identity prevents service startup.
+
+The web UI listens on `127.0.0.1:8384`. Access from another computer uses an SSH tunnel:
+
+```bash
+ssh -N -L 8384:127.0.0.1:8384 steamos@frame
+```
+
+Open `http://127.0.0.1:8384` on the computer running the tunnel. Sync traffic uses Syncthing's standard discovery, connection, and relay settings. Deployment does not change the SteamOS firewall.
+
+Service activation requires the account's actual home directory; alternate synthetic homes cannot control the host user manager. The service starts with the systemd user manager. Starting at boot without a login requires user lingering, configured separately with `loginctl enable-linger steamos` where host permissions permit it. Lingering does not prevent headset suspension. `systemctl --user stop frame-syncthing.service` stops synchronization; a later activation restarts it.
+
 ## Verification and removal
 
 SteamOS updates can change namespace availability; recheck entry afterward.
 
-There is no recursive automatic uninstall. After sessions and the local agent exit, remove only unchanged owned links/files and managed Bash blocks. Check subsequent changes before restoring backups. Remove the wrapper and state only when no process or retained asset link depends on them.
+There is no recursive automatic uninstall. After stopping `frame-syncthing.service`, removing its owned enable link, reloading the user systemd manager, and exiting sessions and the local agent, remove only unchanged owned links/files and managed Bash blocks. Check subsequent changes before restoring backups. Remove the wrapper and state only when no process or retained asset link depends on them.

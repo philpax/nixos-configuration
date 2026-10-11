@@ -6,12 +6,13 @@ let
   topology = import ../syncthing-topology.nix;
   home = config.users.users.${config.mainUser}.home;
   folders = lib.filterAttrs (_: members: builtins.elem cfg.device members) topology.folders;
-  peers = lib.unique (lib.remove cfg.device (lib.concatLists (builtins.attrValues folders)));
+  peers = builtins.filter (device: topology.devices.${device} != null)
+    (lib.unique (lib.remove cfg.device (lib.concatLists (builtins.attrValues folders))));
 in
 {
   options.philpax.syncthing = {
     device = lib.mkOption {
-      type = lib.types.nullOr (lib.types.enum (builtins.attrNames topology.devices));
+      type = lib.types.nullOr (lib.types.enum (builtins.attrNames (lib.filterAttrs (_: id: id != null) topology.devices)));
       default = null;
       description = "This machine's name in syncthing-topology.nix; null leaves Syncthing off.";
     };
@@ -35,7 +36,7 @@ in
         devices = lib.genAttrs peers (d: { id = topology.devices.${d}; });
         folders = lib.mapAttrs (name: members: {
           path = cfg.folderPaths.${name} or "${home}/notes/${name}";
-          devices = lib.remove cfg.device members;
+          devices = builtins.filter (device: builtins.elem device peers) members;
         }) folders;
         options.minHomeDiskFree = { unit = "GB"; value = 1; };
       };

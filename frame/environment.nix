@@ -28,7 +28,18 @@ let
   };
   lib = pkgs.lib;
   runtimePackages = import ../common-all/packages/runtime.nix { inherit pkgs; };
-  defaultCliPackages = lib.concatMap (path: import path { inherit pkgs; }) [
+  topology = import ../common-all/syncthing-topology.nix;
+  syncthingFolders = lib.filterAttrs (_: members: builtins.elem "frame" members) topology.folders;
+  syncthingPeers = builtins.filter (name: topology.devices.${name} != null)
+    (lib.unique (lib.remove "frame" (lib.concatLists (builtins.attrValues syncthingFolders))));
+  syncthingSettings = {
+    deviceID = topology.devices.frame;
+    devices = lib.genAttrs syncthingPeers (name: { id = topology.devices.${name}; });
+    folders = lib.mapAttrs (_: members: {
+      devices = builtins.filter (name: builtins.elem name syncthingPeers) members;
+    }) syncthingFolders;
+  };
+  defaultCliPackages = [ pkgs.syncthing ] ++ lib.concatMap (path: import path { inherit pkgs; }) [
     ../common-all/packages/system.nix
     ../common-all/packages/development.nix
     ../common-all/packages/network.nix
@@ -126,6 +137,7 @@ let
     cp ${pkgs.writeText "frame-cli-build-info.json" (builtins.toJSON buildInfo)} "$out/share/frame-cli/build-info.json"
     cp ${pkgs.writeText "frame-cli-output-manifest.json" (builtins.toJSON outputManifest)} "$out/share/frame-cli/output-manifest.json"
     cp ${pkgs.writeText "frame-cli-assets.json" (builtins.toJSON assetManifest)} "$out/share/frame-cli/assets.json"
+    cp ${pkgs.writeText "frame-syncthing.json" (builtins.toJSON syncthingSettings)} "$out/share/frame-cli/syncthing.json"
     cp ${pkgs.writeText "frame-cli-nixpkgs.json" (builtins.toJSON pin)} "$out/share/frame-cli/nixpkgs.json"
     ln -s ${lib.escapeShellArg (toString source)} "$out/share/frame-cli/nixpkgs"
     ${lib.concatMapStringsSep "\n" (record:

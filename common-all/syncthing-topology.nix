@@ -9,9 +9,10 @@
     mindgame-windows = "6TUTJSN-X6S2MSP-2WPFOT2-4LT33IM-NPMZGMT-W7KXKCY-NBLNC4B-HPUIPAE";
     iphone = "CTLWMSO-UZTMF6D-DKMOSXI-4DST6YP-W2GN3YW-Y5AV4UD-LUXBIBV-WBJXXQ6";
     aynthor = "ANRYBLG-F2D6L6L-RCMFYAZ-TP5CX4G-3VMZ2E3-O6SIO2B-4JYMOLJ-7ZKYXQS";
+    frame = "RUA2WKC-IHROCOL-W2AYYXX-A5Z7O3A-NPCGM5O-NZY53FV-XKVB5OC-T4XIVA6";
   };
 
   folders = {
-    Main = [ "redline" "paprika" "patlabor" "mindgame-nixos" "mindgame-windows" "iphone" ];
+    Main = [ "redline" "paprika" "patlabor" "mindgame-nixos" "mindgame-windows" "iphone" "frame" ];
   };
 }
