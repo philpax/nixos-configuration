@@ -28,7 +28,7 @@ git submodule update --init
 ./sync.sh frame
 ```
 
-The dry-run is read-only: no bootstrap, downloads, evaluation, builds, or writes. Combined sync installs or updates the profile before asking for home activation confirmation. Declining stops activation, not profile publication or matching asset refreshes. Build failure stops before activation. No NixOS rebuild follows.
+The dry-run is read-only: no bootstrap, downloads, evaluation, builds, or writes. Combined sync installs or updates the profile before asking for home activation confirmation. Declining stops activation, not profile publication or matching asset refreshes. Nix build progress is displayed live on stderr; packages without ARM64 substitutes may build locally and run their package checks. Build failure stops before activation. No NixOS rebuild follows.
 
 Explicit `./sync.sh --home-only frame` manages dotfiles only. Combined deployment rejects `--force` and `--init-state`. Conflicts remain preserved and return nonzero; new startup integration waits for resolution.
 

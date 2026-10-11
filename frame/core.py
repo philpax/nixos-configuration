@@ -220,13 +220,22 @@ class Frame:
     def lock(self):
         return self.paths.lock()
 
-    def run(self, argv, *, env=None, capture_output=True, check=True, cwd=None):
+    def run(
+        self, argv, *, env=None, capture_output=True, check=True, cwd=None, stream_stderr=False
+    ):
+        output = (
+            {"stdout": subprocess.PIPE, "stderr": None}
+            if stream_stderr
+            else {"capture_output": capture_output}
+        )
         result = self.runner(
             [str(arg) for arg in argv],
             env=env or self.environment(),
             cwd=cwd,
-            capture_output=capture_output,
+            **output,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         if check and result.returncode:
@@ -363,6 +372,7 @@ class Frame:
         source=True,
         env=None,
         reuse=False,
+        stream_stderr=False,
     ):
         controlled = {
             key: value
@@ -381,7 +391,13 @@ class Frame:
         command = self.namespace_argv(
             argv, profile=profile, source=source, env=controlled, reuse=reuse
         )
-        return self.run(command, env=controlled, capture_output=capture_output, check=check)
+        return self.run(
+            command,
+            env=controlled,
+            capture_output=capture_output,
+            check=check,
+            stream_stderr=stream_stderr,
+        )
 
     def resolve_store_path(self, logical):
         """Map a logical store path, including symlinks, into this selected physical store."""
@@ -773,7 +789,7 @@ class Frame:
             copied = self.state / "sources" / (hashlib.sha256(data).hexdigest() + ".nix")
             self.paths.atomic_bytes(copied, data)
             argv += ["--argstr", "overrides", str(copied)]
-        result = self.namespace_run(argv)
+        result = self.namespace_run(argv, stream_stderr=True)
         lines = result.stdout.strip().splitlines()
         if len(lines) != 1:
             raise FrameError("Build did not return exactly one environment store path")
