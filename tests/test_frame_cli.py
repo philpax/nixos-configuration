@@ -971,7 +971,8 @@ def test_nix_source_paths_evaluate_literal_strings(installed, monkeypatch):
     overrides.write_text('args: { marker = "literal override"; }')
     calls = []
 
-    def record_build(argv):
+    def record_build(argv, *, stream_stderr):
+        assert stream_stderr is True
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, STORE_ONE + "\n", "")
 
