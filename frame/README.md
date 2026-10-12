@@ -76,7 +76,7 @@ ssh steamos@frame '~/.local/bin/frame-cli enter -- git --version'
 
 ## Host-visible assets and terminal configuration
 
-Activation exports fonts and bell audio to host-visible files and owns generated Fontconfig, Ghostty, and Alacritty configuration. Terminal commands use the host wrapper. Updates and rollbacks prepare matching assets without editing startup files. Host font discovery is checked when Fontconfig tools are available. Rendering and audio need manual checks after installing a GUI terminal.
+Activation exports fonts and bell audio to host-visible files and owns generated Fontconfig, Ghostty, and Alacritty configuration. It also owns the Desktop Mode cursor fix: `~/.config/environment.d/90-kwin-software-cursor.conf` sets `KWIN_FORCE_SW_CURSOR=1`, because KWin's hardware-plane cursor is not shown in the headset view, and `~/.config/autostart/frame-cli-cursor-size.desktop` reapplies the `kcminputrc` cursor size, 24 px unless already set, over gamescope's 256 px. The environment change takes effect after the next login. Apps run directly under gamescope rather than in the desktop still have no cursor. Terminal commands use the host wrapper. Updates and rollbacks prepare matching assets without editing startup files. Host font discovery is checked when Fontconfig tools are available. Rendering and audio need manual checks after installing a GUI terminal.
 
 ## SSH client
 

@@ -212,7 +212,7 @@ def test_activation_dry_run_no_mutation(setup, service_start):
     selected = SimpleNamespace(describe=lambda: "sync link plan")
     plan = activation.plan(sync_plan=selected)
     assert "sync link plan" in plan.describe()
-    assert len(plan.operations) == 9
+    assert len(plan.operations) == 11
     assert [(op.kind, op.source) for op in plan.operations if op.source == syncthing.SERVICE] == [
         ("file", syncthing.SERVICE),
         ("link", syncthing.SERVICE),
@@ -793,6 +793,42 @@ def test_terminal_generated_paths_and_commands(setup):
     bell = Path(ghostty.splitlines()[1].removeprefix("bell-audio-path = "))
     assert bell.read_bytes() == b"bell-one"
     assert "/nix/" not in ghostty
+
+
+@pytest.mark.parametrize("saved", ["", "48"])
+def test_desktop_cursor_generated_files(setup, tmp_path, saved):
+    frame, activation = setup
+    apply(activation)
+    environment = frame.home / ".config/environment.d/90-kwin-software-cursor.conf"
+    assignments = [
+        line for line in environment.read_text().splitlines() if line and not line.startswith("#")
+    ]
+    assert assignments == ["KWIN_FORCE_SW_CURSOR=1"]
+
+    entry = (frame.home / ".config/autostart/frame-cli-cursor-size.desktop").read_text()
+    assert "OnlyShowIn=KDE;" in entry.splitlines()
+    command = next(line for line in entry.splitlines() if line.startswith("Exec="))
+    bin_dir, size, log = tmp_path / "bin", tmp_path / "size", tmp_path / "dbus.log"
+    size.write_text(saved)
+    stubs = {
+        "kreadconfig6": f'cat "{size}"\n',
+        "kwriteconfig6": f'printf "%s" "$7" > "{size}"\n',
+        "dbus-send": f'printf "%s\\n" "$*" > "{log}"\n',
+    }
+    for name, body in stubs.items():
+        write(bin_dir / name, "#!/bin/sh\n" + body)
+        (bin_dir / name).chmod(0o755)
+    environ = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    subprocess.run(shlex.split(command.removeprefix("Exec=")), env=environ, check=True)
+    assert size.read_text() == (saved or "24")
+    assert log.read_text().split() == [
+        "--session",
+        "--type=signal",
+        "/KGlobalSettings",
+        "org.kde.KGlobalSettings.notifyChange",
+        "int32:5",
+        "int32:0",
+    ]
 
 
 def test_parent_symlink_escape_prevents_mutation(setup, tmp_path):

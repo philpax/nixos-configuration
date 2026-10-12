@@ -372,6 +372,18 @@ class Activation:
                 xml.encode(),
                 "fontconfig.conf",
             ),
+            Operation(
+                self.home / ".config/environment.d/90-kwin-software-cursor.conf",
+                "file",
+                self._template("kwin-software-cursor.conf").encode(),
+                "kwin-software-cursor.conf",
+            ),
+            Operation(
+                self.home / ".config/autostart/frame-cli-cursor-size.desktop",
+                "file",
+                self._template("cursor-size.desktop").encode(),
+                "cursor-size.desktop",
+            ),
             Operation(font_dir, "link", str(self.assets / "current/fonts"), "profile font assets"),
         ]
 
