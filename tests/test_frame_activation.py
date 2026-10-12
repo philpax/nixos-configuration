@@ -17,7 +17,7 @@ from unittest.mock import Mock
 import pytest
 import tomllib
 
-from frame import syncthing
+from frame import syncthing, trackpad
 from frame.activation import BEGIN, END, Activation, ActivationError, handle_cli
 from frame.paths import FrameError
 
@@ -55,7 +55,14 @@ def service_start(monkeypatch):
 
 
 @pytest.fixture
-def setup(tmp_path, monkeypatch, service_start):
+def trackpad_start(monkeypatch):
+    start = Mock()
+    monkeypatch.setattr(trackpad, "start_service", start)
+    return start
+
+
+@pytest.fixture
+def setup(tmp_path, monkeypatch, service_start, trackpad_start):
     home = tmp_path / "home with 'quotes' and spaces"
     home.mkdir()
     frame = FakeFrame(home, Path(__file__).resolve().parents[1])
@@ -212,11 +219,12 @@ def test_activation_dry_run_no_mutation(setup, service_start):
     selected = SimpleNamespace(describe=lambda: "sync link plan")
     plan = activation.plan(sync_plan=selected)
     assert "sync link plan" in plan.describe()
-    assert len(plan.operations) == 11
-    assert [(op.kind, op.source) for op in plan.operations if op.source == syncthing.SERVICE] == [
-        ("file", syncthing.SERVICE),
-        ("link", syncthing.SERVICE),
-    ]
+    assert len(plan.operations) == 13
+    for service in (syncthing.SERVICE, trackpad.SERVICE):
+        assert [(op.kind, op.source) for op in plan.operations if op.source == service] == [
+            ("file", service),
+            ("link", service),
+        ]
     assert snapshot(frame.home) == before
     with pytest.raises(ActivationError, match="confirmation"):
         activation.apply(plan)
@@ -224,7 +232,9 @@ def test_activation_dry_run_no_mutation(setup, service_start):
     service_start.assert_not_called()
 
 
-def test_service_starts_after_confirmed_integration(setup, monkeypatch, service_start):
+def test_service_starts_after_confirmed_integration(
+    setup, monkeypatch, service_start, trackpad_start
+):
     frame, activation = setup
     selected = SimpleNamespace(conflicts=())
     events = []
@@ -258,6 +268,7 @@ def test_service_starts_after_confirmed_integration(setup, monkeypatch, service_
 
     monkeypatch.setattr(activation, "refresh_fonts", refresh)
     service_start.side_effect = start
+    trackpad_start.side_effect = lambda current: events.append("trackpad")
     plan = activation.plan(sync_plan=selected)
     service_start.assert_not_called()
     with pytest.raises(ActivationError, match="confirmation"):
@@ -266,8 +277,9 @@ def test_service_starts_after_confirmed_integration(setup, monkeypatch, service_
     result = activation.apply(plan, confirmed=True, sync_apply=sync_apply)
     assert result["complete"]
     assert activation.status()["complete"]
-    assert events == ["sync", "fonts", "service"]
+    assert events == ["sync", "fonts", "service", "trackpad"]
     service_start.assert_called_once_with(frame)
+    trackpad_start.assert_called_once_with(frame)
 
 
 @pytest.mark.parametrize(
@@ -276,10 +288,12 @@ def test_service_starts_after_confirmed_integration(setup, monkeypatch, service_
         ".config/ghostty/machine",
         ".config/systemd/user/" + syncthing.SERVICE,
         ".config/systemd/user/default.target.wants/" + syncthing.SERVICE,
+        ".config/systemd/user/" + trackpad.SERVICE,
+        ".config/systemd/user/default.target.wants/" + trackpad.SERVICE,
         ".bashrc",
     ],
 )
-def test_service_conflicts_prevent_startup(setup, service_start, relative):
+def test_service_conflicts_prevent_startup(setup, service_start, trackpad_start, relative):
     frame, activation = setup
     content = BEGIN + b"\nuser startup block\n" + END if relative == ".bashrc" else b"user file"
     path = frame.home / relative
@@ -290,6 +304,28 @@ def test_service_conflicts_prevent_startup(setup, service_start, relative):
     assert any(str(path) in conflict for conflict in result["conflicts"])
     assert path.read_bytes() == content
     service_start.assert_not_called()
+    trackpad_start.assert_not_called()
+
+
+def test_trackpad_unit_runs_submodule_driver(setup):
+    frame, activation = setup
+    apply(activation)
+    unit = (frame.home / ".config/systemd/user" / trackpad.SERVICE).read_text()
+    command = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+    driver = frame.repo.absolute() / "frame/magic-trackpad-2-linux-userspace/mt2_driver.py"
+    assert shlex.split(command.removeprefix("ExecStart=")) == ["/usr/bin/python3", str(driver)]
+    link = frame.home / ".config/systemd/user/default.target.wants" / trackpad.SERVICE
+    assert os.readlink(link) == "../" + trackpad.SERVICE
+
+
+def test_trackpad_start_requires_submodule(tmp_path, monkeypatch):
+    import pwd
+
+    monkeypatch.setattr(pwd, "getpwuid", lambda uid: SimpleNamespace(pw_dir=str(tmp_path)))
+    frame = SimpleNamespace(home=tmp_path, repo=tmp_path / "checkout", run=Mock())
+    with pytest.raises(FrameError, match="submodule"):
+        trackpad.start_service(frame)
+    frame.run.assert_not_called()
 
 
 @pytest.mark.parametrize("prerequisite", ["sync", "fonts"])

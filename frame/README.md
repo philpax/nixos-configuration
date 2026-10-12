@@ -12,7 +12,7 @@ Deployment stays under home. It never uses sudo, unlocks the root filesystem, in
 
 ## Prerequisites and locations
 
-The host needs `aarch64-linux`, `/usr/bin/python3`, Bash, curl, tar, xz, sha256sum, Git, and working unprivileged user/mount namespaces. The checkout must remain at a stable path, with Steel submodules initialized.
+The host needs `aarch64-linux`, `/usr/bin/python3`, Bash, curl, tar, xz, sha256sum, Git, and working unprivileged user/mount namespaces. The checkout must remain at a stable path, with submodules initialized: the Steel cogs and `frame/magic-trackpad-2-linux-userspace`.
 
 State, the private store, profile, and exported assets default to `~/.local/share/frame-cli`; alternate state directories must remain beneath home. The host wrapper is `~/.local/bin/frame-cli`. Privileged operations and device access are unsupported. Activation manages a Syncthing user service through the host systemd user manager.
 
@@ -64,7 +64,7 @@ frame-cli activate --dry-run
 frame-cli activate
 ```
 
-Activation confirms home links, generated assets, Bash startup hooks, and the Syncthing user service. Successful activation reloads the user systemd manager and restarts `frame-syncthing.service`. Conflicts defer service startup. Only unset/empty `XDG_CONFIG_HOME` or canonical `~/.config` is supported, including for dry-runs. Explicit entry preserves custom XDG paths but does not relocate shared dotfiles.
+Activation confirms home links, generated assets, Bash startup hooks, and the Syncthing and Magic Trackpad 2 user services. Successful activation reloads the user systemd manager and restarts `frame-syncthing.service` and `frame-mt2-driver.service`. Conflicts defer service startup. Only unset/empty `XDG_CONFIG_HOME` or canonical `~/.config` is supported, including for dry-runs. Explicit entry preserves custom XDG paths but does not relocate shared dotfiles.
 
 Automatic entry requires interactive Bash with TTY input/output. Noninteractive SSH and file transfers remain quiet. Keep a working SSH session during activation. Recovery bypasses automatic entry:
 
@@ -138,6 +138,17 @@ ssh -N -L 8384:127.0.0.1:8384 steamos@frame
 Open `http://127.0.0.1:8384` on the computer running the tunnel. Sync traffic uses Syncthing's standard discovery, connection, and relay settings. Deployment does not change the SteamOS firewall.
 
 Service activation requires the account's actual home directory; alternate synthetic homes cannot control the host user manager. The service starts with the systemd user manager. Starting at boot without a login requires user lingering, configured separately with `loginctl enable-linger steamos` where host permissions permit it. Lingering does not prevent headset suspension. `systemctl --user stop frame-syncthing.service` stops synchronization; a later activation restarts it.
+
+## Magic Trackpad 2
+
+The SteamOS kernel on Frame has neither `hidp` nor `hid_magicmouse`. Over Bluetooth, an Apple Magic Trackpad 2 therefore works only as a one-button mouse. The `frame/magic-trackpad-2-linux-userspace` submodule provides a pairing tool and a userspace multitouch driver; its README documents the pairing procedure and the root-owned BlueZ changes it needs.
+
+Activation installs `~/.config/systemd/user/frame-mt2-driver.service` and its `default.target.wants` link, and restarts the service after successful integration. The service runs the submodule's `mt2_driver.py` with the host's `/usr/bin/python3`, outside the private Nix namespace. The driver waits for the trackpad to connect, so the service is harmless without a paired trackpad. A missing submodule checkout prevents service startup and is reported as an activation conflict.
+
+```bash
+systemctl --user status frame-mt2-driver.service
+journalctl --user -u frame-mt2-driver.service
+```
 
 ## Verification and removal
 

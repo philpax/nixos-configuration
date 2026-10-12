@@ -7,3 +7,6 @@
 [submodule "steel-cogs/glyph"]
 	path = steel-cogs/glyph
 	url = https://github.com/Ra77a3l3-jar/glyph.hx.git
+[submodule "frame/magic-trackpad-2-linux-userspace"]
+	path = frame/magic-trackpad-2-linux-userspace
+	url = https://github.com/philpax/magic-trackpad-2-linux-userspace.git
