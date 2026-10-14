@@ -1,0 +1,14 @@
+{
+  "name": "ttt-lang-luau",
+  "displayName": "Luau",
+  "description": "Luau syntax highlighting, including type annotations and interpolated strings.",
+  "version": "1.0.0",
+  "api": 1,
+  "grammars": [
+    {
+      "path": "syntaxes/luau.tmLanguage.json",
+      "language": "Luau",
+      "fileTypes": ["luau"]
+    }
+  ]
+}

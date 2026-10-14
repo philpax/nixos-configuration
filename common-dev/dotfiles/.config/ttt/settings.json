@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "theme": "13-tokyo-neon",
+  "appearance": {
+    "icons": "nerd-font",
+    "chevrons": {
+      "collapsed": "▶",
+      "expanded": "▼"
+    }
+  },
+  "editor": {
+    "tabSize": 4,
+    "insertSpaces": true,
+    "wordWrap": true,
+    "diffMode": "split",
+    "diffContext": "changes",
+    "diffWordWrap": false,
+    "lineNumbers": true,
+    "formatOnSave": true,
+    "insertFinalNewline": true,
+    "trimTrailingWhitespace": false,
+    "focusOnOpen": false,
+    "syntaxHighlight": true,
+    "gitGutter": true,
+    "autoDedent": true,
+    "autoIndent": true,
+    "gutterStyle": "compact",
+    "borderStyle": "default",
+    "bracketPairColorization": false,
+    "showTrailingNewline": true,
+    "menuBar": true,
+    "transparentBackground": false,
+    "grammars": [
+      {
+        "path": "grammars/ttt-lang-luau/syntaxes/luau.tmLanguage.json",
+        "language": "Luau",
+        "fileTypes": [
+          "luau"
+        ],
+        "plugin": "ttt-lang-luau"
+      }
+    ]
+  },
+  "search": {
+    "debounce": 350
+  },
+  "explorer": {
+    "showHidden": true,
+    "showGitIgnored": true,
+    "gitStatusColors": true,
+    "dimStagedGitColors": false
+  },
+  "git": {
+    "fileView": "list"
+  },
+  "terminal": {
+    "scrollback": 1000
+  },
+  "lsp": {
+    "saveOnRename": false,
+    "hoverDelay": 500
+  },
+  "autocomplete": {
+    "enabled": true,
+    "autoSuggest": true,
+    "debounce": 150,
+    "signatureHelp": true
+  },
+  "markdown": {
+    "wrapWidth": 80
+  },
+  "image": {
+    "protocol": "auto"
+  },
+  "plugins": {
+    "enabled": true
+  },
+  "welcome": {
+    "recentFolders": true
+  }
+}

@@ -1,0 +1,11 @@
+[
+  {
+    "name": "ttt-lang-luau",
+    "displayName": "Luau",
+    "version": "1.0.0",
+    "enabled": true,
+    "permissions": {
+      "network.http": false
+    }
+  }
+]
