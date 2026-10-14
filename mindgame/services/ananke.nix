@@ -34,8 +34,8 @@ let
       src = pkgs.fetchFromGitHub {
         owner = "Neroued";
         repo = "ninfer";
-        rev = "5f45a26f81b6a15805a3d4d09d5c3d60f420b210";
-        hash = "sha256-fGyHdZOkKRTsarkHkUxYigZT2v1J+Fq/t3V3eOpAdL8=";
+        rev = "81c8ce093b2c1646a87566a8e59d807fcf0ec95c";
+        hash = "sha256-D+rrNhQ5+cvQu1Ylhlzu36WJZgGLmKydeGLGz8KZ/c8=";
       };
     };
   };
@@ -43,10 +43,9 @@ let
   # The model roster, hoisted so both `mkAnankeConfig` (below) and
   # `clientModels` (further below) can reference it.
   models = [
-    # Vision freezes at startup, so each model has a separate text/vision
-    # pair; DFlash is 35B-A3B-only and text-only, so its vision pair uses
-    # MTP instead. Context and vram figures come from empirical
-    # --max-concurrency 1 sizing trials on this GPU.
+    # Vision is fixed at startup, so each model has separate text/vision
+    # profiles. Qwen3.6 DFlash is text-only; vision profiles use MTP.
+    # Context and VRAM limits retain the existing sizing values.
     {
       kind = "ninfer";
       name = "qwen3.6-27b-ninfer-mtp3";
@@ -157,14 +156,6 @@ let
         max_output_tokens = 32768;
       };
     }
-    # The NVFP4 weight profile of the Qwen3.8-27B target: 20.02 GiB of
-    # weights against the groupwise-int build's 16.96, and 26 GiB is
-    # already the ceiling this desktop leaves, so the extra comes out of
-    # context.
-    #
-    # Both contexts are the largest that loaded against a ~4.3 GiB desktop
-    # baseline. ninfer sizes its reservation up front, so if the desktop
-    # grows these refuse to start rather than failing partway through.
     {
       kind = "ninfer";
       name = "qwen3.8-27b-nvfp4-ninfer-mtp3";
