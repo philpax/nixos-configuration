@@ -3,6 +3,9 @@
 let
   # bump `rev` to pull in new commits (an unpinned URL is cached for an hour by tarball-ttl and won't refetch promptly).
   blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=e57182d2076a28468ae4a6b3883c4578316030b8").packages.${pkgs.stdenv.hostPlatform.system}.default;
+  # Tracking the upstream flake directly rather than the nixpkgs channel build
+  # (the flake's default package builds from git HEAD, so it carries newer fixes).
+  xwayland-satellite = (builtins.getFlake "git+https://github.com/Supreeeme/xwayland-satellite?rev=ae88928f7334556d298b8d9552abdf395931931b").packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   imports = [ ./quickshell.nix ./niri.nix ];
