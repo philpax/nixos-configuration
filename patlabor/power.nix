@@ -229,6 +229,20 @@ in
     unitConfig.ConditionPathExists = "/sys/bus/pci/devices/0000:01:00.0";
   };
 
+  # The CDI generator opens /dev/nvidia0 at boot, racing supergfxd's rmmod
+  # pass. When it loses, it crashes with the device open, and its close
+  # deadlocks the driver: the adapter shutdown holds the RM lock while flushing
+  # the kacpi_notify queue, whose nvidia handlers wait on that same lock.
+  # supergfxd's unbind then hangs behind it, and the next suspend never got past
+  # the freeze. Wait for the card to be gone and skip; a condition skip still
+  # satisfies the Requires from docker and podman. After gfx perf, restart this
+  # unit by hand to get a spec.
+  systemd.services.nvidia-container-toolkit-cdi-generator = {
+    wants = [ "dgpu-settled.service" ];
+    after = [ "dgpu-settled.service" ];
+    unitConfig.ConditionPathExists = "/sys/bus/pci/devices/0000:01:00.0";
+  };
+
   # supergfxd claims its bus name before the rmmod pass, so `After=` on it is
   # not enough; wait for the module and the card to actually be gone. The SDDM
   # greeter can otherwise open card1 in that window and pin the driver.
