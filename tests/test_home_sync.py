@@ -91,7 +91,7 @@ def main_home(tree, monkeypatch, *arguments, confirm=True):
     for name in ("_init_state", "get_imported_layers"):
         monkeypatch.setattr(sync, name, forbid)
     monkeypatch.setattr(sync_engine.subprocess, "Popen", forbid)
-    monkeypatch.setattr(sync.sys, "argv", ["sync.py", "--home-only", "frame", *arguments])
+    monkeypatch.setattr(sync.sys, "argv", ["sync.py", "frame", *arguments])
     sync.main()
 
 
@@ -690,26 +690,10 @@ def test_work_account_follows_winning_skill_marker(tree):
 
 
 def test_control_paths_cannot_occupy_protected_destinations(tree):
-    for path in (".bashrc", ".tokens/state.json", ".local/share/frame-cli/sync.json"):
+    for path in (".bashrc", ".tokens/state.json", ".config/systemd/user/sync.json"):
         with pytest.raises(ValueError, match="protected destinations"):
             plan(tree, state_path=tree[1] / path)
     assert snapshot(tree[1]) == {}
-
-
-def test_activation_custom_paths_excluded_from_create_and_stale_cleanup(tree):
-    repo, home = tree
-    source = put(repo / "common-all/dotfiles/custom/assets/font")
-    destination = home / "custom/assets/font"
-    destination.parent.mkdir(parents=True)
-    destination.symlink_to(source)
-    write_state(tree, {destination: source})
-    proposal = plan(tree, extra_exclusions=("custom/assets",))
-    assert destination not in dict(proposal.symlinks)
-    home_sync.apply_home_sync(proposal, confirmed=True)
-    assert destination.is_symlink()
-    source.unlink()
-    home_sync.apply_home_sync(plan(tree, extra_exclusions=("custom/assets",)), confirmed=True)
-    assert destination.is_symlink()
 
 
 def test_explicit_home_layer_order_wins_before_machine(tree):

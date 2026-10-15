@@ -1,0 +1,4 @@
+# SteamOS's login shell is bash; start fish as the NixOS machines do.
+[terminal.shell]
+program = "/run/current-system/sw/bin/fish"
+args = ["--login"]

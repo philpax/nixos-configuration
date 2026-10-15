@@ -1,157 +1,70 @@
-# Steam Frame CLI environment
+# Steam Frame
 
-Frame supplies CLI packages and shared dotfiles on ARM64 SteamOS. `nix-user-chroot` exposes a home-backed, single-user Nix store as `/nix` inside a private namespace. Host applications cannot use its store paths directly.
+Frame runs SteamOS with a multi-user Nix install and [system-manager](https://github.com/numtide/system-manager), which applies NixOS-style modules to a non-NixOS host. `configuration.nix` imports each shared layer's `portable.nix`, the same modules the NixOS machines import, so packages, fonts, fish, the SSH agent and Syncthing are declared once for both. `steamos.nix` implements the NixOS options those modules use on SteamOS.
 
-## Scope
+## Setup
 
-Frame shares definitions from `common-all/packages`, `common-dev/packages`, and `common-desktop/packages/fonts.nix`, with an independent nixpkgs pin. NixOS uses its own package set.
-
-`frame/sync.json` is authoritative for dotfile layers and exclusions. Sync includes the repository's `authorized_keys` and Makima authentication files; `.tokens` remains excluded. Ownership checks preserve modified or unowned files and links. Missing private keys require separate provisioning.
-
-Deployment stays under home. It never uses sudo, unlocks the root filesystem, installs GUI terminals, replaces the VR session, or changes system services, the login shell, or host SSH configuration. Polytoken, Makima, and Claude Code retain separate installers.
-
-## Prerequisites and locations
-
-The host needs `aarch64-linux`, `/usr/bin/python3`, Bash, curl, tar, xz, sha256sum, Git, and working unprivileged user/mount namespaces. The checkout must remain at a stable path, with submodules initialized: the Steel cogs and `frame/magic-trackpad-2-linux-userspace`.
-
-State, the private store, profile, and exported assets default to `~/.local/share/frame-cli`; alternate state directories must remain beneath home. The host wrapper is `~/.local/bin/frame-cli`. Privileged operations and device access are unsupported. Activation manages a Syncthing user service through the host systemd user manager.
-
-## Installation and entry
-
-From a stable checkout:
+Once per device, from a checkout with submodules initialised:
 
 ```bash
-cd ~/nixos-configuration
-git pull --ff-only
-git submodule update --init
-./sync.sh frame --dry-run
+sudo frame/bootstrap.sh install
 ./sync.sh frame
+frame/rebuild.sh switch
 ```
 
-The dry-run is read-only: no bootstrap, downloads, evaluation, builds, or writes. Combined sync installs or updates the profile before asking for home activation confirmation. Declining stops activation, not profile publication or matching asset refreshes. Nix build progress is displayed live on stderr; packages without ARM64 substitutes may build locally and run their package checks. Build failure stops before activation. No NixOS rebuild follows.
+`bootstrap.sh install` puts the store in `/home/nix`, bind-mounts it on `/nix`, creates the `nixbld` users, writes the daemon units and `/etc/nix/nix.conf`, and installs `system-manager-boot.service`. It is idempotent. `./sync.sh frame` links dotfiles from the layers in `sync.json`. `rebuild.sh switch` builds `default.nix`, registers it as a system-manager generation, and activates it; `rebuild.sh build` only builds.
 
-Explicit `./sync.sh --home-only frame` manages dotfiles only. Combined deployment rejects `--force` and `--init-state`. Conflicts remain preserved and return nonzero; new startup integration waits for resolution.
+`nixpkgs.json` and `system-manager.json` pin both sources. system-manager's `main` branch expects nixpkgs unstable; a nixpkgs release needs the matching `release-*` branch.
 
-Manual commands remain available:
+## Surviving SteamOS updates
+
+The root filesystem is read-only and replaced by each update; `/etc` is reset except for paths on the keep list (`/usr/lib/rauc/atomic-update-keep.conf` plus `/etc/atomic-update.conf.d/`). The setup relies on that as follows:
+
+- The store and all profiles live in `/home/nix`, which updates never touch.
+- `nix-mountpoint.service` recreates the empty `/nix` directory when an update has removed it, unlocking the root's btrfs `ro` property only around the `mkdir`.
+- The bootstrap units, the `nixbld` accounts and the `.wants` links are on Valve's keep list. `bootstrap.sh` adds `/etc/nix`, its profile snippet and its tmpfiles entry to `/etc/atomic-update.conf.d/nix.conf`.
+- system-manager's own `/etc` entries are symlinks into the store. They dangle until `/nix` is mounted, and an update may delete them. `system-manager-boot.service` reruns activation once `/nix` is mounted, which restores them and starts `system-manager.target`, about eight seconds into boot.
+
+Nothing in SteamOS depends on Nix: `nix.mount` is only wanted by `local-fs.target`, and the login shell stays `/bin/bash`. If the store fails to mount, the device boots and SSH works; `frame/bootstrap.sh check` shows what is missing, and rerunning `install` repairs it.
+
+`sudo frame/bootstrap.sh simulate-update` removes `/nix` the way an update does, to test the next boot. It unmounts lazily because sandboxed system services hold copies of the mount.
+
+## Shell
+
+SteamOS's login shell remains bash. Interactive login shells, such as SSH sessions, continue in fish through `/etc/profile.d/zz-fish.sh`, and Frame's Ghostty and Alacritty machine configs start fish directly, matching the NixOS machines. `ssh -t steamos@frame bash --noprofile` gets plain bash.
+
+## User services
+
+system-manager has no user units, so `steamos.nix` renders `systemd.user.services` with the NixOS unit types into `/etc/systemd/user`, and `reload-user-units.service` reloads the user manager whenever they change. This carries the SSH agent from `programs.ssh.startAgent` (`SSH_AUTH_SOCK` is `$XDG_RUNTIME_DIR/ssh-agent`) and the Magic Trackpad 2 driver. The agent starts empty; `AddKeysToAgent` loads a key on its first SSH use, but signing a commit first needs `ssh-add`.
+
+The SteamOS kernel has neither `hidp` nor `hid_magicmouse`, so over Bluetooth the trackpad is a one-button mouse without the `magic-trackpad-2-linux-userspace` submodule's driver. Pairing, and the root-owned BlueZ changes it needs, are in that submodule's README.
 
 ```bash
-/usr/bin/python3 frame/cli.py install
-~/.local/bin/frame-cli status
-~/.local/bin/frame-cli enter
-~/.local/bin/frame-cli enter -- git --version
-~/.local/bin/frame-cli update
-~/.local/bin/frame-cli rollback
+systemctl --user status ssh-agent mt2-driver
 ```
-
-Install, update, and rollback do not add startup hooks. Default entry starts `fish -l`; explicit commands preserve arguments and exit status. Status reports the active generation, including after rollback.
-
-## Source and package customization
-
-Source precedence is `--nixpkgs-pin PATH`, then `~/.config/frame-cli/nixpkgs.json` if present, then `frame/nixpkgs.json`. JSON requires `rev` and `sha256`, containing a full revision and NAR hash. Invalid selections fail.
-
-Package precedence is `--overrides PATH`, then `~/.config/frame-cli/overrides.nix` if present, then no override:
-
-```bash
-frame-cli update --nixpkgs-pin ~/.config/frame-cli/nixpkgs.json --overrides ~/.config/frame-cli/overrides.nix
-```
-
-Overrides are trusted executable Nix, not sandboxed data. They accept `{ pkgs, cliPackages, fontPackages }` and return `{ cliPackages, fontPackages }`; required runtime tools cannot be removed. Files are snapshotted before evaluation and must be self-contained: relative imports and sources are not copied. See [example-overrides.nix](example-overrides.nix). Changes require a successful update and do not affect NixOS.
-
-## Activation
-
-```bash
-frame-cli activate --dry-run
-frame-cli activate
-```
-
-Activation confirms home links, generated assets, Bash startup hooks, and the Syncthing and Magic Trackpad 2 user services. Successful activation reloads the user systemd manager and restarts `frame-syncthing.service` and `frame-mt2-driver.service`. Conflicts defer service startup. Only unset/empty `XDG_CONFIG_HOME` or canonical `~/.config` is supported, including for dry-runs. Explicit entry preserves custom XDG paths but does not relocate shared dotfiles.
-
-Automatic entry requires interactive Bash with TTY input/output. Noninteractive SSH and file transfers remain quiet. Keep a working SSH session during activation. Recovery bypasses automatic entry:
-
-```bash
-FRAME_CLI_NO_AUTO=1 /bin/bash -il
-ssh -tt steamos@frame 'FRAME_CLI_NO_AUTO=1 /bin/bash -il'
-ssh steamos@frame '~/.local/bin/frame-cli enter -- git --version'
-```
-
-## Host-visible assets and terminal configuration
-
-Activation exports fonts and bell audio to host-visible files and owns generated Fontconfig, Ghostty, and Alacritty configuration. It also owns the Desktop Mode cursor fix: `~/.config/environment.d/90-kwin-software-cursor.conf` sets `KWIN_FORCE_SW_CURSOR=1`, because KWin's hardware-plane cursor is not shown in the headset view, and `~/.config/autostart/frame-cli-cursor-size.desktop` reapplies the `kcminputrc` cursor size, 24 px unless already set, over gamescope's 256 px. The environment change takes effect after the next login. Apps run directly under gamescope rather than in the desktop still have no cursor. Terminal commands use the host wrapper. Updates and rollbacks prepare matching assets without editing startup files. Host font discovery is checked when Fontconfig tools are available. Rendering and audio need manual checks after installing a GUI terminal.
-
-## SSH client
-
-Frame's OpenSSH reads `~/.ssh/config` and an empty system configuration in the Nix store. It does not read SteamOS's `/etc/ssh/ssh_config` or its included files. The private namespace maps only the current user's UID; host root-owned files appear as `nobody`, which OpenSSH rejects for included configuration. The Frame-only package overlay avoids those files without disabling permission checks or changing host SSH configuration. Host SSH settings needed inside Frame belong in `~/.ssh/config`.
-
-An existing generation with this error can use `git -c core.sshCommand='ssh -F ~/.ssh/config' pull`. If that file does not exist, use `-F /dev/null`. Apply the package fix with `frame-cli update` and enter a new session.
-
-## SSH agent
-
-Interactive TTY entry reuses a responding inherited or forwarded agent, otherwise starts or reuses a managed local agent. After reboot, recovery removes validated prior-boot records, stale sockets, and generation roots without opening or signalling saved PIDs. Conflicting files, roots, or responding sockets remain protected. Explicit `enter -- <command>` never starts the fallback.
-
-`frame-cli agent start` explicitly starts or reuses an agent. `frame-cli agent env` attaches an existing shell to a responding inherited or managed agent; it does not start one. Bash:
-
-```bash
-frame-cli agent start && eval "$(frame-cli agent env --shell bash)"
-ssh-add -t 8h ~/.ssh/id_rsa
-maki
-```
-
-Fish:
-
-```fish
-frame-cli agent start; and frame-cli agent env --shell fish | source
-ssh-add -t 8h ~/.ssh/id_rsa
-maki
-```
-
-Keys are never loaded automatically. The passphrase must be entered locally after reboot or key expiry. Processes launched after shell attachment inherit the socket; already-running coding agents must be restarted or supplied the socket explicitly. No `SSH_AGENT_PID` export is needed.
-
-```bash
-frame-cli agent status
-frame-cli agent stop
-```
-
-The local agent can persist until stop or reboot. Stop never signals inherited agents. Same-boot recovery still requires verified process identity and confirmed child exit. Unresolved ownership preserves control state and generation roots. Do not delete unresolved control state.
 
 ## Syncthing
 
-The Frame profile includes Syncthing. Activation installs `~/.config/systemd/user/frame-syncthing.service` and its `default.target.wants` link. The service enters the private Nix namespace through `frame-cli`; host systemd never executes private store paths directly. Install, update, and rollback do not enable or restart the service. After a profile update or rollback, activation restarts it with the selected generation.
-
-Each service start generates or reuses the local identity and applies peers and folders from the profile's snapshot of `common-all/syncthing-topology.nix`. This replaces folder and peer changes made through the web UI. Configuration, keys, and the database reside in `~/.local/state/frame-syncthing`. `Main` synchronizes `~/notes/Main`. Automatic binary upgrades are disabled; profile updates supply the binary.
-
-The topology records Frame's public device ID. For a new identity, set `devices.frame = null` before the first activation. NixOS machines omit unprovisioned devices from peers and folder sharing. After that activation, retrieve the generated ID:
-
-```bash
-frame-cli syncthing device-id
-systemctl --user status frame-syncthing.service
-journalctl --user -u frame-syncthing.service
-```
-
-Set `devices.frame` in `common-all/syncthing-topology.nix` to that ID. Run `./sync.sh frame` again and rebuild participating NixOS machines. Other peers require the device and folder share to be added manually. The private key remains on Frame and must not be committed. A configured ID that differs from the local identity prevents service startup.
-
-The web UI listens on `127.0.0.1:8384`. Access from another computer uses an SSH tunnel:
+Frame uses `common-all/syncthing.nix` and the NixOS Syncthing module, running as a system service for the main user. Configuration and keys live in `~/.config/syncthing`. `Main` synchronises `~/notes/Main`. The web UI listens on `127.0.0.1:8384`; from another computer:
 
 ```bash
 ssh -N -L 8384:127.0.0.1:8384 steamos@frame
 ```
 
-Open `http://127.0.0.1:8384` on the computer running the tunnel. Sync traffic uses Syncthing's standard discovery, connection, and relay settings. Deployment does not change the SteamOS firewall.
+Rebuilding warns that system-manager does not manage firewall rules. SteamOS's firewalld already allows ports 1024–65535 in its default zone, which covers Syncthing's 22000.
 
-Service activation requires the account's actual home directory; alternate synthetic homes cannot control the host user manager. The service starts with the systemd user manager. Starting at boot without a login requires user lingering, configured separately with `loginctl enable-linger steamos` where host permissions permit it. Lingering does not prevent headset suspension. `systemctl --user stop frame-syncthing.service` stops synchronization; a later activation restarts it.
+A new identity needs `devices.frame = null` in `common-all/syncthing-topology.nix` for the first switch; then record the ID from `syncthing device-id --home ~/.config/syncthing` and rebuild the participating machines.
 
-## Magic Trackpad 2
+## Graphics and Desktop Mode
 
-The SteamOS kernel on Frame has neither `hidp` nor `hid_magicmouse`. Over Bluetooth, an Apple Magic Trackpad 2 therefore works only as a one-button mouse. The `frame/magic-trackpad-2-linux-userspace` submodule provides a pairing tool and a userspace multitouch driver; its README documents the pairing procedure and the root-owned BlueZ changes it needs.
+Nix-built programs load GL and Vulkan drivers from `/run/opengl-driver`, which `hardware.graphics` points at nixpkgs Mesa, as NixOS does. SteamOS's own Mesa links against host libraries they cannot load. The Vulkan loader still finds SteamOS's driver manifest and logs a failure for it before using Turnip.
 
-Activation installs `~/.config/systemd/user/frame-mt2-driver.service` and its `default.target.wants` link, and restarts the service after successful integration. The service runs the submodule's `mt2_driver.py` with the host's `/usr/bin/python3`, outside the private Nix namespace. The driver waits for the trackpad to connect, so the service is harmless without a paired trackpad. A missing submodule checkout prevents service startup and is reported as an activation conflict.
+Fonts from `fonts.packages` are linked into the system profile and registered in `/etc/fonts/conf.d/52-nixos-default-fonts.conf`, as on NixOS. It sorts before SteamOS's `60-latin.conf`, whose preferences would otherwise win, and SteamOS applications read it too.
 
-```bash
-systemctl --user status frame-mt2-driver.service
-journalctl --user -u frame-mt2-driver.service
-```
+In the headset view, KWin's hardware-plane cursor is invisible, so `KWIN_FORCE_SW_CURSOR=1` is set in `/etc/environment.d`, and an autostart entry resets the cursor to 24 px after gamescope's 256 px. Both take effect at the next Desktop Mode login.
 
-## Verification and removal
+## Removal
 
-SteamOS updates can change namespace availability; recheck entry afterward.
+`sudo frame/bootstrap.sh uninstall` deactivates system-manager, which restores the `/etc` files it replaced, and removes the units, configuration and build users. It keeps `/home/nix` unless given `--purge-store`.
 
-There is no recursive automatic uninstall. After stopping `frame-syncthing.service`, removing its owned enable link, reloading the user systemd manager, and exiting sessions and the local agent, remove only unchanged owned links/files and managed Bash blocks. Check subsequent changes before restoring backups. Remove the wrapper and state only when no process or retained asset link depends on them.
+system-manager logs `Unit userborn.service not found` on every activation: userborn is disabled because SteamOS owns the accounts, and the message is harmless.

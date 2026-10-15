@@ -11,23 +11,12 @@ import json
 import re
 from pathlib import Path
 
-from sync_engine import SyncOperation as HomeOperation
-from sync_engine import SyncPlan as HomeSyncPlan
-from sync_engine import SyncResult as HomeSyncResult
-from sync_engine import _relative, plan_links
+from sync_engine import SyncPlan, _relative, plan_links
 from sync_engine import apply_sync as apply_home_sync
 from sync_engine import read_state as read_home_state
-from sync_workflow import collect_links, describe_sync_plan
+from sync_workflow import collect_links
 
-__all__ = [
-    "HomeOperation",
-    "HomeSyncPlan",
-    "HomeSyncResult",
-    "apply_home_sync",
-    "describe_home_plan",
-    "plan_home_sync",
-    "read_home_state",
-]
+__all__ = ["apply_home_sync", "plan_home_sync", "read_home_state"]
 
 NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 
@@ -78,8 +67,7 @@ def plan_home_sync(
     repo: Path,
     state_path: Path | None = None,
     force: bool = False,
-    extra_exclusions: tuple[str, ...] = (),
-) -> HomeSyncPlan:
+) -> SyncPlan:
     """Read the home target declaration and submit links to the shared engine."""
     home, repo = Path(home).resolve(strict=True), Path(repo).resolve(strict=True)
     layers, exclusions = _read_selection(repo, target)
@@ -91,12 +79,7 @@ def plan_home_sync(
         selected=selected,
         state_path=state_path,
         layers=layers,
-        exclusions=(*exclusions, *extra_exclusions),
+        exclusions=exclusions,
         overrides=overrides,
         force=force,
     )
-
-
-def describe_home_plan(plan: HomeSyncPlan) -> str:
-    """Use the same categorized presentation as every other sync request."""
-    return describe_sync_plan(plan)

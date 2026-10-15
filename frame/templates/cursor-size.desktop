@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=frame-cli cursor size
-Comment=KWin starts with gamescope's 256 px cursor; reapply the kcminputrc size, defaulting to 24 px
-Exec=/bin/sh -c "kreadconfig6 --file kcminputrc --group Mouse --key cursorSize | grep -q . || kwriteconfig6 --file kcminputrc --group Mouse --key cursorSize 24; exec dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:5 int32:0"
-OnlyShowIn=KDE;
-X-KDE-autostart-phase=2
-NoDisplay=true

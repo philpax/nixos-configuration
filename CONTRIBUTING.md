@@ -9,9 +9,16 @@ Personal NixOS configuration with shared layers and dotfiles.
 sudo nixos-rebuild switch
 ```
 
-`./sync.sh frame` installs or updates the home-only Steam Frame environment and confirms activation. It requires no NixOS rebuild or sudo. See [frame/README.md](frame/README.md) for entry, overrides, and recovery.
+Frame runs SteamOS with Nix and system-manager rather than NixOS:
 
-`--dry-run` is read-only. Sync preserves unowned or modified objects and removes stale links only when they still match recorded ownership. NixOS `--force` backs up non-directory conflicts; directories are never recursively replaced. Frame deployment rejects `--force` and `--init-state`. Unresolved conflicts return a nonzero status.
+```bash
+./sync.sh frame
+frame/rebuild.sh switch
+```
+
+The device needs a one-time `sudo frame/bootstrap.sh install` first. See [frame/README.md](frame/README.md).
+
+`--dry-run` is read-only. Sync preserves unowned or modified objects and removes stale links only when they still match recorded ownership. `--force` backs up non-directory conflicts; directories are never recursively replaced. `--init-state` applies only to NixOS targets. Unresolved conflicts return a nonzero status.
 
 Machines last synced before the target-first migration need [MIGRATION.md](MIGRATION.md).
 
@@ -21,6 +28,8 @@ Machines last synced before the target-first migration need [MIGRATION.md](MIGRA
 
 Each machine or shared layer owns `<target>/configuration.nix` and `<target>/dotfiles/`. NixOS imports determine the dotfile layers; machine overrides win. Frame declares its layers and exclusions in `frame/sync.json`.
 
+A layer's `portable.nix` holds what both NixOS and Frame's system-manager configuration accept: packages, fonts, fish, the SSH client and agent, and Syncthing. Its NixOS entry point imports `portable.nix` alongside NixOS-only settings, and Frame imports `portable.nix` directly. `frame/steamos.nix` implements the NixOS options portable modules use on SteamOS; anything it does not declare fails Frame's evaluation rather than being ignored.
+
 | Layer | Contents |
 | --- | --- |
 | `common-all` | Users, SSH, packages, locale |
@@ -29,17 +38,17 @@ Each machine or shared layer owns `<target>/configuration.nix` and `<target>/dot
 | `common-dev` | Development tools, Helix, shared skills and plugins |
 | `common-dev-desktop` | Niri, panels, terminals, Steam and Wine |
 
-Machine-specific configuration lives in `jinroh/`, `paprika/`, `patlabor/`, `mindgame/`, and `redline/`. Frame shares CLI and passive desktop configuration without importing NixOS services or installing GUI terminals. Its declared sync includes repository `authorized_keys` and Makima authentication files.
+Machine-specific configuration lives in `jinroh/`, `paprika/`, `patlabor/`, `mindgame/`, `redline/`, and `frame/`. Frame's declared sync includes repository `authorized_keys` and Makima authentication files.
 
 Modules must use `config.mainUser` and `config.users.users.${config.mainUser}.home` rather than hardcoded user names or home paths.
 
-`programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files. Shared package functions belong in `packages/`, not those module directories. NixOS supplies its existing `pkgs`; Frame uses its independent pin and the shared Helix Steel overlay.
+`programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files, so they hold NixOS-only modules. Shared package functions belong in `packages/`. Overlays every machine applies are listed in `common-all/overlays/default.nix`. NixOS supplies its existing `pkgs`; Frame pins nixpkgs and system-manager in `frame/nixpkgs.json` and `frame/system-manager.json`.
 
-Syncthing membership is declared in `common-all/syncthing-topology.nix`. NixOS machines select `philpax.syncthing.device` and supply their folder paths. Frame snapshots the topology into its profile and runs a home-only systemd user service through `frame-cli`. A null device ID marks an unprovisioned peer; NixOS excludes it until the generated ID is recorded.
+Syncthing membership is declared in `common-all/syncthing-topology.nix`. Machines select `philpax.syncthing.device` and supply their folder paths; Frame runs the same NixOS module through system-manager. A null device ID marks an unprovisioned peer, excluded until the generated ID is recorded.
 
 ### Dotfiles and sync
 
-`sync_workflow.py` handles shared discovery, display, and confirmation; `sync_engine.py` handles ownership, state, and mutations. Target adapters supply destinations and exclusions. Frame adds generated files and startup integration to the displayed plan.
+`sync_workflow.py` handles shared discovery, display, and confirmation; `sync_engine.py` handles ownership, state, and mutations. Target adapters supply destinations and exclusions.
 
 NixOS records ownership in repository `.sync-state.json`; home-only sync uses `~/.local/state/nixos-configuration/sync-home.json`. Sudo is requested only after a permitted non-home write fails for lack of permission. Home and state writes never elevate. Do not delete lock or request files to bypass a stalled worker, or use independent manifests to manage overlapping destinations.
 
@@ -69,7 +78,7 @@ uv run ruff format --check
 uv run pytest -v
 ```
 
-Use `uv run ruff format` to format changes. CI runs lint and tests. Set `FRAME_NIX_BUILD_TESTS=1` to include real profile builds. Frame tests use synthetic homes and keys; device-test staging excludes real credential contents and tests do not invoke bespoke agent binaries or installers. Do not stage, commit, or deploy without operator consent.
+Use `uv run ruff format` to format changes. CI runs lint and tests, and evaluates Frame's configuration on arm64 with `nix-instantiate frame`. Do not stage, commit, or deploy without operator consent.
 
 `uv run update-ai.py` regenerates provider configs from the Ananke definitions in `mindgame/services/ananke.nix` and `redline/ai/ananke.nix`. Run it before syncing model changes; `--check` detects drift.
 

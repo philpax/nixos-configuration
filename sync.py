@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select and confirm shared sync plans for NixOS, home-only, or Frame targets."""
+"""Select and confirm shared sync plans for NixOS and home-only targets."""
 
 from __future__ import annotations
 
@@ -75,6 +75,11 @@ def get_imported_layers(config_path: Path) -> list[str]:
     return sorted(layers)
 
 
+def is_home_target(name: str) -> bool:
+    """A target with sync.json declares its own dotfile layers and never touches NixOS."""
+    return bool(sync_engine.NAME_RE.fullmatch(name)) and (target_dir(name) / "sync.json").is_file()
+
+
 def list_available_targets() -> list[str]:
     """List machine targets and their selection mode or imported layers."""
     if not TARGETS_ROOT.is_dir():
@@ -85,18 +90,14 @@ def list_available_targets() -> list[str]:
         if entry.name.startswith("common"):
             continue
         config = entry / "configuration.nix"
-        if config.is_file():
+        if (entry / "sync.json").is_file():
+            targets.append(f"{entry.name} (home only; layers from sync.json)")
+        elif config.is_file():
             layers = get_imported_layers(config)
             targets.append(
                 f"{entry.name} (layers: {' '.join(layers)})"
                 if layers
                 else f"{entry.name} (no layers)"
-            )
-        elif (entry / "sync.json").is_file():
-            targets.append(
-                "frame (home deployment; --home-only for dotfiles only)"
-                if entry.name == "frame"
-                else f"{entry.name} (home-only; use --home-only)"
             )
         else:
             targets.append(f"{entry.name} (no configuration.nix)")
@@ -175,14 +176,14 @@ def _init_state(target: str) -> int:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync NixOS dotfiles, deploy Frame, or explicitly select home-only dotfiles.",
-        usage="%(prog)s [--home-only] <target> [--dry-run] [--force]",
+        description="Sync dotfiles and NixOS configuration links for a target.",
+        usage="%(prog)s <target> [--dry-run] [--force]",
     )
     parser.add_argument(
         "machine",
         nargs="?",
         metavar="target",
-        help="NixOS machine, frame for combined home deployment, or --home-only target",
+        help="NixOS machine, or a home-only target with sync.json",
     )
     parser.add_argument(
         "-f",
@@ -197,35 +198,17 @@ def main():
         "never change links",
     )
     parser.add_argument(
-        "--home-only", action="store_true", help="Use target sync.json; never mutate NixOS"
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Report selections and conflicts without writes/prompts",
     )
     args = parser.parse_args()
-    if args.init_state and (args.home_only or args.dry_run):
-        parser.error("--init-state cannot be combined with --home-only or --dry-run")
+    if args.init_state and args.dry_run:
+        parser.error("--init-state cannot be combined with --dry-run")
+    if args.init_state and args.machine and is_home_target(args.machine):
+        parser.error("--init-state applies only to NixOS targets")
 
-    if args.machine == "frame" and not args.home_only:
-        if args.init_state or args.force:
-            parser.error(
-                "Frame deployment does not support --init-state or --force; conflicts are preserved"
-            )
-        from frame.core import Frame
-        from frame.deploy import deploy
-
-        try:
-            status = deploy(
-                Frame(home=DOTFILES_TARGET, repo=TARGETS_ROOT),
-                dry_run=args.dry_run,
-                confirm=_confirmation,
-            )
-        except (ValueError, OSError, RuntimeError) as exc:
-            print(f"Frame deployment failed: {exc}")
-            status = 1
-    elif args.home_only and args.machine:
+    if args.machine and is_home_target(args.machine):
         status = run_sync(
             planner=lambda: plan_home_sync(
                 target=args.machine, home=DOTFILES_TARGET, repo=TARGETS_ROOT, force=args.force
@@ -250,10 +233,9 @@ def main():
             cancelled_status=0,
         )
     else:
-        print(f"Usage: {sys.argv[0]} [--home-only] <target> [--dry-run] [--force]\n")
-        print("frame installs/updates its CLI profile, then confirms home activation.")
-        print("--home-only reads target sync.json and changes only home dotfiles.")
-        print("--dry-run reports changes without prompts or writes.\n")
+        print(f"Usage: {sys.argv[0]} <target> [--dry-run] [--force]\n")
+        print("Targets with sync.json (frame) take their layers from it and change only")
+        print("home dotfiles. --dry-run reports changes without prompts or writes.\n")
         print("Creates symlinks for NixOS and dotfiles, then creates a symlink from")
         print(f"{NIXOS_TARGET}/configuration.nix to")
         print(f"{TARGETS_ROOT}/<target>/configuration.nix\n")

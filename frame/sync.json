@@ -31,13 +31,6 @@
     ".xsessionrc",
     ".config/mimeapps.list",
     ".config/gtk-3.0/settings.ini",
-    ".config/gtk-4.0/settings.ini",
-    ".config/ghostty/machine",
-    ".config/alacritty/machine.toml",
-    ".config/fontconfig/conf.d/99-frame-cli.conf",
-    ".local/bin/frame-cli",
-    ".config/frame-cli",
-    ".local/share/frame-cli",
-    ".local/share/fonts/frame-cli"
+    ".config/gtk-4.0/settings.ini"
   ]
 }

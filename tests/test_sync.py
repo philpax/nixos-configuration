@@ -36,6 +36,8 @@ def tree(tmp_path, monkeypatch):
         json.dumps({"schema_version": 1, "layers": ["common-all", "common-dev"], "exclusions": []}),
     )
     write(repo / "frame/dotfiles/.tool", "frame")
+    # sync.json wins over configuration.nix: Frame's system is not NixOS.
+    write(repo / "frame/configuration.nix", "../common-all")
     monkeypatch.setattr(sync, "TARGETS_ROOT", repo)
     monkeypatch.setattr(sync, "DOTFILES_TARGET", home)
     monkeypatch.setattr(sync, "NIXOS_TARGET", nixos)
@@ -101,7 +103,7 @@ def test_discover_targets_and_modes(tree):
     listing = sync.list_available_targets()
     assert "aardvark (layers: common-all common-dev)" in listing
     assert "redline (no layers)" in listing
-    assert "frame (home deployment; --home-only for dotfiles only)" in listing
+    assert "frame (home only; layers from sync.json)" in listing
     assert sync.target_dir("aardvark") == repo / "aardvark"
     assert not (repo / "nixos").exists() and not (repo / "dotfiles").exists()
 
@@ -476,9 +478,13 @@ def test_init_state_empty_home_writes_empty_ownership_only(tree, monkeypatch):
     assert (repo / ".sync-state.json").exists()
 
 
-@pytest.mark.parametrize("option", ["--home-only", "--dry-run"])
-def test_init_state_rejects_incompatible_modes(tree, monkeypatch, option):
-    assert main(monkeypatch, "aardvark", "--init-state", option) == 2
+def test_init_state_rejects_dry_run(tree, monkeypatch):
+    assert main(monkeypatch, "aardvark", "--init-state", "--dry-run") == 2
+    assert not (tree[0] / ".sync-state.json").exists()
+
+
+def test_init_state_rejects_home_targets(tree, monkeypatch):
+    assert main(monkeypatch, "frame", "--init-state") == 2
     assert not (tree[0] / ".sync-state.json").exists()
 
 
@@ -508,11 +514,11 @@ def test_read_manifest_missing_and_legacy_compatibility(tree):
     assert sync.read_manifest(state) == links
 
 
-def test_home_only_calls_shared_workflow_without_system_or_legacy_state(tree, monkeypatch, capsys):
+def test_home_target_uses_shared_workflow_without_system_or_legacy_state(tree, monkeypatch, capsys):
     repo, home, nixos = tree
     monkeypatch.setattr(sync, "_plan_nixos_sync", forbid)
     monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
-    assert main(monkeypatch, "--home-only", "frame") == 0
+    assert main(monkeypatch, "frame") == 0
     assert (home / ".tool").readlink() == repo / "frame/dotfiles/.tool"
     assert not (repo / ".sync-state.json").exists()
     assert list(nixos.iterdir()) == []
@@ -521,29 +527,29 @@ def test_home_only_calls_shared_workflow_without_system_or_legacy_state(tree, mo
     assert "NixOS configuration" not in output
 
 
-def test_home_only_dry_run_is_read_only(tree, monkeypatch, capsys):
+def test_home_target_dry_run_is_read_only(tree, monkeypatch, capsys):
     repo, home, nixos = tree
     monkeypatch.setattr(sync, "confirm", forbid)
     monkeypatch.setattr(sync, "apply_home_sync", forbid)
     monkeypatch.setattr(sync.sync_engine.subprocess, "run", forbid)
-    assert main(monkeypatch, "--home-only", "frame", "--dry-run") == 0
+    assert main(monkeypatch, "frame", "--dry-run") == 0
     assert "Dry-run" in capsys.readouterr().out
     assert list(home.iterdir()) == [] and list(nixos.iterdir()) == []
     assert not (repo / ".sync-state.json").exists()
 
 
-def test_home_only_force_backs_up_conflict_and_preserves_directory(tree, monkeypatch):
+def test_home_target_force_backs_up_conflict_and_preserves_directory(tree, monkeypatch):
     _, home, _ = tree
     write(home / ".tool", "mine")
     write(home / ".gitconfig/private", "mine")
-    status = main(monkeypatch, "--home-only", "frame", "--force")
+    status = main(monkeypatch, "frame", "--force")
     assert (home / ".tool").is_symlink()
     assert next(home.glob(".tool.sync-backup-*")).read_text() == "mine"
     assert (home / ".gitconfig/private").read_text() == "mine"
     assert status == 1
 
 
-def test_home_only_changed_plan_is_rejected(tree, monkeypatch, capsys):
+def test_home_target_changed_plan_is_rejected(tree, monkeypatch, capsys):
     _, home, _ = tree
 
     def change(message):
@@ -551,45 +557,17 @@ def test_home_only_changed_plan_is_rejected(tree, monkeypatch, capsys):
         return True
 
     monkeypatch.setattr(sync, "confirm", change)
-    assert main(monkeypatch, "--home-only", "frame") == 1
+    assert main(monkeypatch, "frame") == 1
     assert "changed after confirmation" in capsys.readouterr().out
     assert not (home / ".local/state/nixos-configuration/sync-home.json").exists()
-
-
-def test_frame_dispatches_with_shared_confirmation_adapter(tree, monkeypatch):
-    from frame import deploy as deployment
-
-    repo, home, _ = tree
-    captured = []
-    monkeypatch.setattr(
-        deployment, "deploy", lambda frame, **kwargs: captured.append((frame, kwargs)) or 0
-    )
-    monkeypatch.setattr(sync, "_plan_nixos_sync", forbid)
-    assert main(monkeypatch, "frame", "--dry-run") == 0
-    frame, options = captured[0]
-    assert frame.home == home and frame.repo == repo
-    assert options == {"dry_run": True, "confirm": sync._confirmation}
-    assert list(home.iterdir()) == []
-
-
-@pytest.mark.parametrize("option", ["--force", "--init-state"])
-def test_frame_rejects_legacy_mutation_options(tree, monkeypatch, option):
-    assert main(monkeypatch, "frame", option) == 2
-
-
-def test_frame_propagates_partial_status(tree, monkeypatch):
-    from frame import deploy as deployment
-
-    monkeypatch.setattr(deployment, "deploy", lambda *args, **kwargs: 1)
-    assert main(monkeypatch, "frame") == 1
 
 
 def test_mode_help_and_no_target_listing(tree, monkeypatch, capsys):
     assert main(monkeypatch, "--help") == 0
     help_text = capsys.readouterr().out
-    assert "--home-only" in help_text and "--dry-run" in help_text
+    assert "--dry-run" in help_text and "--home-only" not in help_text
     assert "Back up confirmed non-directory" in help_text
     assert main(monkeypatch) == 1
     output = capsys.readouterr().out
     assert "Available targets:" in output
-    assert "frame (home deployment; --home-only for dotfiles only)" in output
+    assert "frame (home only; layers from sync.json)" in output
