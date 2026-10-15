@@ -1,14 +1,9 @@
 { config, pkgs, lib, ... }:
 {
-  options.mainUser = lib.mkOption {
-    type = lib.types.str;
-    default = "philpax";
-    description = "The primary human user account: the one with sudo, the interactive desktop session, and the personal files under /home/<name>. Modules derive home paths from this rather than hardcoding them.";
-  };
-
   imports =
     [
       /etc/nixos/hardware-configuration.nix
+      ./portable.nix
       (import ./services { inherit config lib pkgs; })
       (import ./programs { inherit config pkgs; })
     ];
@@ -16,8 +11,7 @@
   config = {
     system.autoUpgrade.enable = true;
     nix.settings.experimental-features = [ "nix-command" "flakes" ];
-    nixpkgs.config.allowUnfree = true;
-    nixpkgs.overlays = [ (import ./overlays/helix-steel.nix) ];
+    nixpkgs.overlays = import ./overlays;
 
     boot.kernelPackages =
       if config.boot.zfs.enabled

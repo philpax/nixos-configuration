@@ -1,5 +1,5 @@
 # Syncthing device IDs and folder membership. Machines opt in with
-# philpax.syncthing.device (services/syncthing.nix).
+# philpax.syncthing.device (syncthing.nix).
 {
   devices = {
     redline = "MHZ62PM-H2JVD52-Z73DOWH-WSSOQKI-CYGJSMR-QVSKHGB-DHCTCU2-LKURZAU";

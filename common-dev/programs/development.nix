@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = import ../packages/development.nix { inherit pkgs; };
+  imports = [ ../portable.nix ];
 
   # Vite dev server
   networking.firewall.allowedTCPPorts = [ 5173 ];

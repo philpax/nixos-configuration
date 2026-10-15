@@ -16,14 +16,12 @@ let
     inherit config pkgs lib;
   };
   packageModules = [
-    "/common-all/programs/system.nix"
-    "/common-all/programs/development.nix"
-    "/common-all/programs/network.nix"
-    "/common-all/programs/media.nix"
-    "/common-all/programs/helix.nix"
-    "/common-dev/programs/development.nix"
+    "/common-all/portable.nix"
+    "/common-dev/portable.nix"
+    "/common-desktop/portable.nix"
+    "/common-dev-desktop/portable.nix"
   ];
-  desktop = module "/common-desktop/configuration.nix";
+  desktop = module "/common-desktop/portable.nix";
 in
 assert lib.assertMsg (builtins.all (item: item.assertion) config.assertions)
   "Current-host NixOS assertions failed";
@@ -34,7 +32,7 @@ assert lib.assertMsg (builtins.all (item: item.assertion) config.assertions)
   drvPath = config.system.build.toplevel.drvPath;
   affectedPackages = builtins.listToAttrs (map (path: {
     name = path;
-    value = outputs (module path).environment.systemPackages;
+    value = outputs (let m = module path; in m.config or m).environment.systemPackages;
   }) packageModules);
   systemPackages = outputs config.environment.systemPackages;
   fonts = {

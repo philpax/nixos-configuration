@@ -1,9 +1,9 @@
-# Syncthing peers and folders derived from ../syncthing-topology.nix.
+# Syncthing peers and folders derived from ./syncthing-topology.nix.
 { config, lib, ... }:
 
 let
   cfg = config.philpax.syncthing;
-  topology = import ../syncthing-topology.nix;
+  topology = import ./syncthing-topology.nix;
   home = config.users.users.${config.mainUser}.home;
   folders = lib.filterAttrs (_: members: builtins.elem cfg.device members) topology.folders;
   peers = builtins.filter (device: topology.devices.${device} != null)

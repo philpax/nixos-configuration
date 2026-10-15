@@ -8,12 +8,9 @@ let
   xwayland-satellite = (builtins.getFlake "git+https://github.com/Supreeeme/xwayland-satellite?rev=ae88928f7334556d298b8d9552abdf395931931b").packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
-  imports = [ ./quickshell.nix ./niri.nix ];
+  imports = [ ./portable.nix ./quickshell.nix ./niri.nix ];
 
   nixpkgs.overlays = [ (import ./xdg-desktop-portal/overlay.nix) ];
-
-  # vesktop's nixpkgs recipe still pins pnpm 10.29.2 (build-time only).
-  nixpkgs.config.permittedInsecurePackages = [ "pnpm-10.29.2" ];
 
   # Desktop services
   programs.dconf.enable = true;
@@ -41,18 +38,11 @@ in
   environment.systemPackages = with pkgs; [
     blackbird
 
-    obsidian
-
     # Desktop environment
     glib  # provides gsettings
     gsettings-desktop-schemas  # provides org.gnome.desktop.interface schema
     nwg-look  # GTK theme/icon/cursor/font configuration
     mako
-    # Trialling ghostty as the primary terminal (spawned by niri).
-    # If it sticks, drop alacritty here and its dotfiles/blur rules.
-    alacritty
-    ghostty
-    kdePackages.ocean-sound-theme  # Ghostty and GTK audible bell sound
     fuzzel  # dmenu backend for audio-action.sh / window-action.sh
     anyrun  # Mod+D launcher; rink plugin gives live arithmetic and unit conversion
     polkit_gnome
@@ -79,14 +69,6 @@ in
     libnotify
     art
 
-    discord
-    vesktop
-    zed-editor
-    foliate
-    shotcut
-
-    chromium
-
     # Wine (Full variant includes wine-mono)
     wineWow64Packages.stableFull
     winetricks
@@ -97,12 +79,6 @@ in
 
     # AppImage support
     appimage-run
-
-    # Keyboard configurator (Kaleidoscope)
-    chrysalis
-
-    # Games
-    prismlauncher
   ];
 
   systemd.user.services.polkit-gnome-authentication-agent-1 = {

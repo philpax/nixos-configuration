@@ -1,13 +1,6 @@
 { config, pkgs, ... }:
-let
-  cups-dev = pkgs.cups.dev;
-in
-
 {
-  imports =
-    [
-      (import ./programs { inherit config pkgs; })
-    ];
+  imports = [ ./portable.nix ];
 
   # Boot loader
   boot.loader.systemd-boot.enable = true;
@@ -37,34 +30,10 @@ in
     nssmdns4 = true;  # for .local hostname resolution
   };
 
-  # Common desktop packages
-  environment.systemPackages = with pkgs; [
-    goldendict-ng
-    anki-bin
-    gthumb
-    cups-dev
-    inlyne
-  ];
+  # Headers for building against CUPS.
+  environment.systemPackages = [ pkgs.cups.dev ];
 
-  # Fonts
   fonts.enableDefaultPackages = true;
-  fonts.packages = import ./packages/fonts.nix { inherit pkgs; };
-  fonts.fontconfig.defaultFonts = {
-    monospace = [
-      "Iosevka"
-      "Noto Sans Mono CJK JP"
-    ];
-
-    sansSerif = [
-      "Noto Sans"
-      "Noto Sans CJK JP"
-    ];
-
-    serif = [
-      "Noto Serif"
-      "Noto Serif CJK JP"
-    ];
-  };
 
   # Firefox
   programs.firefox.enable = true;
