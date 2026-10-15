@@ -44,6 +44,34 @@ let
   '' + fontAliases + ''
     </fontconfig>
   '');
+
+  # NixOS gives every shell and session the same environment. system-manager
+  # writes it, including environment.extraInit, only to profile.d, which login
+  # shells read but sessions started by the user manager do not. This generator
+  # sources the Nix-owned profile scripts for the user manager and emits what
+  # they change; SteamOS's own profile.d stays out of the session.
+  profileEnvironmentGenerator = pkgs.writeScript "60-nix-profile" ''
+    #!${pkgs.bash}/bin/bash
+    declare -A before
+    while IFS= read -r -d "" entry; do before[''${entry%%=*}]=''${entry#*=}; done < <(env -0)
+    for script in /etc/profile.d/nix-daemon.sh /etc/profile.d/system-manager-path.sh; do
+      [ -r "$script" ] && . "$script"
+    done
+    # The profile scripts prepend unconditionally; keep each entry once.
+    for list in PATH XDG_DATA_DIRS; do
+      [[ -v $list ]] || continue
+      value=$(printf %s "''${!list}" | ${pkgs.gawk}/bin/awk -v RS=: -v ORS=: 'NF && !seen[$0]++')
+      export "$list=''${value%:}"
+    done
+    while IFS= read -r -d "" entry; do
+      name=''${entry%%=*} value=''${entry#*=}
+      case $name in _ | SHLVL | PWD | OLDPWD) continue ;; esac
+      [[ -v before[$name] && ''${before[$name]} == "$value" ]] && continue
+      value=''${value//\\/\\\\} value=''${value//\"/\\\"}
+      value=''${value//\$/\\\$} value=''${value//\`/\\\`}
+      printf '%s="%s"\n' "$name" "$value"
+    done < <(env -0)
+  '';
 in
 {
   imports = [ (nixosModulesPath + "/services/networking/syncthing.nix") ];
@@ -94,7 +122,9 @@ in
       # while userborn is off.
       users.users.${user}.isNormalUser = true;
 
-      environment.etc = userUnitFiles;
+      environment.etc = userUnitFiles // {
+        "systemd/user-environment-generators/60-nix-profile".source = profileEnvironmentGenerator;
+      };
 
       # User managers read /etc/systemd/user only on reload. This reruns whenever
       # the rendered units change, including when system-manager reactivates at
@@ -149,6 +179,11 @@ in
         if [ -t 0 ] && [ -x /run/current-system/sw/bin/fish ]; then
           exec /run/current-system/sw/bin/fish --login
         fi
+      '';
+      # SHELL still names bash, the login shell, so programs that start a shell
+      # (zellij, editors) would open bash. nixpkgs fish sources this file.
+      environment.etc."fish/config.fish".text = ''
+        set -gx SHELL /run/current-system/sw/bin/fish
       '';
     })
 

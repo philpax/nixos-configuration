@@ -23,6 +23,8 @@ TARBALL_URL="https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION
 
 STORE_HOME=/home/nix
 UNIT_DIR=/etc/systemd/system
+USER_DROPIN_DIR=$UNIT_DIR/user@.service.d
+USER_DROPIN=$USER_DROPIN_DIR/after-system-manager.conf
 KEEP_CONF=/etc/atomic-update.conf.d/nix.conf
 PROFILE_SNIPPET=/etc/profile.d/nix-daemon.sh
 TMPFILES_CONF=/etc/tmpfiles.d/nix-daemon.conf
@@ -141,9 +143,21 @@ ConditionPathExists=$SYSTEM_MANAGER_PROFILE/bin/activate
 Type=oneshot
 RemainAfterExit=true
 ExecStart=$SYSTEM_MANAGER_PROFILE/bin/activate
+# User managers wait for this; bound how long a hung activation delays login.
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+    # After an OS update, system-manager's /etc entries, including the user
+    # environment generator, exist only once reactivation finishes; a session
+    # started earlier would miss them. After= orders without requiring, so a
+    # failed activation still lets the user log in.
+    mkdir -p "$USER_DROPIN_DIR"
+    cat >"$USER_DROPIN" <<EOF
+[Unit]
+After=system-manager-boot.service
 EOF
 }
 
@@ -277,6 +291,7 @@ cmd_check() {
     done
     check_line "nix.mount enabled" systemctl is-enabled nix.mount
     check_line "system-manager-boot.service enabled" systemctl is-enabled system-manager-boot.service
+    check_line "user sessions wait for system-manager-boot" test -f "$USER_DROPIN"
     check_line "nix-daemon.socket active" systemctl is-active nix-daemon.socket
     check_line "nixbld group" getent group nixbld
     check_line "nixbld$NIXBLD_COUNT user" getent passwd "nixbld$NIXBLD_COUNT"
@@ -321,7 +336,8 @@ cmd_uninstall() {
     systemctl disable nix-daemon.socket nix-daemon.service nix.mount system-manager-boot.service || true
     rm -f "$UNIT_DIR"/nix-mountpoint.service "$UNIT_DIR"/nix.mount \
         "$UNIT_DIR"/nix-daemon.socket "$UNIT_DIR"/nix-daemon.service \
-        "$UNIT_DIR"/system-manager-boot.service
+        "$UNIT_DIR"/system-manager-boot.service "$USER_DROPIN"
+    rmdir --ignore-fail-on-non-empty "$USER_DROPIN_DIR" 2>/dev/null || true
     systemctl daemon-reload
     rm -f "$PROFILE_SNIPPET" "$TMPFILES_CONF" "$KEEP_CONF"
     rm -rf /etc/nix

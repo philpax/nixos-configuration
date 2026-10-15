@@ -8,6 +8,9 @@ usage() { echo "usage: $0 build|switch" >&2; exit 2; }
 [[ $# -eq 1 ]] || usage
 case $1 in build | switch) ;; *) usage ;; esac
 
+# bootstrap.sh installs Nix here; shells that missed the profile scripts lack it.
+PATH=/nix/var/nix/profiles/default/bin:$PATH
+
 here=$(cd "$(dirname "$0")" && pwd)
 out=$(nix-build --no-out-link "$here")
 echo "$out"

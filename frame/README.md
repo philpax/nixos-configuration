@@ -23,7 +23,7 @@ The root filesystem is read-only and replaced by each update; `/etc` is reset ex
 - The store and all profiles live in `/home/nix`, which updates never touch.
 - `nix-mountpoint.service` recreates the empty `/nix` directory when an update has removed it, unlocking the root's btrfs `ro` property only around the `mkdir`.
 - The bootstrap units, the `nixbld` accounts and the `.wants` links are on Valve's keep list. `bootstrap.sh` adds `/etc/nix`, its profile snippet and its tmpfiles entry to `/etc/atomic-update.conf.d/nix.conf`.
-- system-manager's own `/etc` entries are symlinks into the store. They dangle until `/nix` is mounted, and an update may delete them. `system-manager-boot.service` reruns activation once `/nix` is mounted, which restores them and starts `system-manager.target`, about eight seconds into boot.
+- system-manager's own `/etc` entries are symlinks into the store. They dangle until `/nix` is mounted, and an update may delete them. `system-manager-boot.service` reruns activation once `/nix` is mounted, which restores them and starts `system-manager.target`, about eight seconds into boot. A drop-in, `user@.service.d/after-system-manager.conf`, makes the user manager wait for it, so sessions always start with system-manager's environment and units. The wait adds about a second to boot; a failed or hung activation (60-second timeout) still lets you log in.
 
 Nothing in SteamOS depends on Nix: `nix.mount` is only wanted by `local-fs.target`, and the login shell stays `/bin/bash`. If the store fails to mount, the device boots and SSH works; `frame/bootstrap.sh check` shows what is missing, and rerunning `install` repairs it.
 
@@ -31,7 +31,9 @@ Nothing in SteamOS depends on Nix: `nix.mount` is only wanted by `local-fs.targe
 
 ## Shell
 
-SteamOS's login shell remains bash. Interactive login shells, such as SSH sessions, continue in fish through `/etc/profile.d/zz-fish.sh`, and Frame's Ghostty and Alacritty machine configs start fish directly, matching the NixOS machines. `ssh -t steamos@frame bash --noprofile` gets plain bash.
+SteamOS's login shell remains bash. Interactive login shells, such as SSH sessions, continue in fish through `/etc/profile.d/zz-fish.sh`, and Frame's Ghostty and Alacritty machine configs start fish directly, matching the NixOS machines. Fish exports itself as `SHELL` from `/etc/fish/config.fish`, so zellij and other programs that start a shell open fish rather than the login shell. `ssh -t steamos@frame bash --noprofile` gets plain bash.
+
+Login shells read the environment from `/etc/profile.d`, where `bootstrap.sh`'s `nix-daemon.sh` adds Nix and system-manager's `system-manager-path.sh` adds the system profile, `environment.variables` and `environment.extraInit` (such as `SSH_AUTH_SOCK` for the agent). Sessions the user manager starts, such as the compositor and its terminals, do not read profile.d, so a user environment generator, `/etc/systemd/user-environment-generators/60-nix-profile`, sources those two scripts and passes on what they change. Anything the configuration adds to the environment therefore reaches both, as on NixOS; SteamOS's own profile.d scripts stay out of the session.
 
 ## User services
 
