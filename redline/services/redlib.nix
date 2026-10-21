@@ -2,21 +2,23 @@
 
 let
   src = pkgs.fetchFromGitHub {
-    owner = "Silvenga";
+    owner = "redlib-org";
     repo = "redlib";
-    rev = "af002ab216d271890e715c2d3413f7193c07c640";
-    hash = "sha256-Ny/pdBZFgUAV27e3wREPV8DUtP3XfMdlw0T01q4b70U=";
+    rev = "a4d36e954cf1bd64f209cd8868c5a29edc81b374";
+    hash = "sha256-siyD6A12UALQIV7BMd7zu1TaojleTEYtpxPszuhx1/Y=";
   };
-  # Use Silvenga's wreq fork (redlib-org/redlib#544) which uses BoringSSL
-  # to emulate browser TLS fingerprints and evade bot detection
-  redlib-fork = pkgs.redlib.overrideAttrs (oldAttrs: {
-    version = "0.36.0-unstable-2026-04-04";
+  # Upstream main, which includes the wreq switch (redlib-org/redlib#544) that
+  # uses BoringSSL to emulate browser TLS fingerprints and evade bot detection
+  redlib-unstable = pkgs.redlib.overrideAttrs (oldAttrs: {
+    version = "0.36.0-unstable-2026-04-24";
     inherit src;
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       inherit src;
-      name = "redlib-0.36.0-unstable-2026-04-04-vendor";
+      name = "redlib-0.36.0-unstable-2026-04-24-vendor";
       hash = "sha256-eO3c7rlFna3DuO31etJ6S4c7NmcvgvIWZ1KVkNIuUqQ=";
     };
+    # Work around thread pages 403ing (redlib-org/redlib#591)
+    patches = (oldAttrs.patches or []) ++ [ ./redlib-591-thread-403.patch ];
     # BoringSSL (via boring-sys2) needs cmake, go, git, perl, and libclang for bindgen
     nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ (with pkgs; [
       cmake
@@ -35,7 +37,7 @@ in
   services.redlib = {
     enable = true;
     openFirewall = true;
-    package = redlib-fork;
+    package = redlib-unstable;
     port = 10000;
     settings = {
       REDLIB_SFW_ONLY = "off";
