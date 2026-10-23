@@ -194,9 +194,9 @@ class TestFmtPolytoken:
     def test_defaults_are_static(self):
         # Defaults are hand-maintained in the template, not derived from models.
         yaml = _render_pt(_providers())
-        assert "  full: codex/gpt-6-astra(high)" in yaml
-        assert "  mini: codex/gpt-5.6-luna(xhigh)" in yaml
-        assert "  nano: codex/gpt-5.6-luna(low)" in yaml
+        assert "  full: codex/gpt-6.1-sol(xhigh)" in yaml
+        assert "  mini: codex/gpt-6-luna(xhigh)" in yaml
+        assert "  nano: codex/gpt-6-luna(low)" in yaml
 
     def test_thinking_emits_can_disable(self):
         yaml = _render_pt(_providers())
