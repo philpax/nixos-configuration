@@ -2,8 +2,7 @@
 
 {
   environment.systemPackages = [
-    # Referencing it here is what causes it to actually be built — nothing
-    # else on mindgame consumes ai.llamaCppCuda yet.
+    # Also on ananke's PATH; listed here for interactive use.
     config.ai.llamaCppCuda
   ];
 }

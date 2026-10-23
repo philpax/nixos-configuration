@@ -136,6 +136,15 @@ models:
       can_disable: true
     context_window: 122880
     supports_vision: true
+  ananke-mindgame/gemma-4-31b-it-qat:
+    provider_name: gemma-4-31b-it-qat
+    variant: other
+    class: mini
+    provider: ananke-mindgame
+    reasoning:
+      type: no_reasoning
+    context_window: 120000
+    supports_vision: true
   ananke-redline/qwen3.6-27b:
     provider_name: qwen3.6-27b
     variant: other

@@ -69,6 +69,12 @@ max_output_tokens = 32768
 supports_thinking = true
 supports_vision = true
 
+[[ananke-mindgame.models]]
+id = "gemma-4-31b-it-qat"
+tier = "medium"
+context_window = 120000
+supports_vision = true
+
 [ananke-redline]
 display_name = "Custom (ananke-redline)"
 protocol = "openai"

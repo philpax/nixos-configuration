@@ -17,6 +17,7 @@ let
   anankeDir = "${home}/programming/ananke";
 
   hfCache = "${home}/.cache/huggingface";
+  ggufDir = "${home}/ai/gguf";
 
   # Where ninfer's artifacts land inside the container.
   artifactsIn = "/artifacts";
@@ -191,6 +192,38 @@ let
         max_output_tokens = 32768;
       };
     }
+    # redline's QAT config cut down to one GPU: no tensor split, and a
+    # single slot. f16 KV at this context does not fit alongside the desktop's
+    # share of the 5090, so the cache is q8_0.
+    {
+      name = "gemma-4-31b-it-qat";
+      file = "unsloth/gemma-4-31B-it-qat-GGUF/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf";
+      mmproj = "unsloth/gemma-4-31B-it-qat-GGUF/mmproj-F16.gguf";
+      extras = {
+        context = 120000;
+        flash_attn = true;
+        cache_type_k = "q8_0";
+        cache_type_v = "q8_0";
+        cache_idle_slots = false;
+        spec_type = "draft-mtp";
+        spec_draft_n_max = 2;
+        draft_model = "${ggufDir}/unsloth/gemma-4-31B-it-qat-GGUF/mtp-gemma-4-31B-it.gguf";
+        # See redline/ai/ananke.nix for why the generation cap and the
+        # disabled host-RAM prompt cache.
+        extra_args = [ "-n" "16384" "--cache-ram" "0" ];
+        sampling = {
+          temperature = 1.0;
+          top_k = 64;
+          top_p = 0.95;
+          min_p = 0.05;
+          repeat_penalty = 1.0;
+        };
+      };
+      client = {
+        class = "medium";
+        reasoning = { type = "none"; };
+      };
+    }
   ];
 
   inherit (anankeLib.mkAnankeConfig {
@@ -200,6 +233,13 @@ let
     services = anankeLib.mkIndexedServices {
       basePort = 8200;
       builders = {
+        llama-cpp = port: m: anankeLib.mkLlmService {
+          inherit (m) name;
+          inherit port;
+          model = "${ggufDir}/${m.file}";
+          mmproj = if m ? mmproj then "${ggufDir}/${m.mmproj}" else null;
+          extra = { jinja = true; } // (m.extras or { });
+        };
         ninfer = port: m: anankeLib.mkContainerCommandService {
           inherit (m) name vramGb perGpuMib description upstreamModel;
           inherit port;
@@ -292,7 +332,7 @@ in
         HOME = config.users.users.${config.mainUser}.home;
         LD_LIBRARY_PATH = "/run/opengl-driver/lib";
       };
-      path = [ pkgs.podman pkgs.curl pkgs.bash "/run/wrappers" ];
+      path = [ config.ai.llamaCppCuda pkgs.podman pkgs.curl pkgs.bash "/run/wrappers" ];
     };
 
     # Per-service ports are loopback-only (allowExternalServices defaults to
