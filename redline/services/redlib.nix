@@ -2,23 +2,20 @@
 
 let
   src = pkgs.fetchFromGitHub {
-    owner = "redlib-org";
+    owner = "polak14";
     repo = "redlib";
-    rev = "a4d36e954cf1bd64f209cd8868c5a29edc81b374";
-    hash = "sha256-siyD6A12UALQIV7BMd7zu1TaojleTEYtpxPszuhx1/Y=";
+    rev = "4055fda1a5355f1507b23108795d827a16794b58";
+    hash = "sha256-7VRaXfYDPhwqgUCSCYCmO36XKdNQ5zEPrpP/E/BQh5g=";
   };
-  # Upstream main, which includes the wreq switch (redlib-org/redlib#544) that
-  # uses BoringSSL to emulate browser TLS fingerprints and evade bot detection
+  # This fork handles blocked comments API requests and falls back to scraping.
   redlib-unstable = pkgs.redlib.overrideAttrs (oldAttrs: {
-    version = "0.36.0-unstable-2026-04-24";
+    version = "0.36.0-unstable-2026-10-20";
     inherit src;
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       inherit src;
-      name = "redlib-0.36.0-unstable-2026-04-24-vendor";
-      hash = "sha256-eO3c7rlFna3DuO31etJ6S4c7NmcvgvIWZ1KVkNIuUqQ=";
+      name = "redlib-0.36.0-unstable-2026-10-20-vendor";
+      hash = "sha256-An6ai9CWrskjfPqmUN/z9rqZYsZp0Tjhp1ODvUnPAuw=";
     };
-    # Work around thread pages 403ing (redlib-org/redlib#591)
-    patches = (oldAttrs.patches or []) ++ [ ./redlib-591-thread-403.patch ];
     # BoringSSL (via boring-sys2) needs cmake, go, git, perl, and libclang for bindgen
     nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ (with pkgs; [
       cmake
