@@ -1,32 +1,7 @@
--- A code-reviewer subagent, modeled on the nat-code-reviewer polytoken subagent.
--- A blocking composite (like the task tool's unified `task`): spawns a read-only
--- subagent session with the reviewer system prompt, waits for the full review,
--- and returns it. The reviewer commits a structured verdict through a
--- session-local `report_review` tool, validated against the exit schema.
-
-local ToolView = require("maki.tool_view")
-local output_limits = require("maki.output_limits")
-
-local REPORT_TOOL_NAME = "report_review"
-local REPORT_TOOL_ACK = "Review recorded."
-local REPORT_TOOL_DESCRIPTION =
-  "Report your final review result. Call it exactly once when your review is complete."
-local REPORT_PROMPT_SUFFIX = "\n\nWhen finished, call the "
-  .. REPORT_TOOL_NAME
-  .. " tool exactly once with your final verdict (summary, verdict, scope, findings, limitations)."
-local NUDGE_MISSING = "You did not call the "
-  .. REPORT_TOOL_NAME
-  .. " tool. Call it now with your final verdict matching its input schema."
-local MAX_NUDGES = 2
-local MAX_SCHEMA_ERRORS = 3
-local INVALID_INPUT_PREFIX = "Input does not match the required schema. Fix the errors and call "
-  .. REPORT_TOOL_NAME
-  .. " again:\n"
-local REVIEW_MISSING_ERROR = "reviewer finished without reporting a verdict"
+local REPORT_PROMPT_SUFFIX =
+  "\n\nWhen finished, call the structured_output tool exactly once with your final verdict (summary, verdict, scope, findings, limitations)."
 local MAX_CONCURRENT_REVIEWS = 2
-local BODY_INDENT_COLS = 4
-local MIN_MD_WIDTH = 20
-local DEFAULT_OUTPUT_LINES = 5
+local DEFAULT_SCOPE = "the pending diff"
 
 local EXIT_SCHEMA = {
   type = "object",
@@ -62,13 +37,16 @@ local EXIT_SCHEMA = {
   },
 }
 
--- Verbatim port of `nat-code-reviewer.md` (polytoken subagent), with the
--- exit_tool instructions redirected to the report_review session-local tool.
-local REVIEWER_SYSTEM = [[You are a strict, multi-axis code reviewer. The caller specifies your mode in the dispatch prompt: `mode: change-review` (review a diff, PR, or commit range) or `mode: codebase-audit` (review existing code with no specific change). Both modes evaluate code across five axes before you give a verdict. Your job is to find real problems, propose concrete fixes, and give an honest verdict. You do not write or edit code in this role.
+local REVIEWER_SYSTEM =
+  [[You are a strict, multi-axis code reviewer. The caller specifies your mode in the dispatch prompt: `mode: change-review` (review a diff, PR, or commit range) or `mode: codebase-audit` (review existing code with no specific change). Both modes evaluate code across five axes before you give a verdict. Your job is to find real problems, propose concrete fixes, and give an honest verdict. You do not write or edit code in this role.
 
-## Read-only role
+## Review-only role
 
-You review. You never modify files. You verify behavior by reading code, tests, and configuration. You cannot run shell commands; if verification requires running tests or builds, note this in your limitations.
+You review; you do not implement fixes. You may run shell commands to inspect the repository and verify behavior, including git status, git diff, git log, git show, builds, tests, and checks that do not apply fixes. Discover the requested diff yourself rather than asking the caller to provide it when repository access is available.
+
+Do not create, edit, delete, or rename source files, tests, configuration, documentation, or other project inputs. Do not stage, commit, stash, reset, switch branches, or otherwise change Git state. Do not run formatters or linters in fix mode, install or update dependencies, or invoke commands that change external services. Builds and tests may produce normal disposable artifacts and caches, but must not update tracked files, snapshots, or fixtures. Check unfamiliar commands before running them; if verification requires prohibited changes or unavailable permissions, report that limitation instead.
+
+Use the same restrictions when calling tools through batch or code_execution. Report which checks actually ran and their results; never imply that unrun checks passed.
 
 ## Approval standard
 
@@ -226,9 +204,9 @@ The human-readable label, one of:
 - Codebase-audit: Healthy / Needs attention / Critical issues
 ```
 
-**Important:** The `report_review` `verdict` field must always use the machine-readable enum value (`pass`, `request_changes`, `blocked`), never the human-readable label. The mapping is:
+**Important:** The `structured_output` `verdict` field must always use the machine-readable enum value (`pass`, `request_changes`, `blocked`), never the human-readable label. The mapping is:
 
-| Mode | Human-readable | report_review verdict |
+| Mode | Human-readable | structured_output verdict |
 |---|---|---|
 | change-review | Approve | `pass` |
 | change-review | Request changes | `request_changes` |
@@ -251,37 +229,29 @@ Surface and propose the simpler design for each of these. Escalate to Required o
 
 local semaphore = maki.async.semaphore(MAX_CONCURRENT_REVIEWS)
 
-local validator, schema_compile_err = maki.json.schema_validator(EXIT_SCHEMA)
-if schema_compile_err then
-  maki.log.error("code_review: cannot compile exit schema: " .. schema_compile_err)
-end
+local VERDICT_LEVELS = { pass = "info", request_changes = "warn", blocked = "error" }
 
-local function bounded_errors(errors)
-  local out = {}
-  for i = 1, math.min(#errors, MAX_SCHEMA_ERRORS) do
-    out[i] = errors[i]
+local function report(ctx, text, level, agent)
+  local posted = maki.ui.post(ctx, text, { level = level, agent = agent })
+  if not posted then
+    maki.notify(text, level)
   end
-  return table.concat(out, "\n")
 end
 
-local report_tool = {
-  description = REPORT_TOOL_DESCRIPTION,
-  input_schema = EXIT_SCHEMA,
-  handler = function(value)
-    if schema_compile_err then
-      return nil, "exit schema failed to compile"
-    end
-    local errs = validator:validate(value)
-    if errs then
-      return nil, INVALID_INPUT_PREFIX .. bounded_errors(errs)
-    end
-    local _, commit_err = maki.agent.report_task_result(value)
-    if commit_err then
-      return nil, "no active subagent session"
-    end
-    return REPORT_TOOL_ACK
-  end,
-}
+local function report_result(ctx, result, reviewer)
+  if result.status == "cancelled" then
+    report(ctx, "Code review cancelled: " .. tostring(result.cancellation_reason), "warn", reviewer)
+  elseif result.status ~= "completed" then
+    report(ctx, "Code review failed: " .. tostring(result.user_message or result.error or result.status), "error", reviewer)
+  elseif type(result.captured) ~= "table" or not result.captured.verdict then
+    report(ctx, "Code review finished without a verdict", "warn", reviewer)
+  else
+    local verdict = result.captured.verdict
+    local findings = #(result.captured.findings or {})
+    local noun = findings == 1 and " finding" or " findings"
+    report(ctx, "Code review finished: " .. verdict .. ", " .. findings .. noun, VERDICT_LEVELS[verdict] or "warn", reviewer)
+  end
+end
 
 local function build_message(input)
   local message = "mode: " .. input.mode .. "\nscope: " .. input.scope
@@ -291,136 +261,61 @@ local function build_message(input)
   return message .. REPORT_PROMPT_SUFFIX
 end
 
-local function handler(input, ctx)
-  if input.mode ~= "change-review" and input.mode ~= "codebase-audit" then
-    return { llm_output = "invalid mode: " .. tostring(input.mode), is_error = true }
-  end
+maki.api.register_command({
+  name = "/code-review",
+  description = "Start a code reviewer that can inspect and run checks without editing project files",
+  tui_only = true,
+  argument_hint = '[change-review|codebase-audit] ["scope"] [context...]',
+  arguments = {
+    { name = "mode", type = "enum", choices = { "change-review", "codebase-audit" }, optional = true },
+    { name = "scope", type = "string", optional = true },
+    { name = "context", type = "string", optional = true, variadic = true },
+  },
+  handler = function(opts, ctx)
+    if not ctx then
+      maki.notify("No agent is available to start a code review.", "error")
+      return
+    end
 
-  local model, model_err = maki.agent.resolve_model(ctx, { tier = input.model_tier })
-  if model_err then
-    return { llm_output = model_err, is_error = true }
-  end
+    local input = opts.values
+    local mode = input.mode or "change-review"
+    local scope = input.scope or DEFAULT_SCOPE
+    local reviewer, spawn_err = maki.agent.spawn(ctx, {
+      system = REVIEWER_SYSTEM,
+      output_schema = EXIT_SCHEMA,
+      audience = "research_sub",
+      name = "code-reviewer",
+      semaphore = semaphore,
+      auto_deliver = true,
+      show = mode .. " of " .. scope,
+    })
+    if not reviewer then
+      report(ctx, "Code review failed to start: " .. tostring(spawn_err), "error")
+      return
+    end
 
-  local tool_defs, tools_err = maki.agent.tools(ctx, {
-    audience = "research_sub",
-    spec = model.spec,
-  })
-  if tools_err then
-    return { llm_output = tools_err, is_error = true }
-  end
-
-  local permit = semaphore:acquire()
-  local ok, out = pcall(function()
-    local ok, sess, sess_err = pcall(function()
-      return maki.agent.session(ctx, {
-        system = REVIEWER_SYSTEM,
-        tools = tool_defs,
-        local_tools = { [REPORT_TOOL_NAME] = report_tool },
-        audience = "research_sub",
-        name = "code-reviewer",
-        semaphore = semaphore,
+    local ticket, send_err = reviewer:send(
+      ctx,
+      build_message({
+        mode = mode,
+        scope = scope,
+        context = table.concat(input.context, " "),
       })
-    end)
-    if not ok then
-      error(sess_err, 0)
-    end
-    if sess_err then
-      error(sess_err, 0)
-    end
-
-    local message = build_message(input)
-    local result = {}
-    local prompt_err
-    local retries = 0
-    result, prompt_err = sess:prompt(message)
-    result = result or {}
-    while not prompt_err and retries < MAX_NUDGES do
-      if result.captured then
-        break
+    )
+    if not ticket then
+      report(ctx, "Code review failed to start: " .. tostring(send_err), "error", reviewer)
+    else
+      local result, wait_err = ticket:wait(ctx)
+      if result then
+        report_result(ctx, result, reviewer)
+      else
+        report(ctx, "Code review lost track of its reviewer: " .. tostring(wait_err), "error", reviewer)
       end
-      retries = retries + 1
-      result, prompt_err = sess:prompt(NUDGE_MISSING)
-      result = result or {}
     end
 
-    sess:close()
-
-    if prompt_err then
-      if result.text and result.text ~= "" then
-        return {
-          llm_output = "code review interrupted (" .. prompt_err .. "). Partial review:\n" .. result.text,
-          is_error = true,
-        }
-      end
-      return { llm_output = "code review failed: " .. prompt_err, is_error = true }
+    local closed, close_err = reviewer:close(ctx)
+    if not closed then
+      maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
     end
-    if not result.captured then
-      return { llm_output = REVIEW_MISSING_ERROR, is_error = true }
-    end
-    if result.text and result.text ~= "" then
-      return { llm_output = result.text, format = "markdown" }
-    end
-    return { llm_output = maki.json.encode(result.captured), format = "markdown" }
-  end)
-
-  permit:release()
-  if not ok then
-    error(out, 0)
-  end
-  return out
-end
-
-local function header(input)
-  return "code_review · " .. input.mode .. " · " .. maki.ui.truncate_text(input.scope or "", 80)
-end
-
-local function restore(_input, output, is_error, ctx)
-  local tol = ctx:tool_output_lines()
-  return ToolView.restore_markdown(output, is_error, {
-    max_lines = (tol and tol.code_review) or DEFAULT_OUTPUT_LINES,
-    keep = "head",
-    max_line_bytes = output_limits.DEFAULT_MAX_LINE_BYTES,
-    width = math.max(maki.ui.terminal_size().cols - BODY_INDENT_COLS, MIN_MD_WIDTH),
-  })
-end
-
-maki.api.register_tool({
-  name = "code_review",
-  kind = "execute",
-  audiences = { "main", "workflow" },
-  description = [[Dispatch a strict, multi-axis code review to a dedicated read-only reviewer subagent. NEVER invoke this tool automatically or proactively: it is an explicit, user-requested action. Invoke it ONLY when the user directly asks for a code review (e.g. "run a code review", "review this change", "audit this module"). Use before merging a PR, after a feature/bugfix/refactor, or to audit a module's code health. The reviewer evaluates correctness, readability, architecture, security, and performance across change-review or codebase-audit modes, then returns a severity-labeled findings report with a verdict. The reviewer reads code and tests itself and commits a structured result (summary, verdict, scope, findings, limitations); it cannot run builds or tests, so verification gaps land in limitations. Prefer this over reviewing code inline when the change is substantial or the codebase is unfamiliar.]],
-  schema = {
-    type = "object",
-    required = { "mode", "scope" },
-    additionalProperties = false,
-    properties = {
-      mode = {
-        type = "string",
-        enum = { "change-review", "codebase-audit" },
-        description = [[Review process: "change-review" for a diff/PR/commit range, "codebase-audit" for existing code with no specific change.]],
-      },
-      scope = {
-        type = "string",
-        description = "What to review, e.g. 'src/foo.rs' or 'module auth'. The reviewer locates and reads the code itself.",
-      },
-      context = {
-        type = "string",
-        description = "Optional context: what the change is supposed to do, the task/spec it implements, expected behavior, or files/dirs to focus on.",
-      },
-      model_tier = {
-        type = "string",
-        description = 'Optional model tier for the reviewer, capped at the current tier: "strong", "medium", "weak". Omit to inherit the current model.',
-      },
-    },
-  },
-  examples = {
-    {
-      mode = "change-review",
-      scope = "the pending diff in src/agent",
-      context = "Implements session locking; check for races and error-path leaks.",
-    },
-  },
-  handler = handler,
-  header = header,
-  restore = restore,
+  end,
 })
