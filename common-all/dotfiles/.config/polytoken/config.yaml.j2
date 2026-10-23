@@ -34,6 +34,13 @@ providers:
       key: $(cat ~/.tokens/synthetic-token)
       format: bearer_token
     protocol: openai_chat_completions
+  ocgo-c:
+    kind:
+      type: catalog
+      name: ocgo-c
+    auth:
+      type: static_key
+      key: $(cat ~/.tokens/opencode-go-token)
 models:
 {% for provider_name, info in providers %}
 {% for model in info.models %}  {{ provider_name }}/{{ model.name }}:
