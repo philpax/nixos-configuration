@@ -4,10 +4,13 @@ workspace "main" {
 workspace "work" {
     open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
 }
+workspace "makima" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
 workspace "ananke" {
     open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
 }
-workspace "jc3vrs" {
+workspace "jc3vr" {
     open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
 }
 workspace "zuihitsu" {
@@ -16,7 +19,10 @@ workspace "zuihitsu" {
 workspace "website" {
     open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
 }
-workspace "pyxis" {
+workspace "lunette" {
+    open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
+}
+workspace "train" {
     open-on-output "Microstep MSI MAG342CQR DB6H261C01393"
 }
 workspace "balatro" {
