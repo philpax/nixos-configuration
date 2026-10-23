@@ -47,14 +47,14 @@ models:
     provider_name: {{ model.name }}
     variant: other
     class: {{ pt_class[model.class] }}
-    provider: {{ provider_name }}
+{% if "max_output_tokens" in model %}    max_output_tokens_per_turn: {{ model.max_output_tokens }}
+{% endif %}    provider: {{ provider_name }}
     reasoning:
 {% if model.reasoning.type == "thinking" %}      type: thinking
       can_disable: {{ model.reasoning.get("can_disable", true) | lower }}
 {% else %}      type: no_reasoning
 {% endif %}    context_window: {{ model.context_window }}
-{% if "max_output_tokens" in model %}    max_output_tokens_per_turn: {{ model.max_output_tokens }}
-{% endif %}    supports_vision: {{ model.supports_vision | lower }}
+    supports_vision: {{ model.supports_vision | lower }}
 {% endfor %}{% endfor %}{% for model in pt_static_models %}  {{ model.id }}:
     provider_name: {{ model.provider_name }}
     variant: {{ model.variant }}
@@ -64,6 +64,7 @@ models:
       type: {{ model.reasoning.type }}
     context_window: {{ model.context_window }}
 {% if "compaction_threshold" in model %}    compaction_threshold: {{ model.compaction_threshold }}
+{% endif %}{% if "supports_vision" in model %}    supports_vision: {{ model.supports_vision | lower }}
 {% endif %}{% endfor %}default_permission_matcher: bypass_plus
 mcp_servers:
   ida-pro-mcp:
@@ -91,3 +92,4 @@ tui:
   density: standard
   show-all-thinking-blocks: false
   show-system-reminders: false
+

@@ -53,6 +53,16 @@ PT_STATIC_MODELS = [
         "context_window": 512000,
         "compaction_threshold": 0.8,
     },
+    {
+        "id": "synthetic/hf:zai-org/GLM-5.3-Flash",
+        "provider_name": "hf:zai-org/GLM-5.3-Flash",
+        "variant": "other",
+        "class": "full",
+        "provider": "synthetic",
+        "reasoning": {"type": "no_reasoning"},
+        "context_window": 512000,
+        "supports_vision": True,
+    },
 ]
 
 MAKI_PATH = REPO_DIR / "common-dev" / "dotfiles" / ".config" / "makima" / "providers.toml"
