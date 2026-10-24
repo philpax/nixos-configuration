@@ -160,17 +160,42 @@ def write_env(*lines):
             f.write(line + "\n")
 
 
+def monado_status():
+    result = sysctl(
+        "show",
+        "-p",
+        "InvocationID",
+        "-p",
+        "ActiveState",
+        "-p",
+        "Result",
+        "-p",
+        "ExecMainStatus",
+        "monado.service",
+    )
+    if result.returncode:
+        say(f"cannot query monado.service: {result.stderr.strip() or result.returncode}", err=True)
+        return None
+    status = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    if not status.get("InvocationID") or not status.get("ActiveState"):
+        say("monado.service has no current invocation or service state", err=True)
+        return None
+    return status
+
+
 def monado_ready(tries=90):
-    """Monado needs a while to probe Lighthouse devices and lease the headset
-    panel before it accepts OpenXR clients — at least LH_DISCOVER_WAIT_MS
-    (20s, see monado.nix), so this poll budget must comfortably exceed that or
-    we'll kill a healthy startup as "failed". It also stays systemd-active
-    even when the compositor fails (IPC_EXIT_ON_DISCONNECT=off) — so is-active
-    is not a readiness signal. Poll this run's journal for the compositor-up
-    marker, bailing early on the failure markers."""
-    inv = sysctl("show", "-p", "InvocationID", "--value", "monado.service").stdout.strip()
+    """Wait beyond the Lighthouse discovery window for compositor readiness.
+
+    An active service alone is insufficient: IPC_EXIT_ON_DISCONNECT=off keeps
+    Monado running after compositor failure. Both a live invocation and its
+    compositor-up journal marker are required.
+    """
+    status = monado_status()
+    if status is None:
+        return False
+    inv = status["InvocationID"]
     for _ in range(tries):
-        log = run(
+        journal = run(
             [
                 "journalctl",
                 "--user",
@@ -179,33 +204,68 @@ def monado_ready(tries=90):
                 f"_SYSTEMD_INVOCATION_ID={inv}",
                 "--no-pager",
             ]
-        ).stdout
-        if "Started vblank event thread" in log:
-            return True
-        if re.search(r"create_system failed|Failed to init compositor", log):
+        )
+        if journal.returncode:
+            say(
+                f"cannot read Monado's journal: {journal.stderr.strip() or journal.returncode}",
+                err=True,
+            )
             return False
+        # Check after reading the journal so an exited service cannot pass on an old marker.
+        status = monado_status()
+        if status is None:
+            return False
+        if status["InvocationID"] != inv:
+            say("monado.service changed invocation while waiting for readiness", err=True)
+            return False
+        if status["ActiveState"] not in {"active", "activating"}:
+            say(
+                f"monado.service is {status['ActiveState']} "
+                f"(result={status.get('Result', 'unknown')}, "
+                f"exit status={status.get('ExecMainStatus', 'unknown')})",
+                err=True,
+            )
+            return False
+        if re.search(r"create_system failed|Failed to init compositor", journal.stdout):
+            say("Monado reports a system or compositor initialization failure", err=True)
+            return False
+        if status["ActiveState"] == "active" and "Started vblank event thread" in journal.stdout:
+            return True
         time.sleep(0.5)
+    say("timed out waiting for Monado's compositor", err=True)
     return False
 
 
 def start_monado():
-    """Bring monado up and wait until it's actually usable. The SteamVR-LH
-    driver intermittently fails device creation, so retry; each attempt starts
-    from a clean socket, because a stale/unlinked monado_comp_ipc (e.g. from an
-    unclean exit) leaves the unit "active" while clients get ENOENT, which a
-    plain restart wouldn't recover from."""
+    """Start each attempt with a clean socket and wait for compositor readiness."""
     for attempt in range(1, 4):
-        stop("monado.service", "monado.socket")
-        sysctl("reset-failed", "monado.service", "monado.socket")
+        for action in ("stop", "reset-failed"):
+            result = sysctl(action, "monado.service", "monado.socket")
+            if result.returncode:
+                say(
+                    f"cannot {action} Monado: {result.stderr.strip() or result.returncode}",
+                    err=True,
+                )
+                return False
         try:
             os.unlink(os.path.join(RUNTIME_DIR, "monado_comp_ipc"))
-        except OSError:
+        except FileNotFoundError:
             pass
-        sysctl("start", "monado.service")
-        if monado_ready():
+        except OSError as error:
+            say(f"cannot remove Monado's stale socket: {error}", err=True)
+            return False
+        result = sysctl("start", "monado.service")
+        if result.returncode:
+            say(
+                f"cannot start monado.service: {result.stderr.strip() or result.returncode}",
+                err=True,
+            )
+        elif monado_ready():
             return True
-        say(f"monado init failed (attempt {attempt}/3), retrying...", err=True)
-        time.sleep(2)
+        say(f"monado init failed (attempt {attempt}/3)", err=True)
+        if attempt < 3:
+            say("retrying Monado in 2 seconds...", err=True)
+            time.sleep(2)
     return False
 
 

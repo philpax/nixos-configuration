@@ -1,7 +1,7 @@
 { ... }:
 let
   nixpkgs-xr = import
-    (builtins.fetchTarball "https://github.com/nix-community/nixpkgs-xr/archive/499bbd9ef425436982b44baed6ff497c84594374.tar.gz");
+    (builtins.fetchTarball "https://github.com/nix-community/nixpkgs-xr/archive/8d169c67d1e73b8721711b3750ef75ba205e7fe1.tar.gz");
 in
 {
   imports = [ nixpkgs-xr.nixosModules.nixpkgs-xr ];
