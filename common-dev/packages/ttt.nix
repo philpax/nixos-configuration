@@ -1,17 +1,19 @@
 { lib, buildGoModule, fetchFromGitHub }:
 
 buildGoModule rec {
+  # Tracks HEAD of main rather than a tagged release; bump rev and both hashes
+  # to the current commit when updating.
   pname = "ttt";
-  version = "1.7.1";
+  version = "unstable-2026-10-26";
 
   src = fetchFromGitHub {
     owner = "eugenioenko";
     repo = "ttt";
-    rev = "v${version}";
-    hash = "sha256-LcSmUntNXmw+2jA8NLMgnAKObSlF2wknLinAuJxD5aw=";
+    rev = "a78ce492370d23f46715f08ab1a465efe18c28a7";
+    hash = "sha256-recObA4jwbfsntDhwoiq6k49usqtJLTTuncs47u43t8=";
   };
 
-  vendorHash = "sha256-+mbwJO7J6t584r3rhPsxj9eVfKFOffoWydKJrFNwA2c=";
+  vendorHash = "sha256-Rlv/akRDQwbbpGblCaVoWRPQnspg0Ijt7bpm3jYmDeE=";
   subPackages = [ "cmd/ttt" ];
   env.CGO_ENABLED = "0";
   ldflags = [ "-s" "-w" "-X main.version=${version}" ];
