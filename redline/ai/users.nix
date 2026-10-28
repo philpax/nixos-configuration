@@ -16,6 +16,9 @@
   # ```
   users.users.ai = {
     isNormalUser = true;
+    # Keep the UID stable: rootless Podman services need to order themselves
+    # after this user's systemd manager and runtime directory.
+    uid = 1001;
     description = "AI Services User";
     home = "/home/ai";
     group = "ai";
@@ -27,4 +30,9 @@
   };
 
   users.groups.ai = {};
+
+  # Several rootless OCI units want this helper. Keep the successful
+  # one-shot active so each container restart does not invoke loginctl again
+  # and trip systemd's start-rate limiter.
+  systemd.services.linger-users.serviceConfig.RemainAfterExit = true;
 }

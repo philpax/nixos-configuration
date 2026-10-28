@@ -225,8 +225,10 @@ in
     , requires ? [ ]
     , path ? [ ]
     , environment ? { }
+    , runtimeUid ? null
     }:
     let
+      runtimeUnit = lib.optional (runtimeUid != null) "user@${toString runtimeUid}.service";
       startScript = pkgs.writeShellScript "ananke-start" ''
         set -euo pipefail
         export XDG_RUNTIME_DIR="/run/user/$(${pkgs.coreutils}/bin/id -u)"
@@ -235,7 +237,11 @@ in
     in
     {
       description = "Ananke";
-      inherit after wants requires path environment;
+      after = after ++ runtimeUnit;
+      wants = wants ++ runtimeUnit;
+      requires = requires ++ runtimeUnit;
+      path = path ++ [ "/run/wrappers" ];
+      inherit environment;
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         User = user;

@@ -332,7 +332,7 @@ in
         HOME = config.users.users.${config.mainUser}.home;
         LD_LIBRARY_PATH = "/run/opengl-driver/lib";
       };
-      path = [ config.ai.llamaCppCuda pkgs.podman pkgs.curl pkgs.bash "/run/wrappers" ];
+      path = [ config.ai.llamaCppCuda pkgs.podman pkgs.curl pkgs.bash ];
     };
 
     # Per-service ports are loopback-only (allowExternalServices defaults to

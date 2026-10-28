@@ -128,14 +128,20 @@ in
   mkImageService =
     { images
     , user ? null
+    , runtimeUid ? null
     , environment ? { }
     , after ? [ "network-online.target" ]
     , wants ? [ ]
     , requires ? [ ]
     }:
+    let
+      runtimeUnit = lib.optional (runtimeUid != null) "user@${toString runtimeUid}.service";
+    in
     {
       description = "Build the container images ananke serves with Podman";
-      inherit after wants requires;
+      after = after ++ runtimeUnit;
+      wants = wants ++ runtimeUnit;
+      requires = requires ++ runtimeUnit;
       wantedBy = [ "multi-user.target" ];
       before = [ "ananke.service" ];
       # Rootless Podman shells out to newuidmap/newgidmap, which only work as

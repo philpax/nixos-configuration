@@ -11,6 +11,7 @@ let
   llmDir = folders.ai.llm;
   vllmDir = folders.ai.vllm;
   anankeDir = folders.ai.ananke;
+  aiRuntimeUid = config.users.users.ai.uid;
 
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
@@ -833,6 +834,7 @@ in
   systemd.services.container-images = mkImageService {
     images = lib.attrValues vllmImages;
     user = "ai";
+    runtimeUid = aiRuntimeUid;
     environment = {
       HOME = "/home/ai";
     };
@@ -843,6 +845,7 @@ in
     inherit pkgs anankeDir configFile;
     user = "ai";
     group = "ai";
+    runtimeUid = aiRuntimeUid;
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     environment = {

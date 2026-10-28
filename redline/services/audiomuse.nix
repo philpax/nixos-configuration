@@ -15,6 +15,7 @@
 let
   folders = import ../folders.nix;
   secrets = import ../secrets/audiomuse.nix;
+  aiRuntimeUnit = "user@${toString config.users.users.ai.uid}.service";
 
   image = "ghcr.io/neptunehub/audiomuse-ai:3.1.1-nvidia";
   # Host port; the container listens on 8000, but that's taken on the host by
@@ -191,8 +192,9 @@ in
       # oci-containers does not manage Podman networks; create ours once.
       podman-network-audiomuse = {
         description = "Podman network for AudioMuse-AI";
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
+        after = [ "network-online.target" aiRuntimeUnit ];
+        wants = [ "network-online.target" aiRuntimeUnit ];
+        requires = [ aiRuntimeUnit ];
         wantedBy = [ "multi-user.target" ];
         before = map (n: "podman-${n}.service") containerNames;
         requiredBy = map (n: "podman-${n}.service") containerNames;
@@ -215,8 +217,8 @@ in
       # history/pruning comes for free). Restoring beats re-crunching ~20k tracks.
       audiomuse-pgdump = {
         description = "Dump AudioMuse-AI postgres database for backup";
-        after = [ "podman-audiomuse-postgres.service" ];
-        requires = [ "podman-audiomuse-postgres.service" ];
+        after = [ "podman-audiomuse-postgres.service" aiRuntimeUnit ];
+        requires = [ "podman-audiomuse-postgres.service" aiRuntimeUnit ];
         serviceConfig = {
           Type = "oneshot";
           User = "ai";
@@ -241,13 +243,33 @@ in
       # accepts connections; without RestartSec the default 100ms restart cadence
       # can trip the start-rate limiter and wedge the unit in `failed`).
       podman-audiomuse = {
-        after = [ "navidrome-audiomuse-user.service" ];
+        after = [ "navidrome-audiomuse-user.service" aiRuntimeUnit ];
+        wants = [ aiRuntimeUnit ];
+        requires = [ aiRuntimeUnit ];
+        path = [ "/run/wrappers" ];
+        serviceConfig.RestartSec = 15;
+      };
+      podman-audiomuse-postgres = {
+        after = [ aiRuntimeUnit ];
+        wants = [ aiRuntimeUnit ];
+        requires = [ aiRuntimeUnit ];
+        path = [ "/run/wrappers" ];
+        serviceConfig.RestartSec = 15;
+      };
+      podman-audiomuse-redis = {
+        after = [ aiRuntimeUnit ];
+        wants = [ aiRuntimeUnit ];
+        requires = [ aiRuntimeUnit ];
+        path = [ "/run/wrappers" ];
         serviceConfig.RestartSec = 15;
       };
     } // lib.listToAttrs (map (i: lib.nameValuePair "podman-${workerName i}" {
       # Ordering only: the user oneshot for first-boot auth, and flask for
       # boot-time schema migrations (racing them deadlocked postgres once).
-      after = [ "navidrome-audiomuse-user.service" "podman-audiomuse.service" ];
+      after = [ "navidrome-audiomuse-user.service" "podman-audiomuse.service" aiRuntimeUnit ];
+      wants = [ aiRuntimeUnit ];
+      requires = [ aiRuntimeUnit ];
+      path = [ "/run/wrappers" ];
       serviceConfig.RestartSec = 15;
     }) workerIds);
 
