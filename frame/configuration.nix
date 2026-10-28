@@ -16,6 +16,8 @@
   philpax.syncthing.device = "frame";
   # SteamOS gives each account a group of the same name, rather than `users`.
   services.syncthing.group = config.mainUser;
+  networking.firewall.allowedTCPPorts = pkgs.lib.mkForce [ ];
+  networking.firewall.allowedUDPPorts = pkgs.lib.mkForce [ ];
 
   hardware.graphics.enable = true;
 
