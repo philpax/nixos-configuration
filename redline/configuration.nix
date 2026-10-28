@@ -18,6 +18,38 @@ in {
 
   redline.ssd0.enable = true;
 
+  # --- TEMPORARY: reserve GPU capacity for long-running workloads -------------
+  #
+  # Disable auto-upgrades to avoid restarting containers during long-running jobs.
+  # Keep Ananke running and disable other services that may use GPU capacity.
+  system.autoUpgrade.enable = lib.mkForce false;
+
+  # AudioMuse runs eight CUDA analysis workers. Keep in sync with
+  # redline.audiomuse.workerCount if that changes.
+  systemd.services.podman-audiomuse.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-1.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-2.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-3.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-4.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-5.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-6.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-7.enable = lib.mkForce false;
+  systemd.services.podman-audiomuse-worker-8.enable = lib.mkForce false;
+  # The navidrome oneshots Want= the containers above and would pull them back.
+  systemd.services.navidrome-audiomuse-user.enable = lib.mkForce false;
+  systemd.services.navidrome-audiomuse-plugin.enable = lib.mkForce false;
+
+  # Hermes is down already (libvirtd inactive, no domains), and this keeps a
+  # rebuild from defining and starting it again.
+  systemd.services.hermes-vm-provision.enable = lib.mkForce false;
+  systemd.services.hermes-backup-check.enable = lib.mkForce false;
+  systemd.timers.hermes-backup-check.enable = lib.mkForce false;
+
+  systemd.services.paxcord.enable = lib.mkForce false;
+  systemd.services.paxboard.enable = lib.mkForce false;
+  systemd.services.whisper-lyrics.enable = lib.mkForce false;
+  # --- end TEMPORARY ----------------------------------------------------------
+
   boot.initrd.kernelModules = [
     "nvidia"
   ];
