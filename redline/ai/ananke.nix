@@ -12,6 +12,46 @@ let
   vllmDir = folders.ai.vllm;
   anankeDir = folders.ai.ananke;
   aiRuntimeUid = config.users.users.ai.uid;
+  strataDir = "${folders.ai.base}/strata-src";
+  strataData = "${folders.ai.base}/strata";
+  strataRuntime = "/run/user/${toString aiRuntimeUid}/strata";
+  strataPython = pkgs.python3.withPackages (p: with p; [ jinja2 numpy regex pyyaml tqdm requests pillow psutil ]);
+  strataConfig = pkgs.writeText "strata-coder.json" (builtins.toJSON {
+    exe = "${strataDir}/engine/strata";
+    cwd = strataDir;
+    tokenizer = "${strataData}/packs/coder-iq1_m/tokenizer";
+    model_name = "qwen3.8-flash-next-coder-iq1_m";
+    cors_origins = [ "*" ];
+    allowed_hosts = [ "*" ];
+    log = "${strataRuntime}/engine.log";
+    gpu = [ 0 1 ];
+    replicas = 2;
+    args = [
+      "--pack" "${strataData}/packs/coder-iq1_m"
+      "--native" "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf"
+      "--ple-gguf" "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"
+      "--expert-profile" "${strataDir}/data/expert-profile-coder.bin"
+      "--expert-cache" "auto" "--prefill" "auto" "--spec" "4" "--spec-min-p" "0.5"
+      "--mtp" "${strataData}/mtp/rt" "--max-context" "131072" "--kv" "int8"
+      "--ple-io" "ram" "--kv-resident" "32768" "--vision" "--vram-reserve-mib" "700"
+      "--shared-expert-arena" "${strataRuntime}/experts"
+    ];
+    vision = {
+      exe = "${strataDir}/engine/strata-vision";
+      mmproj = "${strataData}/models/mmproj-Qwen3.8-Flash-Next-BF16.gguf";
+      model = "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf";
+      gpu = true;
+      max_tokens = 1024;
+    };
+  });
+  strataStart = pkgs.writeShellScript "strata-start" ''
+    set -eu
+    mkdir -p ${lib.escapeShellArg strataRuntime}
+    rm -f ${lib.escapeShellArg "${strataRuntime}/experts"}
+    export STRATA_REPLICA_START=serial
+    export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    exec ${strataPython}/bin/python ${strataDir}/serve/server.py --engine strata --config ${strataConfig} --host 127.0.0.1 --port "$1"
+  '';
 
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
@@ -535,6 +575,11 @@ let
       };
     }
 
+    {
+      kind = "strata";
+      name = "qwen3.8-flash-next-coder";
+    }
+
     # LFM2.5 embedder (llama.cpp-served, 1024-dim). The model's trained
     # max_seq_length is 512 tokens — longer inputs are rejected by the
     # server's physical batch limit, which is the correct behaviour (route
@@ -572,6 +617,22 @@ let
       # entrypoint binds `${listen_host}:${listen_port}`, which resolves to
       # `0.0.0.0:8000` inside, and ananke publishes the allocated loopback
       # port onto it.
+      builders.strata = port: m: {
+        template = "command";
+        inherit (m) name;
+        inherit port;
+        description = "Qwen3.8 Flash Next Coder on two Strata replicas.";
+        command = [ strataStart "\${port}" ];
+        idle_timeout = "60m";
+        priority = 70;
+        allocation = { mode = "static"; reserve_gb = 48; };
+        devices = {
+          placement = "gpu-only";
+          placement_override = { "gpu:0" = 24000; "gpu:1" = 24000; };
+        };
+        health = { http = "/health"; timeout = "10m"; };
+        openai_proxy.upstream_model = "qwen3.8-flash-next-coder-iq1_m";
+      };
       builders.vllm = port: m: anankeLib.mkContainerCommandService {
         inherit (m) name description;
         inherit port;
