@@ -167,4 +167,9 @@ in {
   security.sudo.extraConfig = ''
     Defaults timestamp_timeout=60
   '';
+
+  # temporary until NixOS 26.11 introduces Immich 3
+  nixpkgs.config.permittedInsecurePackages = [
+    "immich-2.7.5"
+  ];
 }
