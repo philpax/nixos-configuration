@@ -15,6 +15,7 @@ let
   strataDir = "${folders.ai.base}/strata-src";
   strataData = "${folders.ai.base}/strata";
   strataRuntime = "/run/user/${toString aiRuntimeUid}/strata";
+  strataContext = 131072;
   strataPython = pkgs.python3.withPackages (p: with p; [ jinja2 numpy regex pyyaml tqdm requests pillow psutil ]);
   strataConfig = pkgs.writeText "strata-coder.json" (builtins.toJSON {
     exe = "${strataDir}/engine/strata";
@@ -32,7 +33,7 @@ let
       "--ple-gguf" "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"
       "--expert-profile" "${strataDir}/data/expert-profile-coder.bin"
       "--expert-cache" "auto" "--prefill" "auto" "--spec" "4" "--spec-min-p" "0.5"
-      "--mtp" "${strataData}/mtp/rt" "--max-context" "131072" "--kv" "int8"
+      "--mtp" "${strataData}/mtp/rt" "--max-context" (toString strataContext) "--kv" "int8"
       "--ple-io" "ram" "--kv-resident" "32768" "--vision" "--vram-reserve-mib" "700"
       "--shared-expert-arena" "${strataRuntime}/experts"
     ];
@@ -578,6 +579,13 @@ let
     {
       kind = "strata";
       name = "qwen3.8-flash-next-coder";
+      maxContext = strataContext;
+      vision = true;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
     }
 
     # LFM2.5 embedder (llama.cpp-served, 1024-dim). The model's trained
