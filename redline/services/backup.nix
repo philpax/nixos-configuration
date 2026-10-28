@@ -27,6 +27,9 @@ let
     # overwritten, so /storage accumulates history that the guest cannot reach
     # or rewrite. The ZFS auto-snapshots on this pool reinforce that.
     { src = folders.hermes.drop; dst = "${folders.backup}/hermes"; }
+    # Back up the workspace and its generated data, including records that
+    # cannot be reproduced. The repository has no remote.
+    { src = folders.ai.workspace; dst = "${folders.backup}/vertas-train"; }
     # Primary SSD -> external drive (offsite backup)
     { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
     { src = folders.music; dst = "${folders.backups.external}/Music"; }

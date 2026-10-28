@@ -46,6 +46,7 @@ rec {
     ananke = "${mounts.ssd0}/ai/ananke";
     paxcord = "${mounts.ssd0}/ai/paxcord";
     vllm = "${mounts.ssd0}/ai/vllm";
+    workspace = "${mounts.ssd0}/ai/vertas-train";
   };
 
   # Sandboxed Hermes Agent VM (see hermes/).
