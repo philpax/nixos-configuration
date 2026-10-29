@@ -277,45 +277,62 @@ maki.api.register_command({
       return
     end
 
-    local input = opts.values
-    local mode = input.mode or "change-review"
-    local scope = input.scope or DEFAULT_SCOPE
-    local reviewer, spawn_err = maki.agent.spawn(ctx, {
-      system = REVIEWER_SYSTEM,
-      output_schema = EXIT_SCHEMA,
-      audience = "research_sub",
-      name = "code-reviewer",
-      semaphore = semaphore,
-      auto_deliver = true,
-      show = mode .. " of " .. scope,
-    })
-    if not reviewer then
-      report(ctx, "Code review failed to start: " .. tostring(spawn_err), "error")
-      return
-    end
-
-    local ticket, send_err = reviewer:send(
-      ctx,
-      build_message({
-        mode = mode,
-        scope = scope,
-        context = table.concat(input.context, " "),
+    local permit = semaphore:acquire()
+    local ok, err = pcall(function()
+      local input = opts.values
+      local mode = input.mode or "change-review"
+      local scope = input.scope or DEFAULT_SCOPE
+      local reviewer, spawn_err = maki.agent.spawn(ctx, {
+        system = REVIEWER_SYSTEM,
+        output_schema = EXIT_SCHEMA,
+        audience = "research_sub",
+        name = "code-reviewer",
+        auto_deliver = true,
+        show = mode .. " of " .. scope,
       })
-    )
-    if not ticket then
-      report(ctx, "Code review failed to start: " .. tostring(send_err), "error", reviewer)
-    else
-      local result, wait_err = ticket:wait(ctx)
-      if result then
-        report_result(ctx, result, reviewer)
-      else
-        report(ctx, "Code review lost track of its reviewer: " .. tostring(wait_err), "error", reviewer)
+      if not reviewer then
+        report(ctx, "Code review failed to start: " .. tostring(spawn_err), "error")
+        return
       end
-    end
 
-    local closed, close_err = reviewer:close(ctx)
-    if not closed then
-      maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
+      local deferred, defer_err = reviewer:defer_close(ctx)
+      if not deferred then
+        local closed, close_err = reviewer:close(ctx)
+        report(ctx, "Code review failed to register cleanup: " .. tostring(defer_err), "error", reviewer)
+        if not closed then
+          maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
+        end
+        return
+      end
+
+      local ticket, send_err = reviewer:send(
+        ctx,
+        build_message({
+          mode = mode,
+          scope = scope,
+          context = table.concat(input.context or {}, " "),
+        }),
+        { when = "idle" }
+      )
+      if not ticket then
+        report(ctx, "Code review failed to start: " .. tostring(send_err), "error", reviewer)
+      else
+        local result, wait_err = ticket:wait(ctx)
+        if result then
+          report_result(ctx, result, reviewer)
+        else
+          report(ctx, "Code review lost track of its reviewer: " .. tostring(wait_err), "error", reviewer)
+        end
+      end
+
+      local closed, close_err = reviewer:close(ctx)
+      if not closed then
+        maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
+      end
+    end)
+    permit:release()
+    if not ok then
+      report(ctx, "Code review failed: " .. tostring(err), "error")
     end
   end,
 })
