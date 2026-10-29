@@ -9,7 +9,6 @@ in {
       ../common-ai/configuration.nix
       ./ssd0.nix
       (import ./ai { inherit config pkgs; })
-      ./hermes
       (import ./services { inherit config lib pkgs; })
       (import ./programs { inherit config pkgs; })
     ];
@@ -38,12 +37,6 @@ in {
   # The navidrome oneshots Want= the containers above and would pull them back.
   systemd.services.navidrome-audiomuse-user.enable = lib.mkForce false;
   systemd.services.navidrome-audiomuse-plugin.enable = lib.mkForce false;
-
-  # Hermes is down already (libvirtd inactive, no domains), and this keeps a
-  # rebuild from defining and starting it again.
-  systemd.services.hermes-vm-provision.enable = lib.mkForce false;
-  systemd.services.hermes-backup-check.enable = lib.mkForce false;
-  systemd.timers.hermes-backup-check.enable = lib.mkForce false;
 
   systemd.services.paxcord.enable = lib.mkForce false;
   systemd.services.paxboard.enable = lib.mkForce false;
