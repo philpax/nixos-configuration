@@ -101,3 +101,11 @@ context_window = 131072
 max_output_tokens = 32768
 supports_thinking = true
 supports_vision = true
+
+[[ananke-redline.models]]
+id = "glm-5.3-flash-maya-m"
+tier = "medium"
+context_window = 262144
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false

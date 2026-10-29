@@ -54,6 +54,40 @@ let
     exec ${strataPython}/bin/python ${strataDir}/serve/server.py --engine strata --config ${strataConfig} --host 127.0.0.1 --port "$1"
   '';
 
+  mayaDir = "${folders.ai.base}/maya-src";
+  mayaData = "${folders.ai.base}/maya-data/models/Maya-M";
+  mayaRuntime = "/run/user/${toString aiRuntimeUid}/maya";
+  mayaContext = 262144;
+  # This locally built engine links against this glibc, not the loader in its ELF interpreter.
+  mayaGlibc = /nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25;
+  mayaEngine = pkgs.writeShellScript "maya-engine" ''
+    exec ${mayaGlibc}/lib/ld-linux-x86-64.so.2 --library-path ${mayaGlibc}/lib:/run/opengl-driver/lib ${mayaDir}/build/maya "$@"
+  '';
+  mayaConfig = pkgs.writeText "maya-m.json" (builtins.toJSON {
+    exe = toString mayaEngine;
+    cwd = mayaDir;
+    tokenizer = "${mayaData}/pack/tokenizer";
+    model_name = "glm-5.3-flash";
+    cors_origins = [ "*" ];
+    log = "${mayaRuntime}/engine.log";
+    gpu = [ 0 1 ];
+    env.MAYA_GLM_RAM_GB = "80";
+    sampling = { temperature = 1.0; top_p = 0.95; };
+    reasoning_effort = "max";
+    args = [
+      "--glm-pack" "${mayaData}/pack"
+      "--max-context" (toString mayaContext)
+      "--expert-cache" "auto" "--prefill" "auto" "--kv-streaming" "on"
+      "--expert-profile" "${mayaDir}/data/expert-profile-glm.bin"
+    ];
+  });
+  mayaStart = pkgs.writeShellScript "maya-start" ''
+    set -eu
+    mkdir -p ${lib.escapeShellArg mayaRuntime}
+    export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    exec ${strataPython}/bin/python ${mayaDir}/serve/server.py --engine strata --config ${mayaConfig} --host 127.0.0.1 --port "$1"
+  '';
+
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
   comfyuiPort = 8188;
@@ -588,6 +622,18 @@ let
       };
     }
 
+    {
+      kind = "maya";
+      name = "glm-5.3-flash-maya-m";
+      maxContext = mayaContext;
+      vision = false;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+
     # LFM2.5 embedder (llama.cpp-served, 1024-dim). The model's trained
     # max_seq_length is 512 tokens — longer inputs are rejected by the
     # server's physical batch limit, which is the correct behaviour (route
@@ -640,6 +686,23 @@ let
         };
         health = { http = "/health"; timeout = "10m"; };
         openai_proxy.upstream_model = "qwen3.8-flash-next-coder-iq1_m";
+      };
+      builders.maya = port: m: {
+        template = "command";
+        inherit (m) name;
+        inherit port;
+        description = "GLM-5.3 Flash Maya-M on two GPUs (experimental).";
+        command = [ mayaStart "\${port}" ];
+        idle_timeout = "60m";
+        stop_grace = "120s";
+        priority = 70;
+        allocation = { mode = "static"; reserve_gb = 48; };
+        devices = {
+          placement = "hybrid";
+          placement_override = { "gpu:0" = 24000; "gpu:1" = 24000; cpu = 95000; };
+        };
+        health = { http = "/health"; timeout = "10m"; };
+        openai_proxy.upstream_model = "glm-5.3-flash";
       };
       builders.vllm = port: m: anankeLib.mkContainerCommandService {
         inherit (m) name description;

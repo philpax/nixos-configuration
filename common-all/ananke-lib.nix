@@ -87,18 +87,18 @@ in
   # max_output_tokens).
   #
   # `context_window` derivation, by runtime kind:
-  #   ninfer, strata → `maxContext` (the reservation is exact).
+  #   ninfer, strata, maya → `maxContext` (the reservation is exact).
   #   llama-cpp → `context / parallel`, unless `kv_unified` (the slots
   #              share one KV pool, so the full context survives).
   # `supports_vision` derivation:
-  #   ninfer, strata → the `vision` flag.
+  #   ninfer, strata, maya → the `vision` flag.
   #   llama-cpp → an `mmproj` is present.
   mkClientModel = m:
     let
       kind = m.kind or "llama-cpp";
       extras = m.extra or m.extras or { };
       totalContext =
-        if kind == "ninfer" || kind == "strata" then m.maxContext
+        if builtins.elem kind [ "ninfer" "strata" "maya" ] then m.maxContext
         else extras.context or (throw "mkClientModel: llama-cpp model `${m.name}` needs extras.context");
       parallel = extras.parallel or 1;
       kvUnified = extras.kv_unified or false;
@@ -106,7 +106,7 @@ in
         if kind == "llama-cpp" && !kvUnified then totalContext / parallel
         else totalContext;
       supports_vision =
-        if kind == "ninfer" || kind == "strata" then m ? vision && m.vision
+        if builtins.elem kind [ "ninfer" "strata" "maya" ] then m ? vision && m.vision
         else m ? mmproj && m.mmproj != null;
     in
     {
