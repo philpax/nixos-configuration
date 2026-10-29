@@ -57,6 +57,8 @@ jobs:
         with:
           submodules: true
       - uses: astral-sh/setup-uv@v6
+      - name: Install Fish for worktree helper tests
+        run: sudo apt-get update && sudo apt-get install -y fish
       - run: uv run pytest -v
 
   frame:

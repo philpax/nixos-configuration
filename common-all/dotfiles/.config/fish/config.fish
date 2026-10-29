@@ -101,35 +101,58 @@ end
 
 function _gwt_cd --argument-names path
     cd $path; or return 1
-    test -f .envrc; and direnv allow
+    if test -f .envrc
+        direnv allow; or return 1
+    end
+    return 0
 end
 
-function gwta --argument-names name ref --description 'Add a worktree at .worktrees/<name> on a new branch <name>'
+function gwta --argument-names name ref --description 'Create or enter .worktrees/<name>, optionally starting a new branch at <ref>'
     if test -z "$name"
         echo "Usage: gwta <name> [ref]" >&2
         return 1
     end
     set -l root (_gwt_root); or return 1
-    test -d $root/.worktrees; or gwti; or return 1
     set -l path $root/.worktrees/$name
+    set -l action
     if test -d $path
-        echo "Worktree $name already exists" >&2
-        _gwt_cd $path
-        return 0
-    end
-    if git show-ref --verify --quiet refs/heads/$name
-        git worktree add $path $name; or return 1
+        if test -n "$ref"
+            echo "Warning: worktree '$name' already exists; ignoring starting ref '$ref'." >&2
+        end
+        set action "Using existing worktree; no branch or worktree created."
     else
-        if test -z "$ref"
-            set ref $name
-        end
-        if git rev-parse --verify --quiet "$ref^{commit}" >/dev/null
-            git worktree add -b $name $path $ref; or return 1
+        if git show-ref --verify --quiet refs/heads/$name
+            if test -n "$ref"
+                echo "Warning: branch '$name' already exists; ignoring starting ref '$ref'." >&2
+            end
+            test -d $root/.worktrees; or gwti; or return 1
+            git worktree add $path $name; or return 1
+            set action "Created worktree for existing branch '$name'; no branch created."
         else
-            git worktree add -b $name $path HEAD; or return 1
+            if test -z "$ref"
+                set ref $name
+                if not git rev-parse --verify --quiet --end-of-options "$ref^{commit}" >/dev/null
+                    set ref HEAD
+                    echo "No starting ref supplied and '$name' does not resolve to a commit; using HEAD."
+                end
+            end
+            set -l start_commit (git rev-parse --verify --quiet --end-of-options "$ref^{commit}")
+            or begin
+                echo "Error: starting ref '$ref' does not resolve to a commit; no branch or worktree created." >&2
+                return 1
+            end
+            test -d $root/.worktrees; or gwti; or return 1
+            git worktree add -b $name $path $ref; or return 1
+            set action "Created branch '$name' from '$ref' ($start_commit) and created worktree."
         end
     end
-    _gwt_cd $path
+    echo $action
+    _gwt_cd $path; or return 1
+    set -l branch (git symbolic-ref --quiet HEAD | string replace -r '^refs/heads/' '')
+    or set branch '(detached HEAD)'
+    set -l commit (git rev-parse --short HEAD); or return 1
+    echo "Directory: $PWD"
+    echo "Branch: $branch ($commit)"
 end
 
 function gwtl --description 'List the worktrees of the current repo'
