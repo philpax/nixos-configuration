@@ -12,30 +12,35 @@ let
   vllmDir = folders.ai.vllm;
   anankeDir = folders.ai.ananke;
   aiRuntimeUid = config.users.users.ai.uid;
+  aiRuntimeDir = "${folders.ai.base}/ananke-runtime";
   strataDir = "${folders.ai.base}/strata-src";
   strataData = "${folders.ai.base}/strata";
-  strataRuntime = "/run/user/${toString aiRuntimeUid}/strata";
-  strataContext = 131072;
   strataPython = pkgs.python3.withPackages (p: with p; [ jinja2 numpy regex pyyaml tqdm requests pillow psutil ]);
-  strataConfig = pkgs.writeText "strata-coder.json" (builtins.toJSON {
+  mkStrataStart = m:
+    let
+      runtime = "${aiRuntimeDir}/strata/${m.name}";
+      configFile = pkgs.writeText "${m.name}.json" (builtins.toJSON ({
     exe = "${strataDir}/engine/strata";
     cwd = strataDir;
     tokenizer = "${strataData}/packs/coder-iq1_m/tokenizer";
     model_name = "qwen3.8-flash-next-coder-iq1_m";
     cors_origins = [ "*" ];
     allowed_hosts = [ "*" ];
-    log = "${strataRuntime}/engine.log";
+    log = "${runtime}/engine.log";
     gpu = [ 0 1 ];
     replicas = 2;
+  } // lib.optionalAttrs (m ? parallelPerReplica) {
+    parallel = m.parallelPerReplica;
+  } // {
     args = [
       "--pack" "${strataData}/packs/coder-iq1_m"
       "--native" "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf"
       "--ple-gguf" "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"
       "--expert-profile" "${strataDir}/data/expert-profile-coder.bin"
       "--expert-cache" "auto" "--prefill" "auto" "--spec" "4" "--spec-min-p" "0.5"
-      "--mtp" "${strataData}/mtp/rt" "--max-context" (toString strataContext) "--kv" "int8"
+      "--mtp" "${strataData}/mtp/rt" "--max-context" (toString m.maxContext) "--kv" "int8"
       "--ple-io" "ram" "--kv-resident" "32768" "--vision" "--vram-reserve-mib" "700"
-      "--shared-expert-arena" "${strataRuntime}/experts"
+      "--shared-expert-arena" "${runtime}/experts"
     ];
     vision = {
       exe = "${strataDir}/engine/strata-vision";
@@ -44,49 +49,52 @@ let
       gpu = true;
       max_tokens = 1024;
     };
-  });
-  strataStart = pkgs.writeShellScript "strata-start" ''
-    set -eu
-    mkdir -p ${lib.escapeShellArg strataRuntime}
-    rm -f ${lib.escapeShellArg "${strataRuntime}/experts"}
-    export STRATA_REPLICA_START=serial
-    export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    exec ${strataPython}/bin/python ${strataDir}/serve/server.py --engine strata --config ${strataConfig} --host 127.0.0.1 --port "$1"
-  '';
+      }));
+    in pkgs.writeShellScript "${m.name}-start" ''
+      set -eu
+      mkdir -p ${lib.escapeShellArg runtime}
+      rm -f ${lib.escapeShellArg "${runtime}/experts"}
+      export STRATA_REPLICA_START=serial
+      export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      exec ${strataPython}/bin/python ${strataDir}/serve/server.py --engine strata --config ${configFile} --host 127.0.0.1 --port "$1"
+    '';
 
   mayaDir = "${folders.ai.base}/maya-src";
   mayaData = "${folders.ai.base}/maya-data/models/Maya-M";
-  mayaRuntime = "/run/user/${toString aiRuntimeUid}/maya";
-  mayaContext = 262144;
   # This locally built engine links against this glibc, not the loader in its ELF interpreter.
   mayaGlibc = /nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25;
   mayaEngine = pkgs.writeShellScript "maya-engine" ''
     exec ${mayaGlibc}/lib/ld-linux-x86-64.so.2 --library-path ${mayaGlibc}/lib:/run/opengl-driver/lib ${mayaDir}/build/maya "$@"
   '';
-  mayaConfig = pkgs.writeText "maya-m.json" (builtins.toJSON {
+  mkMayaStart = m:
+    let
+      runtime = "${aiRuntimeDir}/maya/${m.name}";
+      configFile = pkgs.writeText "${m.name}.json" (builtins.toJSON {
     exe = toString mayaEngine;
     cwd = mayaDir;
     tokenizer = "${mayaData}/pack/tokenizer";
     model_name = "glm-5.3-flash";
     cors_origins = [ "*" ];
-    log = "${mayaRuntime}/engine.log";
+    log = "${runtime}/engine.log";
     gpu = [ 0 1 ];
-    env.MAYA_GLM_RAM_GB = "80";
+    env = { MAYA_GLM_RAM_GB = "80"; } // lib.optionalAttrs (m ? parallel) {
+      MAYA_GLM_SEQ_CTX = toString m.maxContext;
+    };
     sampling = { temperature = 1.0; top_p = 0.95; };
     reasoning_effort = "max";
     args = [
       "--glm-pack" "${mayaData}/pack"
-      "--max-context" (toString mayaContext)
+      "--max-context" (toString m.maxContext)
       "--expert-cache" "auto" "--prefill" "auto" "--kv-streaming" "on"
       "--expert-profile" "${mayaDir}/data/expert-profile-glm.bin"
-    ];
-  });
-  mayaStart = pkgs.writeShellScript "maya-start" ''
-    set -eu
-    mkdir -p ${lib.escapeShellArg mayaRuntime}
-    export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    exec ${strataPython}/bin/python ${mayaDir}/serve/server.py --engine strata --config ${mayaConfig} --host 127.0.0.1 --port "$1"
-  '';
+    ] ++ lib.optionals (m ? parallel) [ "--parallel" (toString m.parallel) ];
+      });
+    in pkgs.writeShellScript "${m.name}-start" ''
+      set -eu
+      mkdir -p ${lib.escapeShellArg runtime}
+      export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      exec ${strataPython}/bin/python ${mayaDir}/serve/server.py --engine strata --config ${configFile} --host 127.0.0.1 --port "$1"
+    '';
 
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
@@ -613,7 +621,7 @@ let
     {
       kind = "strata";
       name = "qwen3.8-flash-next-coder";
-      maxContext = strataContext;
+      maxContext = 131072;
       vision = true;
       client = {
         class = "medium";
@@ -621,11 +629,10 @@ let
         max_output_tokens = 32768;
       };
     }
-
     {
       kind = "maya";
       name = "glm-5.3-flash-maya-m";
-      maxContext = mayaContext;
+      maxContext = 262144;
       vision = false;
       client = {
         class = "medium";
@@ -647,6 +654,58 @@ let
         modality = "embedding";
       };
     }
+
+    # Strata slots are per replica; each service uses both GPUs.
+    {
+      kind = "strata";
+      name = "qwen3.8-flash-next-coder-48k-10way";
+      maxContext = 49152;
+      parallelPerReplica = 5;
+      vision = true;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "strata";
+      name = "qwen3.8-flash-next-coder-64k-8way";
+      maxContext = 65536;
+      parallelPerReplica = 4;
+      vision = true;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "strata";
+      name = "qwen3.8-flash-next-coder-64k-4way";
+      maxContext = 65536;
+      parallelPerReplica = 2;
+      vision = true;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+
+    {
+      kind = "maya";
+      name = "glm-5.3-flash-maya-m-64k-2way";
+      maxContext = 65536;
+      parallel = 2;
+      vision = false;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+
   ];
 
   # Bind per-service reverse proxies on 0.0.0.0 too, so clients can reach
@@ -676,7 +735,7 @@ let
         inherit (m) name;
         inherit port;
         description = "Qwen3.8 Flash Next Coder on two Strata replicas.";
-        command = [ strataStart "\${port}" ];
+        command = [ (mkStrataStart m) "\${port}" ];
         idle_timeout = "60m";
         priority = 70;
         allocation = { mode = "static"; reserve_gb = 48; };
@@ -692,7 +751,7 @@ let
         inherit (m) name;
         inherit port;
         description = "GLM-5.3 Flash Maya-M on two GPUs (experimental).";
-        command = [ mayaStart "\${port}" ];
+        command = [ (mkMayaStart m) "\${port}" ];
         idle_timeout = "60m";
         stop_grace = "120s";
         priority = 70;
