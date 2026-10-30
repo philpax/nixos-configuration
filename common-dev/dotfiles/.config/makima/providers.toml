@@ -78,6 +78,14 @@ supports_thinking = true
 supports_vision = true
 
 [[ananke-mindgame.models]]
+id = "swift-1.5-qwen3.8-27b-iq3s-ninfer-mtp3-c8"
+tier = "medium"
+context_window = 45056
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-mindgame.models]]
 id = "gemma-4-31b-it-qat"
 tier = "medium"
 context_window = 120000

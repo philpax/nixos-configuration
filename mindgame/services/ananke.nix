@@ -39,6 +39,26 @@ let
         hash = "sha256-D+rrNhQ5+cvQu1Ylhlzu36WJZgGLmKydeGLGz8KZ/c8=";
       };
     };
+
+    # iamwavecut/ninfer-all, the line that carries the `gguf_blocks_v1`
+    # loader GGUF-repackaged artifacts (the Swift GSQ-RCO series) need.
+    # Upstream ninfer cannot load those. The Ryan-gsq fork the Swift card
+    # names also can, but predates the fix for creating its cuBLAS handle
+    # under graph capture, so wide verify graphs fail at startup there.
+    #
+    # Its Dockerfile builds every supported architecture by default; only the
+    # 5090's is needed. The entrypoint selects the build and takes `serve`
+    # rather than the binary's name.
+    ninferAll = mkSourceImage {
+      name = "ninfer-all";
+      src = pkgs.fetchFromGitHub {
+        owner = "iamwavecut";
+        repo = "ninfer-all";
+        rev = "3fda3165bb211ec8989c91c7f1bab38efc6fbc8c";
+        hash = "sha256-btxG+S4aiEk0qPfzKJI1269wdTTgJ6WmnEIYLOKYPbI=";
+      };
+      buildArgs = { ARCHS = "120a"; };
+    } // { serveCommand = [ "serve" ]; };
   };
 
   # The model roster, hoisted so both `mkAnankeConfig` (below) and
@@ -214,6 +234,37 @@ let
         max_output_tokens = 32768;
       };
     }
+    # Swift 1.5 (a Qwen3.8-27B fine-tune) at IQ3_S, the largest of its GGUF
+    # tiers, on ninfer-all. The ~12 GiB of weights against Qwen3.8 NVFP4's
+    # larger footprint leaves room for the engine's maximum of eight lanes at
+    # 45056 tokens each within the same reservation: the engine reports
+    # 12.9 GiB of runtime on top of 11.6 GiB of weights. rk8v4 (int8 keys,
+    # int4 values) shrinks the KV to about three quarters of int8, which the
+    # 360448-token pool needs to fit; FP16 GDN state halves each lane's
+    # recurrent state. The artifact carries an MTP head but no DFlash drafter.
+    {
+      kind = "ninfer";
+      name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-mtp3-c8";
+      # The artifact's own model id; ninfer-all refuses any other name.
+      upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+      artifact = "swift15_iq3s_mtp.ninfer";
+      image = images.ninferAll;
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 45056;
+      kvCapacity = 360448;
+      maxConcurrency = 8;
+      kvDtype = "rk8v4";
+      extraFlags = { "--gdn-state-fp16" = true; };
+      spec = "mtp";
+      draftTokens = 3;
+      description = "Swift 1.5 Qwen3.8-27B (IQ3_S) served by ninfer-all (MTP=3, 45056 ctx x8 lanes, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # redline's QAT config cut down to one GPU: no tensor split, and a
     # single slot. f16 KV at this context does not fit alongside the desktop's
     # share of the 5090, so the cache is q8_0.
@@ -265,7 +316,7 @@ let
         ninfer = port: m: anankeLib.mkContainerCommandService {
           inherit (m) name vramGb perGpuMib description upstreamModel;
           inherit port;
-          image = images.ninfer.tag;
+          image = (m.image or images.ninfer).tag;
           # Podman is the default; a model can still opt into another runtime
           # when an external compatibility workflow requires it.
           runtime = m.runtime or "podman";
@@ -275,18 +326,19 @@ let
           # share a larger pool across concurrent lanes — ninfer's KV cache is a
           # single paged pool sized by `--kv-capacity`, independent of
           # `--max-concurrency` (which only sets the lane count).
-          command = [ "ninfer-serve" "${artifactsIn}/${m.artifact}" ] ++ flagArgs {
+          command = (m.image or images.ninfer).serveCommand or [ "ninfer-serve" ]
+            ++ [ "${artifactsIn}/${m.artifact}" ] ++ flagArgs ({
             "--host" = "\${listen_host}";
             "--port" = "\${listen_port}";
             "--max-context" = m.maxContext;
             "--kv-capacity" = m.kvCapacity or m.maxContext;
-            "--kv-dtype" = "int8";
+            "--kv-dtype" = m.kvDtype or "int8";
             "--max-concurrency" = m.maxConcurrency or 1;
             "--vision" = m.vision or false;
             "--spec" = m.spec;
             "--draft-tokens" = m.draftTokens;
             "--lm-head-draft" = true;
-          };
+          } // (m.extraFlags or { }));
           network = "host";
           mounts = [ (roMount "${home}/ai/ninfer" artifactsIn) ];
         };

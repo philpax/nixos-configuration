@@ -147,6 +147,17 @@ models:
       can_disable: true
     context_window: 122880
     supports_vision: true
+  ananke-mindgame/swift-1.5-qwen3.8-27b-iq3s-ninfer-mtp3-c8:
+    provider_name: swift-1.5-qwen3.8-27b-iq3s-ninfer-mtp3-c8
+    variant: other
+    class: mini
+    max_output_tokens_per_turn: 32768
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 45056
+    supports_vision: false
   ananke-mindgame/gemma-4-31b-it-qat:
     provider_name: gemma-4-31b-it-qat
     variant: other
