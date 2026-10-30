@@ -31,12 +31,14 @@ let
 
   # Builds `context` if `tag` is not already present. Podman owns the image
   # store directly, so builds and runs cannot drift across two engines.
-  buildIfMissing = { name, tag, context }: ''
+  buildIfMissing = { name, tag, context, buildArgs ? { } }: ''
     if podman image exists ${tag}; then
       echo "image ${name}: ${tag} already built"
     else
       echo "image ${name}: building ${tag}"
-      podman build --tag ${tag} ${context}
+      podman build --tag ${tag}${lib.concatStrings (lib.mapAttrsToList
+        (arg: value: " --build-arg ${lib.escapeShellArg "${arg}=${value}"}")
+        buildArgs)} ${context}
     fi
   '';
 
@@ -86,15 +88,24 @@ in
 
   # A source tree carrying its own Dockerfile — `src` is both the build
   # context and the recipe. Pin it with `fetchFromGitHub` rather than
-  # pointing at a working tree, so the tag means something.
+  # pointing at a working tree, so the tag means something. `buildArgs`
+  # become `--build-arg`s and are folded into the tag, so changing one
+  # rebuilds; without any, the tag is the source's store hash alone.
   mkSourceImage =
     { name
     , src
+    , buildArgs ? { }
     }:
-    let tag = "${name}:${storeHash src}"; in
+    let
+      version =
+        if buildArgs == { } then storeHash src
+        else builtins.substring 0 32
+          (builtins.hashString "sha256" (builtins.toJSON { src = storeHash src; inherit buildArgs; }));
+      tag = "${name}:${version}";
+    in
     {
       inherit name tag;
-      buildCommand = buildIfMissing { inherit name tag; context = src; };
+      buildCommand = buildIfMissing { inherit name tag buildArgs; context = src; };
     };
 
   # An upstream image pinned to a digest. The digest is the reference —
