@@ -21,6 +21,9 @@ let
     # Back up the workspace and its generated data, including records that
     # cannot be reproduced. The repository has no remote.
     { src = folders.ai.workspace; dst = "${folders.backup}/vertas-train"; }
+    # The workspace links into this archive with absolute symlinks, which rsync
+    # copies as links, so the archive needs its own mapping.
+    { src = folders.ai.workspaceArchive; dst = "${folders.backup}/vertas-train-archive"; }
     # Primary SSD -> external drive (offsite backup)
     { src = folders.photos; dst = "${folders.backups.external}/Photos"; }
     { src = folders.music; dst = "${folders.backups.external}/Music"; }
@@ -61,7 +64,7 @@ let
         fi
 
         # Send to user if logged in
-        if who | grep -q "$USER_TO_NOTIFY"; then
+        if who | grep -q "$USER_TO_NOTIFY" && command -v write >/dev/null; then
             echo "Backup sync failed: $error_msg" | write "$USER_TO_NOTIFY" || true
         fi
 
@@ -233,11 +236,6 @@ in {
       Persistent = false;
       # Add some randomization to avoid issues if multiple systems run this
       RandomizedDelaySec = "30m";
-    };
-
-    # This links the timer to the service
-    unitConfig = {
-      Requires = "backup-sync.service";
     };
   };
 

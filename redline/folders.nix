@@ -47,6 +47,8 @@ rec {
     paxcord = "${mounts.ssd0}/ai/paxcord";
     vllm = "${mounts.ssd0}/ai/vllm";
     workspace = "${mounts.ssd0}/ai/vertas-train";
+    # Workspace data moved off ssd0; the workspace links to it
+    workspaceArchive = "${mounts.storage}/ai/experiments/vertas-train/archive-ssd0";
   };
 
   # Service directories
