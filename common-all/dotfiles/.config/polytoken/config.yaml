@@ -125,6 +125,17 @@ models:
       can_disable: true
     context_window: 180224
     supports_vision: false
+  ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3-c4:
+    provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3-c4
+    variant: other
+    class: mini
+    max_output_tokens_per_turn: 32768
+    provider: ananke-mindgame
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 45056
+    supports_vision: false
   ananke-mindgame/qwen3.8-27b-nvfp4-ninfer-mtp3-vision:
     provider_name: qwen3.8-27b-nvfp4-ninfer-mtp3-vision
     variant: other

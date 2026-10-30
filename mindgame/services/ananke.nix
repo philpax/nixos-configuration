@@ -176,6 +176,28 @@ let
     }
     {
       kind = "ninfer";
+      name = "qwen3.8-27b-nvfp4-ninfer-mtp3-c4";
+      upstreamModel = "qwen3.8-27b";
+      artifact = "qwen3_8_27b_nvfp4.ninfer";
+      vramGb = 26;
+      perGpuMib = 26500;
+      # 4x concurrency against the same KV pool as the c1 text profile. Each
+      # lane gets a quarter of the per-session context (45056), so four lanes
+      # at full context exactly fill the 180224-token pool.
+      maxContext = 45056;
+      kvCapacity = 180224;
+      maxConcurrency = 4;
+      spec = "mtp";
+      draftTokens = 3;
+      description = "Qwen3.8-27B (NVFP4) served by ninfer (MTP=3, 45056 ctx x4 lanes, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    {
+      kind = "ninfer";
       name = "qwen3.8-27b-nvfp4-ninfer-mtp3-vision";
       upstreamModel = "qwen3.8-27b";
       artifact = "qwen3_8_27b_nvfp4.ninfer";
