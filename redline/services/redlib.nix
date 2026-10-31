@@ -1,32 +1,47 @@
 { config, lib, pkgs, ... }:
 
 let
-  src = pkgs.fetchFromGitHub {
-    owner = "polak14";
-    repo = "redlib";
-    rev = "4055fda1a5355f1507b23108795d827a16794b58";
-    hash = "sha256-7VRaXfYDPhwqgUCSCYCmO36XKdNQ5zEPrpP/E/BQh5g=";
+  # The fork requires Rust 1.98; keep its toolchain local to this package.
+  rustOverlaySrc = pkgs.fetchFromGitHub {
+    owner = "oxalica";
+    repo = "rust-overlay";
+    rev = "6ecf534a7c16e7c969f26838fdd8c93597ae93f3";
+    hash = "sha256-+sgVNI2c67di+XIeMaz5KSei4T65kX68s5Nl0E5Gzbc=";
   };
-  # This fork handles blocked comments API requests and falls back to scraping.
-  redlib-unstable = pkgs.redlib.overrideAttrs (oldAttrs: {
-    version = "0.36.0-unstable-2026-10-20";
+  rustPkgs = pkgs.extend (import rustOverlaySrc);
+  rustToolchain = rustPkgs.rust-bin.stable."1.98.0".minimal;
+  redlibRustPlatform = pkgs.makeRustPlatform {
+    rustc = rustToolchain;
+    cargo = rustToolchain;
+  };
+  src = pkgs.fetchFromGitHub {
+    owner = "Nachtalb";
+    repo = "redlib";
+    rev = "f3120f910d0fea3cb578d2b8cb5a7434becf16aa";
+    hash = "sha256-46MDqphWkRtM2i77dn5wF906aRuVV1hmzoMBjzu1Nko=";
+  };
+  redlib-unstable = (pkgs.redlib.override {
+    rustPlatform = redlibRustPlatform;
+  }).overrideAttrs (oldAttrs: {
+    version = "0.36.0-unstable-2026-10-31";
     inherit src;
-    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+    env = (oldAttrs.env or {}) // { GIT_HASH = src.rev; };
+    cargoDeps = redlibRustPlatform.fetchCargoVendor {
       inherit src;
-      name = "redlib-0.36.0-unstable-2026-10-20-vendor";
-      hash = "sha256-An6ai9CWrskjfPqmUN/z9rqZYsZp0Tjhp1ODvUnPAuw=";
+      name = "redlib-0.36.0-unstable-2026-10-31-vendor";
+      hash = "sha256-aCIooy54Z8Hi6+lG8wiWWI4kikXmqxeoV4LWumaAoZc=";
     };
-    # BoringSSL (via boring-sys2) needs cmake, go, git, perl, and libclang for bindgen
+    # BoringSSL (via btls-sys) needs cmake, go, git, perl, and libclang for bindgen.
     nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ (with pkgs; [
       cmake
       go
       perl
       git
-      rustPlatform.bindgenHook
-    ]);
+    ]) ++ [ redlibRustPlatform.bindgenHook ];
     checkFlags = (oldAttrs.checkFlags or []) ++ [
       "--skip=oauth::tests::test_generic_web_backend"
       "--skip=oauth::tests::test_mobile_spoof_backend"
+      "--skip=backends::live_tests::"
     ];
   });
 in
