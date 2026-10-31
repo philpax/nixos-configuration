@@ -229,6 +229,17 @@ models:
       can_disable: true
     context_window: 65536
     supports_vision: false
+  ananke-redline/deepseek-v4.1-flash-1017-xq-v4:
+    provider_name: deepseek-v4.1-flash-1017-xq-v4
+    variant: other
+    class: mini
+    max_output_tokens_per_turn: 32768
+    provider: ananke-redline
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 65536
+    supports_vision: false
   synthetic/hf:zai-org/GLM-5.2:
     provider_name: hf:zai-org/GLM-5.2
     variant: other

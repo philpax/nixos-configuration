@@ -96,6 +96,43 @@ let
       exec ${strataPython}/bin/python ${mayaDir}/serve/server.py --engine strata --config ${configFile} --host 127.0.0.1 --port "$1"
     '';
 
+  xolotlDir = "${folders.ai.base}/xolotl-src";
+  xolotlData = "${folders.ai.base}/xolotl-data";
+  mkXolotlStart = m:
+    let
+      runtime = "${aiRuntimeDir}/xolotl/${m.name}";
+      configFile = pkgs.writeText "${m.name}.json" (builtins.toJSON {
+        exe = "${xolotlDir}/build-ds41-nix/ds41_generate";
+        cwd = xolotlDir;
+        tokenizer = "${xolotlData}/model/tokenizer";
+        model_name = "deepseek-v41-flash-1017-xq-v4";
+        log = "${runtime}/engine.log";
+        args = [
+          "-m" "${xolotlData}/model/v4/V41-XQ-1017-v4.gguf"
+          "--backend" "cuda" "--experts" "gpu"
+          "--engram" "${xolotlData}/engram"
+          "--rank" "${xolotlData}/model/v4/rank-1017-v4.bin"
+          "--ctx" (toString m.maxContext) "--stop" "1"
+          "--arena-gib" "150" "--kv-fp4"
+          "--route-bias" "0.5" "--route-bias-file" "0.3" "--route-bias-remote" "0.5"
+          "--remote-device" "1" "--remote-reserve-gib" "0.6" "--tier-batch-pcie" "0.5"
+        ];
+        env = {
+          CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+          CUDA_VISIBLE_DEVICES = "0,1";
+          STRATA_NO_LARGEPAGES = "1";
+          STRATA_SERVE_DSPARK = "${xolotlData}/model/V41-MTP-Vision-1017.Q2_K.gguf";
+        };
+        sampling = { temperature = 1.0; top_p = 1.0; };
+      });
+    in pkgs.writeShellScript "${m.name}-start" ''
+      set -eu
+      mkdir -p ${lib.escapeShellArg runtime}
+      export STRATA_TEXT_LOG=0
+      export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      exec ${strataPython}/bin/python ${xolotlDir}/tools/v41/serve/serve_ds41.py --engine strata --config ${configFile} --host 127.0.0.1 --port "$1"
+    '';
+
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
   comfyuiPort = 8188;
@@ -706,6 +743,17 @@ let
       };
     }
 
+    {
+      kind = "xolotl";
+      name = "deepseek-v4.1-flash-1017-xq-v4";
+      maxContext = 65536;
+      vision = false;
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
   ];
 
   # Bind per-service reverse proxies on 0.0.0.0 too, so clients can reach
@@ -762,6 +810,23 @@ let
         };
         health = { http = "/health"; timeout = "10m"; };
         openai_proxy.upstream_model = "glm-5.3-flash";
+      };
+      builders.xolotl = port: m: {
+        template = "command";
+        inherit (m) name;
+        inherit port;
+        description = "DeepSeek V4.1 Flash 1017 XQ V4 on two GPUs.";
+        command = [ (mkXolotlStart m) "\${port}" ];
+        idle_timeout = "60m";
+        stop_grace = "120s";
+        priority = 70;
+        allocation = { mode = "static"; reserve_gb = 48; };
+        devices = {
+          placement = "hybrid";
+          placement_override = { "gpu:0" = 24000; "gpu:1" = 24000; cpu = 180000; };
+        };
+        health = { http = "/health"; timeout = "10m"; };
+        openai_proxy.upstream_model = "deepseek-v41-flash-1017-xq-v4";
       };
       builders.vllm = port: m: anankeLib.mkContainerCommandService {
         inherit (m) name description;

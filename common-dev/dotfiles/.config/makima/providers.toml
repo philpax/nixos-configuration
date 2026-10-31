@@ -141,3 +141,11 @@ context_window = 65536
 max_output_tokens = 32768
 supports_thinking = true
 supports_vision = false
+
+[[ananke-redline.models]]
+id = "deepseek-v4.1-flash-1017-xq-v4"
+tier = "medium"
+context_window = 65536
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
