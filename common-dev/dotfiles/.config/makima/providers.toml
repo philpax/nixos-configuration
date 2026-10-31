@@ -165,3 +165,19 @@ context_window = 65536
 max_output_tokens = 32768
 supports_thinking = true
 supports_vision = false
+
+[[ananke-redline.models]]
+id = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu0"
+tier = "medium"
+context_window = 45056
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-redline.models]]
+id = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu1"
+tier = "medium"
+context_window = 45056
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false

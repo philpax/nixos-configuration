@@ -6,7 +6,7 @@ let
   anankeLib = import ../../common-all/ananke-lib.nix { inherit lib; };
   inherit (anankeLib) flagArgs;
   inherit (import ../../common-all/container-images.nix { inherit pkgs lib; })
-    mkOverlayImage mkImageService;
+    mkOverlayImage mkPulledImage mkImageService;
 
   llmDir = folders.ai.llm;
   vllmDir = folders.ai.vllm;
@@ -132,6 +132,14 @@ let
       export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       exec ${strataPython}/bin/python ${xolotlDir}/tools/v41/serve/serve_ds41.py --engine strata --config ${configFile} --host 127.0.0.1 --port "$1"
     '';
+
+  ninferContext = 45056;
+  ninferConcurrency = 7;
+  ninferImage = mkPulledImage {
+    name = "ninfer-all";
+    ref = "ghcr.io/iamwavecut/ninfer-all";
+    digest = "sha256:bab655afe7a90bb6a51b636e5c0d89f96a7b9bb96ad4443b2f852ecec33907a8";
+  };
 
   openaiPort = anankeLib.ports.openai;
   managementPort = anankeLib.ports.management;
@@ -754,6 +762,22 @@ let
         max_output_tokens = 32768;
       };
     }
+    {
+      kind = "ninfer";
+      name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu0";
+      gpuIndex = 0;
+      maxContext = ninferContext;
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
+    {
+      kind = "ninfer";
+      name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu1";
+      gpuIndex = 1;
+      maxContext = ninferContext;
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
   ];
 
   # Bind per-service reverse proxies on 0.0.0.0 too, so clients can reach
@@ -827,6 +851,30 @@ let
         };
         health = { http = "/health"; timeout = "10m"; };
         openai_proxy.upstream_model = "deepseek-v41-flash-1017-xq-v4";
+      };
+      builders.ninfer = port: m: anankeLib.mkContainerCommandService {
+        inherit (m) name;
+        inherit port;
+        image = ninferImage.tag;
+        description = "Swift 1.5 Qwen3.8 27B IQ3_S, seven 45K lanes on GPU ${toString m.gpuIndex}.";
+        upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+        vramGb = 23;
+        perGpuMib = 23000;
+        gpuIndices = [ m.gpuIndex ];
+        command = [ "serve" "/artifacts/swift15_iq3s_mtp.ninfer" ] ++ flagArgs {
+          "--host" = "\${listen_host}";
+          "--port" = "\${listen_port}";
+          "--max-context" = m.maxContext;
+          "--kv-capacity" = ninferContext * ninferConcurrency;
+          "--max-concurrency" = ninferConcurrency;
+          "--kv-dtype" = "rk8v4";
+          "--gdn-state-fp16" = true;
+          "--spec" = "mtp";
+          "--draft-tokens" = 3;
+          "--lm-head-draft" = true;
+        };
+        network = "host";
+        mounts = [ (anankeLib.roMount "${folders.ai.base}/ninfer-all-data" "/artifacts") ];
       };
       builders.vllm = port: m: anankeLib.mkContainerCommandService {
         inherit (m) name description;
@@ -962,7 +1010,7 @@ in
         (lib.filter (m: (m.kind or "") == "vllm") models));
 
   systemd.services.container-images = mkImageService {
-    images = lib.attrValues vllmImages;
+    images = lib.attrValues vllmImages ++ [ ninferImage ];
     user = "ai";
     runtimeUid = aiRuntimeUid;
     environment = {
