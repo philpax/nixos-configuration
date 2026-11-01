@@ -59,7 +59,28 @@ let
       };
       buildArgs = { ARCHS = "120a"; };
     } // { serveCommand = [ "serve" ]; };
+
+    # Basalt, a Strata fork that serves Qwen3.8-Flash-Next on Blackwell with
+    # the experts the GPU does not hold in pinned RAM. It ships no
+    # Dockerfile, so ours is added to the pinned source.
+    basalt = mkSourceImage {
+      name = "basalt";
+      src = pkgs.runCommand "basalt-context" {
+        src = pkgs.fetchFromGitHub {
+          owner = "jesdga95";
+          repo = "basalt";
+          rev = "9175e7a3211bda355c02e804c7c107b15b8ea89f";
+          hash = "sha256-ju0jCZM7PsE1gu47f82azR0ZfnWgR2sqEcWD/xlbLuM=";
+        };
+      } ''
+        cp -r $src $out
+        chmod u+w $out
+        cp ${./basalt.Dockerfile} $out/Dockerfile
+      '';
+    };
   };
+
+  basaltIn = "/models";
 
   # The model roster, hoisted so both `mkAnankeConfig` (below) and
   # `clientModels` (further below) can reference it.
@@ -265,6 +286,38 @@ let
         max_output_tokens = 32768;
       };
     }
+    # Qwen3.8-Flash-Next (125B-A6B) at GSQ-RCO IQ3_S on Basalt. The expert
+    # cache takes the VRAM left after the weights, the slots' KV and
+    # `vram-reserve-mib`; with the desktop holding about 4.5 GiB of the card,
+    # a 1800 MiB reserve measured 25974 MiB for the engine. The experts the
+    # GPU does not hold (about 26 GiB) sit in pinned RAM while it is loaded.
+    # `maxContext` is per slot; the engine's `--max-context` is shared across
+    # `parallel` slots, and its KV is elastic, backing each slot's cells as
+    # its context grows.
+    #
+    # Batching barely raises throughput: with a 70-85% expert-cache hit rate
+    # the RAM-resident experts bound decode, and drafting mostly stops in
+    # batch windows. Replayed JC2 decomp-harness requests (7K-token prompts,
+    # 1-7K tokens of reasoning before a tool call) measured 274 tok/s
+    # aggregate at six slots (62 each, median) and 270 at eight (43 each), so
+    # six slots keep each session well above 50 tok/s at the same total.
+    {
+      kind = "basalt";
+      name = "qwen3.8-flash-next-iq3s-basalt-c6";
+      upstreamModel = "qwen3.8-flash-next-iq3s";
+      pack = "Qwen3.8-FN-GSQ-RCO-IQ3_S.basalt";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 45056;
+      parallel = 6;
+      vramReserveMib = 1800;
+      description = "Qwen3.8-Flash-Next GSQ-RCO IQ3_S served by Basalt (45056 ctx x6 slots, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # redline's QAT config cut down to one GPU: no tensor split, and a
     # single slot. f16 KV at this context does not fit alongside the desktop's
     # share of the 5090, so the cache is q8_0.
@@ -341,6 +394,25 @@ let
           } // (m.extraFlags or { }));
           network = "host";
           mounts = [ (roMount "${home}/ai/ninfer" artifactsIn) ];
+        };
+        # `basalt serve` takes the server's options and passes every other
+        # flag through to the engine.
+        basalt = port: m: anankeLib.mkContainerCommandService {
+          inherit (m) name vramGb perGpuMib description upstreamModel;
+          inherit port;
+          image = images.basalt.tag;
+          command = [ "serve" ] ++ flagArgs {
+            "--model" = "${basaltIn}/${m.pack}";
+            "--alias" = m.upstreamModel;
+            "--host" = "\${listen_host}";
+            "--port" = "\${listen_port}";
+            "--parallel" = m.parallel;
+            "--max-context" = m.maxContext * m.parallel;
+            "--kv" = "int8";
+            "--vram-reserve-mib" = m.vramReserveMib;
+          };
+          network = "host";
+          mounts = [ (roMount "${home}/ai/basalt" basaltIn) ];
         };
       };
       inherit models;

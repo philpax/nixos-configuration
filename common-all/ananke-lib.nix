@@ -98,7 +98,7 @@ in
       kind = m.kind or "llama-cpp";
       extras = m.extra or m.extras or { };
       totalContext =
-        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" ] then m.maxContext
+        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" "basalt" ] then m.maxContext
         else extras.context or (throw "mkClientModel: llama-cpp model `${m.name}` needs extras.context");
       parallel = extras.parallel or 1;
       kvUnified = extras.kv_unified or false;
@@ -106,7 +106,7 @@ in
         if kind == "llama-cpp" && !kvUnified then totalContext / parallel
         else totalContext;
       supports_vision =
-        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" ] then m ? vision && m.vision
+        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" "basalt" ] then m ? vision && m.vision
         else m ? mmproj && m.mmproj != null;
     in
     {
