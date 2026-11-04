@@ -4,13 +4,13 @@ buildGoModule rec {
   # Tracks HEAD of main rather than a tagged release; bump rev and both hashes
   # to the current commit when updating.
   pname = "ttt";
-  version = "unstable-2026-10-26";
+  version = "unstable-2026-11-04";
 
   src = fetchFromGitHub {
     owner = "eugenioenko";
     repo = "ttt";
-    rev = "a78ce492370d23f46715f08ab1a465efe18c28a7";
-    hash = "sha256-recObA4jwbfsntDhwoiq6k49usqtJLTTuncs47u43t8=";
+    rev = "82bb3eeae6210a99d755ef828241f38f802005ff";
+    hash = "sha256-JzWi95+3LuBFuhA9NLnT+PUoDGE8emjw37VfFxOEino=";
   };
 
   vendorHash = "sha256-Rlv/akRDQwbbpGblCaVoWRPQnspg0Ijt7bpm3jYmDeE=";
