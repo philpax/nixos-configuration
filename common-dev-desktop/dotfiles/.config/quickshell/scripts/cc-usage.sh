@@ -36,7 +36,7 @@ if [ ! -s "$result" ] || [ "$(($(date +%s) - attempted))" -ge 300 ] || [ "$creds
             200)
                 if jq -e '
                     def valid: type == "number" and . >= 0 and . <= 100;
-                    (.five_hour.utilization | valid) and
+                    (.five_hour == null or (.five_hour.utilization | valid)) and
                     (.seven_day == null or (.seven_day.utilization | valid))
                 ' "$response" >/dev/null 2>&1 && mv "$response" "$cache"; then
                     status=ok
@@ -48,6 +48,8 @@ if [ ! -s "$result" ] || [ "$(($(date +%s) - attempted))" -ge 300 ] || [ "$creds
 fi
 case "$status" in ok|auth|rate-limit|error) ;; *) status=error ;; esac
 
+# A window the plan does not have is reported as null; print nothing to hide its meter.
+jq -e --arg f "$field" 'has($f) and .[$f] == null' "$cache" >/dev/null 2>&1 && exit 0
 pct=$(jq -r --arg f "$field" '.[$f].utilization | numbers | select(. >= 0 and . <= 100) | floor' "$cache" 2>/dev/null)
 # A missing or malformed cached field must not appear as a current reading.
 [ -n "$pct" ] || { [ "$status" != ok ] || status=error; }
