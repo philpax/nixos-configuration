@@ -15,12 +15,15 @@ let
   aiRuntimeDir = "${folders.ai.base}/ananke-runtime";
   strataDir = "${folders.ai.base}/strata-src";
   strataData = "${folders.ai.base}/strata";
+  engineToolchain = import ./engine-toolchain.nix { inherit pkgs; };
+  strataEngine = engineToolchain.wrap { name = "strata-engine"; exe = "${strataDir}/engine/strata"; };
+  strataVisionEngine = engineToolchain.wrap { name = "strata-vision-engine"; exe = "${strataDir}/engine/strata-vision"; };
   strataPython = pkgs.python3.withPackages (p: with p; [ jinja2 numpy regex pyyaml tqdm requests pillow psutil ]);
   mkStrataStart = m:
     let
       runtime = "${aiRuntimeDir}/strata/${m.name}";
       configFile = pkgs.writeText "${m.name}.json" (builtins.toJSON ({
-    exe = "${strataDir}/engine/strata";
+    exe = toString strataEngine;
     cwd = strataDir;
     tokenizer = "${strataData}/packs/coder-iq1_m/tokenizer";
     model_name = "qwen3.8-flash-next-coder-iq1_m";
@@ -43,7 +46,7 @@ let
       "--shared-expert-arena" "${runtime}/experts"
     ];
     vision = {
-      exe = "${strataDir}/engine/strata-vision";
+      exe = toString strataVisionEngine;
       mmproj = "${strataData}/models/mmproj-Qwen3.8-Flash-Next-BF16.gguf";
       model = "${strataData}/models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf";
       gpu = true;
@@ -61,11 +64,8 @@ let
 
   mayaDir = "${folders.ai.base}/maya-src";
   mayaData = "${folders.ai.base}/maya-data/models/Maya-M";
-  # This locally built engine links against this glibc, not the loader in its ELF interpreter.
-  mayaGlibc = /nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25;
-  mayaEngine = pkgs.writeShellScript "maya-engine" ''
-    exec ${mayaGlibc}/lib/ld-linux-x86-64.so.2 --library-path ${mayaGlibc}/lib:/run/opengl-driver/lib ${mayaDir}/build/maya "$@"
-  '';
+  # Maya's ELF interpreter is the system glibc, older than the one it links against.
+  mayaEngine = engineToolchain.wrap { name = "maya-engine"; exe = "${mayaDir}/build/maya"; loader = true; };
   mkMayaStart = m:
     let
       runtime = "${aiRuntimeDir}/maya/${m.name}";
@@ -97,12 +97,13 @@ let
     '';
 
   xolotlDir = "${folders.ai.base}/xolotl-src";
+  xolotlEngine = engineToolchain.wrap { name = "xolotl-engine"; exe = "${xolotlDir}/build-ds41-nix/ds41_generate"; };
   xolotlData = "${folders.ai.base}/xolotl-data";
   mkXolotlStart = m:
     let
       runtime = "${aiRuntimeDir}/xolotl/${m.name}";
       configFile = pkgs.writeText "${m.name}.json" (builtins.toJSON {
-        exe = "${xolotlDir}/build-ds41-nix/ds41_generate";
+        exe = toString xolotlEngine;
         cwd = xolotlDir;
         tokenizer = "${xolotlData}/model/tokenizer";
         model_name = "deepseek-v41-flash-1017-xq-v4";
