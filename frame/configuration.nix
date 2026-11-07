@@ -4,6 +4,9 @@
 
 let
   cursorPython = pkgs.python3.withPackages (python: [ python.python-xlib ]);
+  gamescopeScroll = pkgs.writeShellScriptBin "gamescope" ''
+    exec /usr/bin/gamescope --vr-scroll-speed 0.25 "$@"
+  '';
 in
 {
   imports =
@@ -30,6 +33,10 @@ in
     # KWin draws the cursor on a hardware plane the headset view does not show.
     "environment.d/90-kwin-software-cursor.conf".text = ''
       KWIN_FORCE_SW_CURSOR=1
+    '';
+    "systemd/user/gamescope-session.service.d/scroll.conf".text = ''
+      [Service]
+      Environment="PATH=${gamescopeScroll}/bin:/run/wrappers/bin:/run/system-manager/sw/bin:${config.users.users.${config.mainUser}.home}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/etc/profiles/per-user/${config.mainUser}/bin:/usr/local/sbin:/usr/local/bin:/usr/bin"
     '';
     # KWin starts with gamescope's 256 px cursor; reapply the kcminputrc size,
     # defaulting to 24 px.
@@ -61,7 +68,7 @@ in
     wantedBy = [ "default.target" ];
     serviceConfig = {
       Type = "exec";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./magic-trackpad-2-linux-userspace/mt2_driver.py}";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./magic-trackpad-2-linux-userspace/mt2_driver.py} --swipe-navigation";
       Restart = "on-failure";
       RestartSec = 5;
     };
