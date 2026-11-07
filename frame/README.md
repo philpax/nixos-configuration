@@ -63,7 +63,7 @@ Nix-built programs load GL and Vulkan drivers from `/run/opengl-driver`, which `
 
 Fonts from `fonts.packages` are linked into the system profile and registered in `/etc/fonts/conf.d/52-nixos-default-fonts.conf`, as on NixOS. It sorts before SteamOS's `60-latin.conf`, whose preferences would otherwise win, and SteamOS applications read it too.
 
-In the headset view, KWin's hardware-plane cursor is invisible, so `KWIN_FORCE_SW_CURSOR=1` is set in `/etc/environment.d`, and an autostart entry resets the cursor to 24 px after gamescope's 256 px. Both take effect at the next Desktop Mode login.
+In the headset view, KWin's hardware-plane cursor is invisible, so `KWIN_FORCE_SW_CURSOR=1` is set in `/etc/environment.d`, and an autostart entry resets the cursor to 24 px after gamescope's 256 px. A second KDE autostart runs `hide-kde-host-cursor.py` against gamescope's X11 display `:0`. It assigns a transparent host cursor only to the nested KWin output windows, identified by their English title and a same-user `kwin_wayland` process. KWin still draws the desktop cursor in software, and other gamescope windows retain their cursors. The helper keeps the cursor resource available to gamescope until the KWin windows close. These settings take effect at the next Desktop Mode login after activation.
 
 ## Removal
 

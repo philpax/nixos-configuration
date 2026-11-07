@@ -2,6 +2,9 @@
 # through their portable.nix; ./steamos.nix supplies the NixOS options they use.
 { config, pkgs, ... }:
 
+let
+  cursorPython = pkgs.python3.withPackages (python: [ python.python-xlib ]);
+in
 {
   imports =
     [
@@ -34,6 +37,16 @@
       Type=Application
       Name=Frame cursor size
       Exec=/bin/sh -c "kreadconfig6 --file kcminputrc --group Mouse --key cursorSize | grep -q . || kwriteconfig6 --file kcminputrc --group Mouse --key cursorSize 24; exec dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:5 int32:0"
+      OnlyShowIn=KDE;
+      X-KDE-autostart-phase=2
+      NoDisplay=true
+    '';
+    # Hide gamescope's X cursor only on KWin's nested output window.
+    "xdg/autostart/frame-host-cursor.desktop".text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=Frame KDE host cursor
+      Exec=${cursorPython}/bin/python3 ${./hide-kde-host-cursor.py} --display :0
       OnlyShowIn=KDE;
       X-KDE-autostart-phase=2
       NoDisplay=true
