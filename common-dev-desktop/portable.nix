@@ -1,11 +1,16 @@
 # Applications shared by the niri desktop and Frame's Desktop Mode. The niri
 # session itself (compositor, panels, portals, helpers) stays in configuration.nix.
 { lib, pkgs, ... }:
+let
+  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=1de93f357cd5372fdc196eecc4209ab34ed5af8c").packages.${pkgs.stdenv.hostPlatform.system}.default;
+in
 {
   # vesktop's nixpkgs recipe still pins pnpm 10.29.2 (build-time only).
   nixpkgs.config.permittedInsecurePackages = [ "pnpm-10.29.2" ];
 
   environment.systemPackages = builtins.filter (lib.meta.availableOn pkgs.stdenv.hostPlatform) (with pkgs; [
+    blackbird
+
     # Trialling ghostty as the primary terminal (spawned by niri).
     # If it sticks, drop alacritty here and its dotfiles/blur rules.
     alacritty
