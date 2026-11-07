@@ -1,10 +1,10 @@
 # Steam Frame
 
-Frame runs SteamOS with a multi-user Nix install and [system-manager](https://github.com/numtide/system-manager), which applies NixOS-style modules to a non-NixOS host. `configuration.nix` imports each shared layer's `portable.nix`, the same modules the NixOS machines import, so packages, fonts, fish, the SSH agent and Syncthing are declared once for both. `steamos.nix` implements the NixOS options those modules use on SteamOS.
+Frame runs SteamOS with a multi-user Nix install and [system-manager](https://github.com/numtide/system-manager). It reuses the shared `portable.nix` modules and dotfiles. `steamos.nix` provides the compatibility options that those modules need outside NixOS.
 
 ## Setup
 
-Once per device, from a checkout with submodules initialised:
+From a checkout with submodules initialised:
 
 ```bash
 sudo frame/bootstrap.sh install
@@ -12,61 +12,40 @@ sudo frame/bootstrap.sh install
 frame/rebuild.sh switch
 ```
 
-`bootstrap.sh install` puts the store in `/home/nix`, bind-mounts it on `/nix`, creates the `nixbld` users, writes the daemon units and `/etc/nix/nix.conf`, and installs `system-manager-boot.service`. It is idempotent. `./sync.sh frame` links dotfiles from the layers in `sync.json`. `rebuild.sh switch` builds `default.nix`, registers it as a system-manager generation, and activates it; `rebuild.sh build` only builds.
+Bootstrap is idempotent. It keeps the store and profiles in `/home/nix`, mounted at `/nix`. `sync.json` selects the dotfile layers and excludes settings that would interfere with SteamOS. `nixpkgs.json` and `system-manager.json` pin the sources; system-manager's branch must match the nixpkgs release.
 
-`nixpkgs.json` and `system-manager.json` pin both sources. system-manager's `main` branch expects nixpkgs unstable; a nixpkgs release needs the matching `release-*` branch.
+For later changes, run sync and rebuild again. `frame/rebuild.sh build` builds without activation. `frame/bootstrap.sh check` diagnoses bootstrap problems; rerunning `install` repairs them.
 
-## Surviving SteamOS updates
+## SteamOS updates
 
-The root filesystem is read-only and replaced by each update; `/etc` is reset except for paths on the keep list (`/usr/lib/rauc/atomic-update-keep.conf` plus `/etc/atomic-update.conf.d/`). The setup relies on that as follows:
+SteamOS replaces the root filesystem during updates. The store remains in `/home`, bootstrap files are preserved through the update keep list, and boot services recreate `/nix` and reactivate system-manager. The user manager waits for activation, with a timeout so a failed activation does not prevent login.
 
-- The store and all profiles live in `/home/nix`, which updates never touch.
-- `nix-mountpoint.service` recreates the empty `/nix` directory when an update has removed it, unlocking the root's btrfs `ro` property only around the `mkdir`.
-- The bootstrap units, the `nixbld` accounts and the `.wants` links are on Valve's keep list. `bootstrap.sh` adds `/etc/nix`, its profile snippet and its tmpfiles entry to `/etc/atomic-update.conf.d/nix.conf`.
-- system-manager's own `/etc` entries are symlinks into the store. They dangle until `/nix` is mounted, and an update may delete them. `system-manager-boot.service` reruns activation once `/nix` is mounted, which restores them and starts `system-manager.target`, about eight seconds into boot. A drop-in, `user@.service.d/after-system-manager.conf`, makes the user manager wait for it, so sessions always start with system-manager's environment and units. The wait adds about a second to boot; a failed or hung activation (60-second timeout) still lets you log in.
+SteamOS does not depend on Nix to boot. The login shell remains `/bin/bash`, so SSH remains usable if the store cannot mount. `sudo frame/bootstrap.sh simulate-update` tests recovery on the next boot by removing the mountpoint as an update would.
 
-Nothing in SteamOS depends on Nix: `nix.mount` is only wanted by `local-fs.target`, and the login shell stays `/bin/bash`. If the store fails to mount, the device boots and SSH works; `frame/bootstrap.sh check` shows what is missing, and rerunning `install` repairs it.
+## Differences from NixOS
 
-`sudo frame/bootstrap.sh simulate-update` removes `/nix` the way an update does, to test the next boot. It unmounts lazily because sandboxed system services hold copies of the mount.
+- Interactive shells use fish without changing SteamOS's login shell. `ssh -t steamos@frame bash --noprofile` bypasses the fish handoff.
+- `steamos.nix` supplies user-unit and session-environment support that system-manager lacks. SteamOS retains ownership of accounts, the host compositor, and firewall rules. The `Unit userborn.service not found` activation message is harmless.
+- Nix applications use nixpkgs Mesa through `/run/opengl-driver`; SteamOS's Mesa libraries are not compatible with them. Vulkan may log a failed attempt to load the host driver before using Turnip.
 
-## Shell
+### Trackpad
 
-SteamOS's login shell remains bash. Interactive login shells, such as SSH sessions, continue in fish through `/etc/profile.d/zz-fish.sh`, and Frame's Ghostty and Alacritty machine configs start fish directly, matching the NixOS machines. Fish exports itself as `SHELL` from `/etc/fish/config.fish`, so zellij and other programs that start a shell open fish rather than the login shell. `ssh -t steamos@frame bash --noprofile` gets plain bash.
+The SteamOS kernel lacks the Magic Trackpad 2 Bluetooth drivers. The [userspace driver README](magic-trackpad-2-linux-userspace/README.md) covers pairing and the required BlueZ changes.
 
-Login shells read the environment from `/etc/profile.d`, where `bootstrap.sh`'s `nix-daemon.sh` adds Nix and system-manager's `system-manager-path.sh` adds the system profile, `environment.variables` and `environment.extraInit` (such as `SSH_AUTH_SOCK` for the agent). Sessions the user manager starts, such as the compositor and its terminals, do not read profile.d, so a user environment generator, `/etc/systemd/user-environment-generators/60-nix-profile`, sources those two scripts and passes on what they change. Anything the configuration adds to the environment therefore reaches both, as on NixOS; SteamOS's own profile.d scripts stay out of the session.
+SteamVR converts touchpad input to wheel events before it reaches the nested desktop, so native gestures are unavailable.
 
-## User services
+### Nested desktops
 
-system-manager has no user units, so `steamos.nix` renders `systemd.user.services` with the NixOS unit types into `/etc/systemd/user`, and `reload-user-units.service` reloads the user manager whenever they change. This carries the SSH agent from `programs.ssh.startAgent` (`SSH_AUTH_SOCK` is `$XDG_RUNTIME_DIR/ssh-agent`) and the Magic Trackpad 2 driver. The agent starts empty; `AddKeysToAgent` loads a key on its first SSH use, but signing a commit first needs `ssh-add`.
+KDE remains the standard Desktop Mode. `Niri Desktop` is a separate application, also available as `frame-niri`, that Steam can add as a non-Steam application. Both desktops hide the outer gamescope cursor only over their own windows. KDE also requires software cursor rendering in the headset.
 
-The SteamOS kernel has neither `hidp` nor `hid_magicmouse`, so over Bluetooth the trackpad is a one-button mouse without the `magic-trackpad-2-linux-userspace` submodule's driver. Pairing, and the root-owned BlueZ changes it needs, are in that submodule's README.
+Niri uses cached upstream packages rather than the workstation forks. It adapts the shared configuration for a nested session: Windows/Super remains the modifier, Fuzzel replaces Anyrun, and machine-specific outputs, workspaces, monitor controls, screen locking, and automatic suspend are omitted. SteamOS retains control of the hardware session. The shared bar and wallpaper remain enabled; no terminal opens automatically.
 
-```bash
-systemctl --user status ssh-agent mt2-driver
-```
-
-## Syncthing
-
-Frame uses `common-all/syncthing.nix` and the NixOS Syncthing module, running as a system service for the main user. Configuration and keys live in `~/.config/syncthing`. `Main` synchronises `~/notes/Main`. The web UI listens on `127.0.0.1:8384`; from another computer:
-
-```bash
-ssh -N -L 8384:127.0.0.1:8384 steamos@frame
-```
-
-Rebuilding warns that system-manager does not manage firewall rules. SteamOS's firewalld already allows ports 1024–65535 in its default zone, which covers Syncthing's 22000.
-
-A new identity needs `devices.frame = null` in `common-all/syncthing-topology.nix` for the first switch; then record the ID from `syncthing device-id --home ~/.config/syncthing` and rebuild the participating machines.
-
-## Graphics and Desktop Mode
-
-Nix-built programs load GL and Vulkan drivers from `/run/opengl-driver`, which `hardware.graphics` points at nixpkgs Mesa, as NixOS does. SteamOS's own Mesa links against host libraries they cannot load. The Vulkan loader still finds SteamOS's driver manifest and logs a failure for it before using Turnip.
-
-Fonts from `fonts.packages` are linked into the system profile and registered in `/etc/fonts/conf.d/52-nixos-default-fonts.conf`, as on NixOS. It sorts before SteamOS's `60-latin.conf`, whose preferences would otherwise win, and SteamOS applications read it too.
-
-In the headset view, KWin's hardware-plane cursor is invisible, so `KWIN_FORCE_SW_CURSOR=1` is set in `/etc/environment.d`, and an autostart entry resets the cursor to 24 px after gamescope's 256 px. A second KDE autostart runs `hide-kde-host-cursor.py` against gamescope's X11 display `:0`. It assigns a transparent host cursor only to the nested KWin output windows, identified by their English title and a same-user `kwin_wayland` process. KWin still draws the desktop cursor in software, and other gamescope windows retain their cursors. The helper keeps the cursor resource available to gamescope until the KWin windows close. These settings take effect at the next Desktop Mode login after activation.
+Niri runs with a private runtime directory and D-Bus session while sharing host audio and the SSH agent. Exiting it stops its applications. Screen sharing and portal integration remain unverified.
 
 ## Removal
 
-`sudo frame/bootstrap.sh uninstall` deactivates system-manager, which restores the `/etc` files it replaced, and removes the units, configuration and build users. It keeps `/home/nix` unless given `--purge-store`.
+```bash
+sudo frame/bootstrap.sh uninstall
+```
 
-system-manager logs `Unit userborn.service not found` on every activation: userborn is disabled because SteamOS owns the accounts, and the message is harmless.
+Uninstall deactivates system-manager and removes the bootstrap configuration. It preserves `/home/nix` unless given `--purge-store`.

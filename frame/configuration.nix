@@ -9,6 +9,7 @@ in
   imports =
     [
       ./steamos.nix
+      ./niri.nix
       ../common-all/portable.nix
       ../common-dev/portable.nix
       ../common-desktop/portable.nix
