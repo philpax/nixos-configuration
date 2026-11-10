@@ -1,9 +1,9 @@
 version: 3
 config_command_substitution: true
 defaults:
-  full: codex/gpt-6.1-sol(xhigh)
-  mini: codex/gpt-6-luna(xhigh)
-  nano: codex/gpt-6-luna(low)
+  full: umans/umans-deepseek-v4.1-flash(max)
+  mini: umans/umans-deepseek-v4.1-flash(high)
+  nano: umans/umans-deepseek-v4.1-flash(low)
 providers:
   umans:
     kind:
