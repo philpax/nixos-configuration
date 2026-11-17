@@ -17,19 +17,19 @@ let
   src = pkgs.fetchFromGitHub {
     owner = "Nachtalb";
     repo = "redlib";
-    rev = "f3120f910d0fea3cb578d2b8cb5a7434becf16aa";
-    hash = "sha256-46MDqphWkRtM2i77dn5wF906aRuVV1hmzoMBjzu1Nko=";
+    rev = "856c6e060a23373ae8fa290b5daff7588c6260a2";
+    hash = "sha256-O4vCQlkSkLWHLaoYcDkBn6UTCAxgHJ1jqSigoxH7m8U=";
   };
   redlib-unstable = (pkgs.redlib.override {
     rustPlatform = redlibRustPlatform;
   }).overrideAttrs (oldAttrs: {
-    version = "0.36.0-unstable-2026-10-31";
+    version = "0.36.0-unstable-2026-11-15";
     inherit src;
     env = (oldAttrs.env or {}) // { GIT_HASH = src.rev; };
     cargoDeps = redlibRustPlatform.fetchCargoVendor {
       inherit src;
-      name = "redlib-0.36.0-unstable-2026-10-31-vendor";
-      hash = "sha256-aCIooy54Z8Hi6+lG8wiWWI4kikXmqxeoV4LWumaAoZc=";
+      name = "redlib-0.36.0-unstable-2026-11-15-vendor";
+      hash = "sha256-bdT/Mqfy5uC/yQAsjedBJzVxtRw/jVWyo+TANFZA9P4=";
     };
     # BoringSSL (via btls-sys) needs cmake, go, git, perl, and libclang for bindgen.
     nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ (with pkgs; [
