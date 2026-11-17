@@ -78,6 +78,10 @@
       wireplumber.environment = env;
     };
 
+  environment.systemPackages = with pkgs; [
+    (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
+  ];
+
   services.asusd.enable = true;
   # The unit binds /etc/asusd rw, but nixpkgs only creates it when a config is set.
   systemd.tmpfiles.rules = [ "d /etc/asusd 0755 root root -" ];
