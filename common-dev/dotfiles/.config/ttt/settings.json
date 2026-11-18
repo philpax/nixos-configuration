@@ -3,19 +3,34 @@
   "theme": "13-tokyo-neon",
   "appearance": {
     "icons": "nerd-font",
-    "chevrons": {
-      "collapsed": "▶",
-      "expanded": "▼"
-    }
+    "scrollbarGlyphs": "blocks",
+    "pointerShapes": true
   },
   "editor": {
+    "autoClosing": {
+      "brackets": false,
+      "quotes": false,
+      "skipClosing": true,
+      "deletePairs": true,
+      "inStrings": false,
+      "plainText": false
+    },
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": true,
+    "wordWrapColumn": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
+    "diffHighContrast": false,
+    "diffEmphasizeCollapsedRows": false,
+    "diffSigns": false,
+    "diffSignsColor": true,
+    "diffGutterHighlight": true,
+    "diffColorGutterNumbers": false,
+    "diffScrollbarGitMarks": false,
     "lineNumbers": true,
+    "selectionStyle": "background",
     "formatOnSave": true,
     "insertFinalNewline": true,
     "trimTrailingWhitespace": false,
@@ -29,7 +44,7 @@
     "bracketPairColorization": false,
     "showTrailingNewline": true,
     "menuBar": true,
-    "transparentBackground": false,
+    "transparentBackground": true,
     "grammars": [
       {
         "path": "grammars/ttt-lang-luau/syntaxes/luau.tmLanguage.json",
@@ -39,7 +54,13 @@
         ],
         "plugin": "ttt-lang-luau"
       }
-    ]
+    ],
+    "saveAllOnQuit": false,
+    "saveAllOnQuitExceptUnnamed": false
+  },
+  "quickOpen": {
+    "showHidden": false,
+    "showGitIgnored": false
   },
   "search": {
     "debounce": 350
@@ -48,13 +69,21 @@
     "showHidden": true,
     "showGitIgnored": true,
     "gitStatusColors": true,
-    "dimStagedGitColors": false
+    "dimStagedGitColors": false,
+    "autoReveal": false,
+    "compactFolders": true
+  },
+  "sidebar": {
+    "tabStyle": "label"
   },
   "git": {
     "fileView": "list"
   },
   "terminal": {
-    "scrollback": 1000
+    "scrollback": 1000,
+    "selectionStyle": "background",
+    "ctrlVPastes": true,
+    "padding_x": 1
   },
   "lsp": {
     "saveOnRename": false,
@@ -73,7 +102,8 @@
     "protocol": "auto"
   },
   "plugins": {
-    "enabled": true
+    "enabled": true,
+    "selectionStyle": "invert"
   },
   "welcome": {
     "recentFolders": true
