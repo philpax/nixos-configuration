@@ -227,14 +227,14 @@ Surface and propose the simpler design for each of these. Escalate to Required o
 - A near-duplicate of an existing canonical helper.
 - A silent fallback that hides an unclear invariant.]]
 
-local semaphore = maki.async.semaphore(MAX_CONCURRENT_REVIEWS)
+local semaphore = makima.async.semaphore(MAX_CONCURRENT_REVIEWS)
 
 local VERDICT_LEVELS = { pass = "info", request_changes = "warn", blocked = "error" }
 
 local function report(ctx, text, level, agent)
-  local posted = maki.ui.post(ctx, text, { level = level, agent = agent })
+  local posted = makima.ui.post(ctx, text, { level = level, agent = agent })
   if not posted then
-    maki.notify(text, level)
+    makima.notify(text, level)
   end
 end
 
@@ -261,7 +261,7 @@ local function build_message(input)
   return message .. REPORT_PROMPT_SUFFIX
 end
 
-maki.api.register_command({
+makima.api.register_command({
   name = "/code-review",
   description = "Start a code reviewer that can inspect and run checks without editing project files",
   tui_only = true,
@@ -273,7 +273,7 @@ maki.api.register_command({
   },
   handler = function(opts, ctx)
     if not ctx then
-      maki.notify("No agent is available to start a code review.", "error")
+      makima.notify("No agent is available to start a code review.", "error")
       return
     end
 
@@ -282,7 +282,7 @@ maki.api.register_command({
       local input = opts.values
       local mode = input.mode or "change-review"
       local scope = input.scope or DEFAULT_SCOPE
-      local reviewer, spawn_err = maki.agent.spawn(ctx, {
+      local reviewer, spawn_err = makima.agent.spawn(ctx, {
         system = REVIEWER_SYSTEM,
         output_schema = EXIT_SCHEMA,
         audience = "research_sub",
@@ -300,7 +300,7 @@ maki.api.register_command({
         local closed, close_err = reviewer:close(ctx)
         report(ctx, "Code review failed to register cleanup: " .. tostring(defer_err), "error", reviewer)
         if not closed then
-          maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
+          makima.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
         end
         return
       end
@@ -327,7 +327,7 @@ maki.api.register_command({
 
       local closed, close_err = reviewer:close(ctx)
       if not closed then
-        maki.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
+        makima.notify("Cannot close code reviewer: " .. tostring(close_err), "error")
       end
     end)
     permit:release()

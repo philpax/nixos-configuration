@@ -60,7 +60,7 @@ local C_LUNA = { 153, 41, 41 } -- lunared red, dimmed
 local M = {}
 
 local function theme_or(name, fallback)
-  local c = maki.ui.theme_color(name)
+  local c = makima.ui.theme_color(name)
   if c then
     return {
       tonumber(string.sub(c, 2, 3), 16),
@@ -313,7 +313,7 @@ end
 
 local state = { drops = nil, dust = nil, sparks = nil, key = nil, last_t = nil }
 
-maki.api.create_autocmd("SplashShown", {
+makima.api.create_autocmd("SplashShown", {
   callback = function()
     state.drops = nil
     state.dust = nil
@@ -584,7 +584,7 @@ function M.render(w, h, t, fade)
 
   -- Version beneath the signature, drifting along the heat gradient so the
   -- furniture never sits still.
-  local ver = "v" .. maki.version().current
+  local ver = "v" .. makima.version().current
   place_text(over, bot_row + 1, anchor - math.floor(#ver / 2), ver, ramp(VER_STOPS, 0.5 + 0.25 * math.sin(t * 0.23), 0.5 * f))
   return build_rows(over)
 end

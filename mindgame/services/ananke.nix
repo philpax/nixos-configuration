@@ -318,6 +318,27 @@ let
         max_output_tokens = 32768;
       };
     }
+    # The same aggregate pool as the c6 profile, split eight ways instead of
+    # six: 33792 tokens per slot against the shared 270336-token ceiling.
+    # Throughput per session drops (see above), but eight slots suit a wider
+    # fan-out of short requests.
+    {
+      kind = "basalt";
+      name = "qwen3.8-flash-next-iq3s-basalt-c8";
+      upstreamModel = "qwen3.8-flash-next-iq3s";
+      pack = "Qwen3.8-FN-GSQ-RCO-IQ3_S.basalt";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 33792;
+      parallel = 8;
+      vramReserveMib = 1800;
+      description = "Qwen3.8-Flash-Next GSQ-RCO IQ3_S served by Basalt (33792 ctx x8 slots, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # redline's QAT config cut down to one GPU: no tensor split, and a
     # single slot. f16 KV at this context does not fit alongside the desktop's
     # share of the 5090, so the cache is q8_0.
