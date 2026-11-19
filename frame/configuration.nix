@@ -61,6 +61,10 @@ in
     '';
   };
 
+  # PS5 Remote Play. Steam launches it as a non-Steam application into the
+  # headset view; it decodes in software because Turnip exposes no VAAPI.
+  environment.systemPackages = [ pkgs.chiaki-ng ];
+
   # The SteamOS kernel lacks hidp and hid_magicmouse, so the Magic Trackpad 2
   # needs this userspace driver; pairing is in its README.
   systemd.user.services.mt2-driver = {
