@@ -106,7 +106,7 @@ in
         if kind == "llama-cpp" && !kvUnified then totalContext / parallel
         else totalContext;
       supports_vision =
-        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" "basalt" ] then m ? vision && m.vision
+        if builtins.elem kind [ "ninfer" "strata" "maya" "xolotl" "basalt" ] then m ? vision && m.vision != false && m.vision != null
         else m ? mmproj && m.mmproj != null;
     in
     {

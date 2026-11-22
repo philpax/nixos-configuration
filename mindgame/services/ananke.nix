@@ -60,21 +60,24 @@ let
       buildArgs = { ARCHS = "120a"; };
     } // { serveCommand = [ "serve" ]; };
 
-    # Basalt, a Strata fork that serves Qwen3.8-Flash-Next on Blackwell with
-    # the experts the GPU does not hold in pinned RAM. It ships no
-    # Dockerfile, so ours is added to the pinned source.
+    # Basalt, a Strata fork that serves Qwen3.8-Flash-Next and Inkling 2
+    # Mini on Blackwell with the experts the GPU does not hold in pinned RAM.
+    # It ships a Dockerfile now, but ours stays: it drops the CUDA
+    # forward-compatibility libraries that break CUDA on GeForce cards and
+    # keeps `bin/basalt` as the entrypoint the services' argv assumes.
     basalt = mkSourceImage {
       name = "basalt";
       src = pkgs.runCommand "basalt-context" {
         src = pkgs.fetchFromGitHub {
           owner = "jesdga95";
           repo = "basalt";
-          rev = "9175e7a3211bda355c02e804c7c107b15b8ea89f";
-          hash = "sha256-ju0jCZM7PsE1gu47f82azR0ZfnWgR2sqEcWD/xlbLuM=";
+          rev = "ff0b978d2ee9ff195d113b6feb80961b2d2f99ef";
+          hash = "sha256-kxj1d8LjQ3y2zUzI37IJgM0khGkL6XzKxnamkr6So6w=";
         };
       } ''
         cp -r $src $out
         chmod u+w $out
+        rm -f $out/Dockerfile
         cp ${./basalt.Dockerfile} $out/Dockerfile
       '';
     };
@@ -226,6 +229,32 @@ let
         max_output_tokens = 32768;
       };
     }
+    # Inkling 2 Mini (24 physical layers, 48 visits a token, 128 experts
+    # top-8). The 19.7 GB pack puts about 16.3 GiB of weights and the DSpark
+    # drafter on the card, with the token embedding in page-locked RAM. At
+    # 262144 tokens the fp8 KV cache is about 4.5 GiB, and with the vision
+    # path's buffers the service consumes around 24 GiB. `--vision dynamic`
+    # uses the engine's own encoder for images. One slot: upstream has not
+    # measured `--parallel` for this model.
+    {
+      kind = "basalt";
+      name = "inkling-2-mini-q8-basalt-c1";
+      upstreamModel = "inkling-2-mini";
+      pack = "Inkling-2-Mini-NVFP4-q8.basalt";
+      vramGb = 24;
+      perGpuMib = 24500;
+      maxContext = 262144;
+      parallel = 1;
+      kv = "fp8";
+      vision = "dynamic";
+      vramReserveMib = 1800;
+      description = "Inkling 2 Mini (NVFP4 q8) served by Basalt (262144 ctx, vision).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # redline's QAT config cut down to one GPU: no tensor split, and a
     # single slot. f16 KV at this context does not fit alongside the desktop's
     # share of the 5090, so the cache is q8_0.
@@ -316,7 +345,8 @@ let
             "--port" = "\${listen_port}";
             "--parallel" = m.parallel;
             "--max-context" = m.maxContext * m.parallel;
-            "--kv" = "int8";
+            "--kv" = m.kv or "int8";
+            "--vision" = m.vision or false;
             "--vram-reserve-mib" = m.vramReserveMib;
           };
           network = "host";
