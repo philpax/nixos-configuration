@@ -17,18 +17,18 @@ let
   src = pkgs.fetchFromGitHub {
     owner = "Nachtalb";
     repo = "redlib";
-    rev = "856c6e060a23373ae8fa290b5daff7588c6260a2";
-    hash = "sha256-O4vCQlkSkLWHLaoYcDkBn6UTCAxgHJ1jqSigoxH7m8U=";
+    rev = "fb19c14f36e60ad056294344118047c41c75d229";
+    hash = "sha256-ByvhJ1Nfjon5YDICSL94Ivd137HvXIAtDN8V2PF0DBI=";
   };
   redlib-unstable = (pkgs.redlib.override {
     rustPlatform = redlibRustPlatform;
   }).overrideAttrs (oldAttrs: {
-    version = "0.36.0-unstable-2026-11-15";
+    version = "0.36.0-unstable-2026-11-21";
     inherit src;
     env = (oldAttrs.env or {}) // { GIT_HASH = src.rev; };
     cargoDeps = redlibRustPlatform.fetchCargoVendor {
       inherit src;
-      name = "redlib-0.36.0-unstable-2026-11-15-vendor";
+      name = "redlib-0.36.0-unstable-2026-11-21-vendor";
       hash = "sha256-bdT/Mqfy5uC/yQAsjedBJzVxtRw/jVWyo+TANFZA9P4=";
     };
     # BoringSSL (via btls-sys) needs cmake, go, git, perl, and libclang for bindgen.
