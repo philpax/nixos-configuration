@@ -6,54 +6,6 @@ api_key_env = "ANANKE_MINDGAME_API_KEY"
 discover_models = true
 
 [[ananke-mindgame.models]]
-id = "qwen3.6-27b-ninfer-mtp3"
-tier = "medium"
-context_window = 196608
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = false
-
-[[ananke-mindgame.models]]
-id = "qwen3.6-27b-ninfer-mtp3-vision"
-tier = "medium"
-context_window = 147456
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = true
-
-[[ananke-mindgame.models]]
-id = "qwen3.6-35b-a3b-ninfer-dflash7"
-tier = "medium"
-context_window = 262144
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = false
-
-[[ananke-mindgame.models]]
-id = "qwen3.6-35b-a3b-ninfer-dflash7-c2"
-tier = "medium"
-context_window = 131072
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = false
-
-[[ananke-mindgame.models]]
-id = "qwen3.6-35b-a3b-ninfer-mtp3-vision"
-tier = "medium"
-context_window = 163840
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = true
-
-[[ananke-mindgame.models]]
-id = "ornith-1.5-35b-a3b-ninfer-dflash7"
-tier = "medium"
-context_window = 262144
-max_output_tokens = 32768
-supports_thinking = true
-supports_vision = false
-
-[[ananke-mindgame.models]]
 id = "qwen3.8-27b-nvfp4-ninfer-mtp3"
 tier = "medium"
 context_window = 180224
