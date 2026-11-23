@@ -262,6 +262,28 @@ models:
       can_disable: true
     context_window: 45056
     supports_vision: false
+  ananke-redline/swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu0:
+    provider_name: swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu0
+    variant: other
+    class: mini
+    max_output_tokens_per_turn: 32768
+    provider: ananke-redline
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 98304
+    supports_vision: false
+  ananke-redline/swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu1:
+    provider_name: swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu1
+    variant: other
+    class: mini
+    max_output_tokens_per_turn: 32768
+    provider: ananke-redline
+    reasoning:
+      type: thinking
+      can_disable: true
+    context_window: 98304
+    supports_vision: false
   ananke-redline/inkling-2-mini-iq4xs-ninfer-79k-7way-gpu0:
     provider_name: inkling-2-mini-iq4xs-ninfer-79k-7way-gpu0
     variant: other

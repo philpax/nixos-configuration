@@ -137,6 +137,12 @@ let
 
   ninferContext = 45056;
   ninferConcurrency = 7;
+  # Swift 1.5's long-context profile: rk4v4's 17,920 B/token (against
+  # rk8v4's 26,112) is what makes five full 96K lanes fit on a 24 GiB 3090.
+  # The 45K/7-way pair below stays as the throughput profile; ananke evicts
+  # whichever Swift profile is idle when the other starts.
+  ninferLongContext = 98304;
+  ninferLongConcurrency = 5;
   # Inkling 2 Mini's per-lane ceiling with seven lanes on a 24 GiB 3090,
   # measured on 2026-11-23 against release 2026-11-23.7 (c3e6ea1):
   # 80,896 starts at runtime 7.94 GiB with 251 MiB free; seven concurrent
@@ -808,6 +814,44 @@ let
       kvCapacity = ninferContext * ninferConcurrency;
       maxConcurrency = ninferConcurrency;
       kvDtype = "rk8v4";
+      gdnStateFp16 = true;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
+    {
+      kind = "ninfer";
+      name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu0";
+      gpuIndex = 0;
+      description = "Swift 1.5 Qwen3.8 27B IQ3_S, five 96K lanes on GPU 0 (rk4v4 KV).";
+      upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+      artifact = "swift15_iq3s_mtp.ninfer";
+      vramGb = 23;
+      perGpuMib = 23600;
+      maxContext = ninferLongContext;
+      kvCapacity = ninferLongContext * ninferLongConcurrency;
+      maxConcurrency = ninferLongConcurrency;
+      kvDtype = "rk4v4";
+      gdnStateFp16 = true;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
+    {
+      kind = "ninfer";
+      name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-96k-5way-rk4v4-gpu1";
+      gpuIndex = 1;
+      description = "Swift 1.5 Qwen3.8 27B IQ3_S, five 96K lanes on GPU 1 (rk4v4 KV).";
+      upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+      artifact = "swift15_iq3s_mtp.ninfer";
+      vramGb = 23;
+      perGpuMib = 23600;
+      maxContext = ninferLongContext;
+      kvCapacity = ninferLongContext * ninferLongConcurrency;
+      maxConcurrency = ninferLongConcurrency;
+      kvDtype = "rk4v4";
       gdnStateFp16 = true;
       spec = "mtp";
       draftTokens = 3;
