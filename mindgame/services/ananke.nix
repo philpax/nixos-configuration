@@ -48,14 +48,15 @@ let
     #
     # Its Dockerfile builds every supported architecture by default; only the
     # 5090's is needed. The entrypoint selects the build and takes `serve`
-    # rather than the binary's name.
+    # rather than the binary's name. This pin adds Inkling 2 Mini and the
+    # 2026-11-23 tensor-core decode attention.
     ninferAll = mkSourceImage {
       name = "ninfer-all";
       src = pkgs.fetchFromGitHub {
         owner = "iamwavecut";
         repo = "ninfer-all";
-        rev = "3fda3165bb211ec8989c91c7f1bab38efc6fbc8c";
-        hash = "sha256-btxG+S4aiEk0qPfzKJI1269wdTTgJ6WmnEIYLOKYPbI=";
+        rev = "ea7fbdafb159396806e83ce78c431f1dc42beb3f";
+        hash = "sha256-nXhnomICtENPB5Zo5rHc6kSEXbU5lEyOU6kvFod5DDg=";
       };
       buildArgs = { ARCHS = "120a"; };
     } // { serveCommand = [ "serve" ]; };
@@ -170,6 +171,33 @@ let
       spec = "mtp";
       draftTokens = 3;
       description = "Swift 1.5 Qwen3.8-27B (IQ3_S) served by ninfer-all (MTP=3, 45056 ctx x8 lanes, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
+    # Inkling 2 Mini (26.4B-A3.4B, 24 layers run as 48 visits) at UD-IQ4_XS.
+    # The artifact keeps 14.6 GiB of weights and the DSpark drafter on the
+    # card; DSpark only drafts one request at a time, so batch work runs
+    # `--spec none`. rk4v4 (int8 keys, int4 values) stores a token's full
+    # attention K/V in 8.75 KiB, which fits eight sequences at 112k context
+    # in 27.8 GiB. Eight concurrent requests decode at about 60 tok/s each.
+    {
+      kind = "ninfer";
+      name = "inkling-2-mini-iq4xs-ninfer-rk4v4-c8";
+      upstreamModel = "inkling-2-mini";
+      modelId = "inkling-2-mini";
+      artifact = "Inkling-2-Mini-UD-IQ4_XS-ninfer-v3.ninfer";
+      image = images.ninferAll;
+      vramGb = 28;
+      perGpuMib = 27500;
+      maxContext = 114688;
+      kvCapacity = 917504;
+      maxConcurrency = 8;
+      kvDtype = "rk4v4";
+      spec = "none";
+      description = "Inkling 2 Mini (UD-IQ4_XS) served by ninfer-all (112k ctx x8 lanes, rk4v4, text-only).";
       client = {
         class = "medium";
         reasoning = { type = "thinking"; };
@@ -325,7 +353,10 @@ let
             "--kv-dtype" = m.kvDtype or "int8";
             "--max-concurrency" = m.maxConcurrency or 1;
             "--vision" = m.vision or false;
+            "--model-id" = m.modelId or null;
+          } // lib.optionalAttrs (m ? spec) {
             "--spec" = m.spec;
+          } // lib.optionalAttrs ((m.spec or "none") != "none") {
             "--draft-tokens" = m.draftTokens;
             "--lm-head-draft" = true;
           } // (m.extraFlags or { }));
