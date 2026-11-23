@@ -5,6 +5,7 @@ let
   lib = pkgs.lib;
   anankeLib = import ../../common-all/ananke-lib.nix { inherit lib; };
   inherit (anankeLib) flagArgs;
+  ninferAll = import ../../common-all/ninfer-all.nix { inherit pkgs; };
   inherit (import ../../common-all/container-images.nix { inherit pkgs lib; })
     mkOverlayImage mkPulledImage mkImageService;
 
@@ -138,8 +139,8 @@ let
   ninferConcurrency = 7;
   ninferImage = mkPulledImage {
     name = "ninfer-all";
-    ref = "ghcr.io/iamwavecut/ninfer-all";
-    digest = "sha256:bab655afe7a90bb6a51b636e5c0d89f96a7b9bb96ad4443b2f852ecec33907a8";
+    ref = ninferAll.images.cuda12_9.ref;
+    digest = ninferAll.images.cuda12_9.digest;
   };
 
   openaiPort = anankeLib.ports.openai;

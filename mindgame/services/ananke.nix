@@ -10,6 +10,7 @@ let
   lib = pkgs.lib;
   anankeLib = import ../../common-all/ananke-lib.nix { inherit lib; };
   inherit (anankeLib) flagArgs roMount;
+  ninferAll = import ../../common-all/ninfer-all.nix { inherit pkgs; };
   inherit (import ../../common-all/container-images.nix { inherit pkgs lib; })
     mkSourceImage mkImageService;
 
@@ -48,16 +49,11 @@ let
     #
     # Its Dockerfile builds every supported architecture by default; only the
     # 5090's is needed. The entrypoint selects the build and takes `serve`
-    # rather than the binary's name. This pin adds Inkling 2 Mini and the
-    # 2026-11-23 tensor-core decode attention.
+    # rather than the binary's name. The revision is shared with redline via
+    # common-all/ninfer-all.nix.
     ninferAll = mkSourceImage {
       name = "ninfer-all";
-      src = pkgs.fetchFromGitHub {
-        owner = "iamwavecut";
-        repo = "ninfer-all";
-        rev = "ea7fbdafb159396806e83ce78c431f1dc42beb3f";
-        hash = "sha256-nXhnomICtENPB5Zo5rHc6kSEXbU5lEyOU6kvFod5DDg=";
-      };
+      src = ninferAll.source;
       buildArgs = { ARCHS = "120a"; };
     } // { serveCommand = [ "serve" ]; };
 
@@ -188,7 +184,7 @@ let
       name = "inkling-2-mini-iq4xs-ninfer-rk4v4-c8";
       upstreamModel = "inkling-2-mini";
       modelId = "inkling-2-mini";
-      artifact = "Inkling-2-Mini-UD-IQ4_XS-ninfer-v3.ninfer";
+      artifact = ninferAll.inkling2Mini.artifact;
       image = images.ninferAll;
       vramGb = 28;
       perGpuMib = 27500;
