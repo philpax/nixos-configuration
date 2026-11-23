@@ -7,10 +7,11 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---
 
 Trimmed to the nvidia-drm hunk. The original's other four hunks replaced
-strncpy, which NVIDIA removed from the open modules in 595.112.07:
-nvkms_strncpy and nvswitch_os_strncpy no longer exist, and
-os_get_current_process_name and the UVM chunk cache names use strscpy and
-snprintf. Drop the rest when re-syncing from upstream.
+strncpy; they live in kernel-7.2-strncpy.patch and are applied only for
+drivers older than 595.112.07, which still call it. Drivers from 595.112.07
+on no longer contain strncpy: nvkms_strncpy and nvswitch_os_strncpy are gone,
+and os_get_current_process_name and the UVM chunk cache names use strscpy and
+snprintf.
 
 Original: https://github.com/Frogging-Family/nvidia-all/blob/master/nvidia-all-patches/610/kernel-7.2.patch
 
