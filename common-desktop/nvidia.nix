@@ -7,8 +7,9 @@ let
   cfg = config.philpax.nvidia;
   base = config.boot.kernelPackages.nvidiaPackages.latest;
 
-  # Linux 7.2 dropped strncpy and renamed drm_atomic_state; nvidia-all's patch
-  # applies cleanly to 595.71.05. Inert on older kernels.
+  # Linux 7.2 renamed drm_atomic_state; the patch shims the old spelling back in.
+  # Upstream nvidia-all's version also replaced strncpy, but 595.112.07 no longer
+  # contains any, so only the nvidia-drm hunk is kept. Inert on older kernels.
   #   https://github.com/Frogging-Family/nvidia-all/blob/master/nvidia-all-patches/610/kernel-7.2.patch
   kernel7_2Patch =
     lib.optional (lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.2")
