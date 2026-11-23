@@ -62,14 +62,17 @@ let
     # It ships a Dockerfile now, but ours stays: it drops the CUDA
     # forward-compatibility libraries that break CUDA on GeForce cards and
     # keeps `bin/basalt` as the entrypoint the services' argv assumes.
+    #
+    # 0.5.6 batches a model's parallel slots through one pass over the
+    # weights (Flash-Next included), which the multi-slot profiles below use.
     basalt = mkSourceImage {
       name = "basalt";
       src = pkgs.runCommand "basalt-context" {
         src = pkgs.fetchFromGitHub {
           owner = "jesdga95";
           repo = "basalt";
-          rev = "ff0b978d2ee9ff195d113b6feb80961b2d2f99ef";
-          hash = "sha256-kxj1d8LjQ3y2zUzI37IJgM0khGkL6XzKxnamkr6So6w=";
+          rev = "1e205ae87cc8e3c04e96db40fd505a75f44685ec";
+          hash = "sha256-i1ouTY9AHAGuSi8E/ctWAKY7avUCYHGxE+m7Q31ftYw=";
         };
       } ''
         cp -r $src $out
@@ -253,6 +256,34 @@ let
         max_output_tokens = 32768;
       };
     }
+    # Swift 1.5 Flash-Next is UkisAI's reasoning-efficiency fine-tune of the
+    # base model. The IQ3_S pack carries the same 46.84 GiB of routed experts
+    # as the base pack, so the same 26 GiB reservation holds it; the 26.82 GiB
+    # n-gram table stays on disk. Three 96K lanes trade the base profiles' six
+    # and eight short slots for long agent sessions: the 294912-token pool
+    # costs about 311 MB of int8 KV, and 0.5.6 decodes the three slots
+    # together. Batch windows only read int8 K/V, so k8v4 is not an option
+    # with three slots. The pack is knoopx/Swift-1.5-FN-GSQ-RCO-IQ3_S-Basalt:
+    # `hf download knoopx/Swift-1.5-FN-GSQ-RCO-IQ3_S-Basalt --local-dir ~/ai/basalt`.
+    # The HF copy is `.basalt` v1; v0.5.6 reads v2 only, so convert it once with
+    # `tools/migrations/basalt_v1_to_v2.py` (as the base pack already was).
+    {
+      kind = "basalt";
+      name = "swift-1.5-flash-next-iq3s-basalt-96k-3way";
+      upstreamModel = "swift-1.5-flash-next-iq3s";
+      pack = "Swift-1.5-FN-GSQ-RCO-IQ3_S.basalt";
+      vramGb = 26;
+      perGpuMib = 26500;
+      maxContext = 98304;
+      parallel = 3;
+      vramReserveMib = 1800;
+      description = "Swift 1.5 Flash-Next GSQ-RCO IQ3_S served by Basalt (98304 ctx x3 slots, int8, text-only).";
+      client = {
+        class = "medium";
+        reasoning = { type = "thinking"; };
+        max_output_tokens = 32768;
+      };
+    }
     # Inkling 2 Mini (24 physical layers, 48 visits a token, 128 experts
     # top-8). The 19.7 GB pack puts about 16.3 GiB of weights and the DSpark
     # drafter on the card, with the token embedding in page-locked RAM. At
@@ -361,6 +392,11 @@ let
         };
         # `basalt serve` takes the server's options and passes every other
         # flag through to the engine.
+        #
+        # Basalt refuses a /v1 request from another page's origin unless the
+        # Host or origin is allowed. ananke's UI runs on the management port
+        # and the service itself binds loopback, so without these the panel
+        # works locally but answers 403 from another machine.
         basalt = port: m: anankeLib.mkContainerCommandService {
           inherit (m) name vramGb perGpuMib description upstreamModel;
           inherit port;
@@ -375,6 +411,8 @@ let
             "--kv" = m.kv or "int8";
             "--vision" = m.vision or false;
             "--vram-reserve-mib" = m.vramReserveMib;
+            "--allowed-host" = config.networking.hostName;
+            "--cors-origin" = "http://${config.networking.hostName}:${toString anankeLib.ports.management}";
           };
           network = "host";
           mounts = [ (roMount "${home}/ai/basalt" basaltIn) ];
