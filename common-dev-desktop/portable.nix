@@ -2,7 +2,7 @@
 # session itself (compositor, panels, portals, helpers) stays in configuration.nix.
 { lib, pkgs, ... }:
 let
-  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=1de93f357cd5372fdc196eecc4209ab34ed5af8c").packages.${pkgs.stdenv.hostPlatform.system}.default;
+  blackbird = (builtins.getFlake "git+https://github.com/philpax/blackbird?rev=8a0032a112ffc6a6faa8e92dac90c7567f60ff2d").packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   # vesktop's nixpkgs recipe still pins pnpm 10.29.2 (build-time only).
