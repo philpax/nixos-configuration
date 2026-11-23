@@ -137,6 +137,18 @@ let
 
   ninferContext = 45056;
   ninferConcurrency = 7;
+  # Inkling 2 Mini's per-lane ceiling with seven lanes on a 24 GiB 3090,
+  # measured on 2026-11-23 against release 2026-11-23.7 (c3e6ea1):
+  # 80,896 starts at runtime 7.94 GiB with 251 MiB free; seven concurrent
+  # 128-token requests decode at 25.1 tok/s each (172.4 aggregate). The
+  # eight-lane profile caps at 65,472 and decodes 23.2 each (181.1), so
+  # this trades two sessions and 4.8% aggregate for 23.6% more context.
+  # 81,120 starts but is a fragile page-group edge (81,088 fails). The
+  # family keeps its own per-sequence cache, so `--kv-capacity` is not
+  # used; `--max-context` is the per-lane ceiling. `--no-prefix-reuse`
+  # reaches 90,112, but every turn would re-prefill the whole prompt.
+  inklingContext = 80896;
+  inklingConcurrency = 7;
   ninferImage = mkPulledImage {
     name = "ninfer-all";
     ref = ninferAll.images.cuda12_9.ref;
@@ -768,7 +780,18 @@ let
       kind = "ninfer";
       name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu0";
       gpuIndex = 0;
+      description = "Swift 1.5 Qwen3.8 27B IQ3_S, seven 45K lanes on GPU 0.";
+      upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+      artifact = "swift15_iq3s_mtp.ninfer";
+      vramGb = 23;
+      perGpuMib = 23000;
       maxContext = ninferContext;
+      kvCapacity = ninferContext * ninferConcurrency;
+      maxConcurrency = ninferConcurrency;
+      kvDtype = "rk8v4";
+      gdnStateFp16 = true;
+      spec = "mtp";
+      draftTokens = 3;
       vision = false;
       client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
     }
@@ -776,7 +799,63 @@ let
       kind = "ninfer";
       name = "swift-1.5-qwen3.8-27b-iq3s-ninfer-45k-7way-gpu1";
       gpuIndex = 1;
+      description = "Swift 1.5 Qwen3.8 27B IQ3_S, seven 45K lanes on GPU 1.";
+      upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
+      artifact = "swift15_iq3s_mtp.ninfer";
+      vramGb = 23;
+      perGpuMib = 23000;
       maxContext = ninferContext;
+      kvCapacity = ninferContext * ninferConcurrency;
+      maxConcurrency = ninferConcurrency;
+      kvDtype = "rk8v4";
+      gdnStateFp16 = true;
+      spec = "mtp";
+      draftTokens = 3;
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
+    # Inkling 2 Mini (26.4B-A3.4B, 24 layers run as 48 visits) at UD-IQ4_XS.
+    # The artifact keeps 14.6 GiB of weights on the card; rk4v4 stores a
+    # token's full attention K/V in 8.75 KiB, and the sliding visits' rings
+    # stay F16 at 224 MiB a sequence. `--spec none`: DSpark only drafts one
+    # request at a time, so batch work runs without it. One lane set per GPU
+    # because the engine caps a server at eight concurrent sequences; seven
+    # is the context/speed point measured below. This
+    # family allocates its own cache per sequence, so `kvCapacity = null`
+    # leaves `--kv-capacity` off; `maxContext` is the per-lane ceiling.
+    {
+      kind = "ninfer";
+      name = "inkling-2-mini-iq4xs-ninfer-${toString (builtins.div (inklingContext + 1023) 1024)}k-7way-gpu0";
+      gpuIndex = 0;
+      description = "Inkling 2 Mini (UD-IQ4_XS) served by ninfer-all (${toString inklingContext} ctx x7 lanes, rk4v4, text-only). GPU 0.";
+      upstreamModel = ninferAll.inkling2Mini.modelId;
+      modelId = ninferAll.inkling2Mini.modelId;
+      artifact = ninferAll.inkling2Mini.artifact;
+      vramGb = 23;
+      perGpuMib = 24000;
+      maxContext = inklingContext;
+      kvCapacity = null;
+      maxConcurrency = inklingConcurrency;
+      kvDtype = "rk4v4";
+      spec = "none";
+      vision = false;
+      client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
+    }
+    {
+      kind = "ninfer";
+      name = "inkling-2-mini-iq4xs-ninfer-${toString (builtins.div (inklingContext + 1023) 1024)}k-7way-gpu1";
+      gpuIndex = 1;
+      description = "Inkling 2 Mini (UD-IQ4_XS) served by ninfer-all (${toString inklingContext} ctx x7 lanes, rk4v4, text-only). GPU 1.";
+      upstreamModel = ninferAll.inkling2Mini.modelId;
+      modelId = ninferAll.inkling2Mini.modelId;
+      artifact = ninferAll.inkling2Mini.artifact;
+      vramGb = 23;
+      perGpuMib = 24000;
+      maxContext = inklingContext;
+      kvCapacity = null;
+      maxConcurrency = inklingConcurrency;
+      kvDtype = "rk4v4";
+      spec = "none";
       vision = false;
       client = { class = "medium"; reasoning = { type = "thinking"; }; max_output_tokens = 32768; };
     }
@@ -855,26 +934,25 @@ let
         openai_proxy.upstream_model = "deepseek-v41-flash-1017-xq-v4";
       };
       builders.ninfer = port: m: anankeLib.mkContainerCommandService {
-        inherit (m) name;
+        inherit (m) name description upstreamModel vramGb perGpuMib;
         inherit port;
         image = ninferImage.tag;
-        description = "Swift 1.5 Qwen3.8 27B IQ3_S, seven 45K lanes on GPU ${toString m.gpuIndex}.";
-        upstreamModel = "swift-1.5-qwen3.8-27b-gsq-rco-iq3s";
-        vramGb = 23;
-        perGpuMib = 23000;
         gpuIndices = [ m.gpuIndex ];
-        command = [ "serve" "/artifacts/swift15_iq3s_mtp.ninfer" ] ++ flagArgs {
+        command = [ "serve" "/artifacts/${m.artifact}" ] ++ flagArgs ({
           "--host" = "\${listen_host}";
           "--port" = "\${listen_port}";
           "--max-context" = m.maxContext;
-          "--kv-capacity" = ninferContext * ninferConcurrency;
-          "--max-concurrency" = ninferConcurrency;
-          "--kv-dtype" = "rk8v4";
-          "--gdn-state-fp16" = true;
-          "--spec" = "mtp";
-          "--draft-tokens" = 3;
+          "--kv-capacity" = m.kvCapacity or (m.maxContext * (m.maxConcurrency or 1));
+          "--max-concurrency" = m.maxConcurrency or 1;
+          "--kv-dtype" = m.kvDtype or "rk8v4";
+          "--model-id" = m.modelId or null;
+          "--vision" = m.vision or false;
+          "--spec" = m.spec or "mtp";
+          "--gdn-state-fp16" = m.gdnStateFp16 or false;
+        } // lib.optionalAttrs ((m.spec or "mtp") != "none") {
+          "--draft-tokens" = m.draftTokens or 3;
           "--lm-head-draft" = true;
-        };
+        });
         network = "host";
         mounts = [ (anankeLib.roMount "${folders.ai.base}/ninfer-all-data" "/artifacts") ];
       };

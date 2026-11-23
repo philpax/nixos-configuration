@@ -165,3 +165,19 @@ context_window = 45056
 max_output_tokens = 32768
 supports_thinking = true
 supports_vision = false
+
+[[ananke-redline.models]]
+id = "inkling-2-mini-iq4xs-ninfer-79k-7way-gpu0"
+tier = "medium"
+context_window = 80896
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
+
+[[ananke-redline.models]]
+id = "inkling-2-mini-iq4xs-ninfer-79k-7way-gpu1"
+tier = "medium"
+context_window = 80896
+max_output_tokens = 32768
+supports_thinking = true
+supports_vision = false
