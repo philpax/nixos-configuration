@@ -1,4 +1,10 @@
 { pkgs }:
+let
+  # Built from upstream's flake, tracking `mistress` HEAD; bump `rev` to update.
+  makima = (builtins.getFlake
+    "git+https://github.com/lun-4/makima?rev=1c412946ee1aa0aef1d2692f0c6ca4ecf5685efe")
+    .packages.${pkgs.stdenv.hostPlatform.system}.default;
+in
 with pkgs; [
   # Programming languages and build tools
   rustup
@@ -20,6 +26,7 @@ with pkgs; [
   cmake
   gh
   (pkgs.callPackage ./ttt.nix { })
+  makima
 
   # Build dependencies and toolchain
   openssl
