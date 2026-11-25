@@ -34,7 +34,7 @@ description: Apply whenever staging or committing git work. Propose and get per-
 
 6. **Get per-batch consent.** Unless scoped autocommit authorisation applies, wait for the user to approve a specific commit before committing it. If the user approves only part of the plan, commit only that part. Approval of commit N is not approval of commit N+1 unless the user explicitly approved both.
 
-7. **Commit.** Run `git commit` with the approved message, or a message prepared under scoped autocommit authorisation. Include the required body in either case. Show the resulting commit (`git show --stat HEAD` or similar).
+7. **Commit.** Run `git commit` with the approved message, or a message prepared under scoped autocommit authorisation. Include the required body and the attribution trailer in either case. Show the resulting commit (`git show --stat HEAD` or similar).
 
 8. **Repeat for the next batch.** Return to step 1 for the remaining changes. Re-check whether consent or autocommit authorisation covers the next batch.
 
@@ -100,6 +100,8 @@ Follow the repo's existing convention (check `git log --oneline`). Default to a 
 
 Write the body in the register the `plain-technical-prose` skill defines: short declarative sentences, third person, no bold or emphasis constructions. A commit message states what changed and why it changed, without selling the change.
 
+**Attribution trailer:** Every commit ends with `Model: <model-name>` on its own line, after any `Closes #NN`, as the `ai-attribution` skill defines. It is not a body paragraph, and does not count toward the two to three paragraph body.
+
 **Closing issues:** When a commit resolves an issue, put `Closes #N` in the commit **body** (the description), never in the summary heading. The heading should describe the change itself, not the issue-closure bookkeeping. For example:
 
 ```
@@ -110,6 +112,7 @@ The expiry check now compares against the correct bound. Tokens remain valid unt
 The previous bound caused premature refresh under load. The corrected comparison avoids unnecessary refresh requests.
 
 Closes #142
+Model: <model-name>
 ```
 
 ## Don't

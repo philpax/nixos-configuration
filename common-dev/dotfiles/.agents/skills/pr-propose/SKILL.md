@@ -54,9 +54,13 @@ How the change was verified. State "Not tested" when it was not, and "Needs test
 Caveats, follow-up work, breaking changes, and screenshots. Omit the section when there is nothing to note.
 
 Closes #NN
+
+---
+
+_Created by `<model>`._
 ```
 
-The block above is the final format: each paragraph is a single source line, and a newline ends a paragraph. `Closes #NN` is the final line of the description when the PR closes an issue, and is omitted when it closes none. Write the placeholder as "Closes #NN" with the real number, or omit the line entirely.
+The block above is the final format: each paragraph is a single source line, and a newline ends a paragraph. `Closes #NN` is the last content line of the description when the PR closes an issue, and is omitted when it closes none. Write the placeholder as "Closes #NN" with the real number, or omit the line entirely. The `ai-attribution` footer is always last.
 
 ## Creating the PR
 

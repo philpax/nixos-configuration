@@ -23,7 +23,7 @@ description: Use when drafting or creating GitHub issues. Triggers on phrases li
 
    Do not ask all of these mechanically. Ask only about what the user's description and the codebase context do not already answer. Batch the questions in a single `ask_user_question` tool call (up to four questions) so the user can answer them at once. Each question supports free-text answers, so do not add a separate "other" option.
 
-3. **Draft the issue.** Write the issue body following the structure below, then show it to the user for review. Do not create the issue until the user explicitly approves. Iterate on the draft until the user gives affirmative consent before proceeding to creation.
+3. **Draft the issue.** Write the issue body following the structure below, then append the attribution footer the `ai-attribution` skill defines, then show it to the user for review. Do not create the issue until the user explicitly approves. Iterate on the draft until the user gives affirmative consent before proceeding to creation.
 
    A correction or follow-up (answering an open question, asking for a wording change, pointing out a missing detail) is feedback on the draft, not consent to create it. Apply the feedback, re-show the updated draft, and wait for an explicit go-ahead (e.g. "looks good", "ship it", "go ahead and create it") before moving to creation. Do not infer approval from the user merely responding to the draft.
 
@@ -79,6 +79,16 @@ The work, stated as behaviour rather than as a task list. Where an alternative w
 ## Done when
 
 One sentence, checkable by someone other than the author, naming the form of verification: a test, a measurement, a recorded decision.
+```
+
+## Attribution footer
+
+End the body with the footer the `ai-attribution` skill defines:
+
+```
+---
+
+_Created by `<model>`._
 ```
 
 ## Guidelines

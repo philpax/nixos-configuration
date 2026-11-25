@@ -21,7 +21,7 @@ Use the `github-issue` skill instead when permalinks, commit references, detaile
 
 2. **Ask for clarification.** If a gap would make the issue ambiguous, ask the user to fill it in using `ask_user_question`. Keep it light: batch the questions in a single call, ask only what is genuinely needed, and skip the questionnaire entirely if the description is already clear enough to act on later. Each question supports free-text answers, so do not add a separate "other" option.
 
-3. **Write the issue.** Draft a title and body from the user's description plus any clarification they provided. Follow the `github-issue-prose-style` skill for the register, the title, and the reader it is written for. Speed is the point here, and the plain register is the faster one to write.
+3. **Write the issue.** Draft a title and body from the user's description plus any clarification they provided. Follow the `github-issue-prose-style` skill for the register, the title, and the reader it is written for. End the body with the attribution footer the `ai-attribution` skill defines. Speed is the point here, and the plain register is the faster one to write.
 
 4. **Show the draft.** Present the title and body to the user for a quick review.
 
@@ -50,6 +50,14 @@ Any context the user provided — file paths, error messages, when it started, w
 Keep the title to a single clause. A defect names the component and the symptom; work names the change as a verb phrase rather than the end state it produces.
 
 A short issue still has to be actionable later by someone holding part of the context, so a term the description depends on is defined even in two sentences.
+
+End the body with the footer the `ai-attribution` skill defines:
+
+```
+---
+
+_Created by `<model>`._
+```
 
 ## Creating the issue
 
