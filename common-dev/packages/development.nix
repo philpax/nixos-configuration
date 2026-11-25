@@ -2,7 +2,7 @@
 let
   # Built from upstream's flake, tracking `mistress` HEAD; bump `rev` to update.
   makima = (builtins.getFlake
-    "git+https://github.com/lun-4/makima?rev=1c412946ee1aa0aef1d2692f0c6ca4ecf5685efe")
+    "git+https://github.com/lun-4/makima?rev=1c018ff3f42bdafeab86c6fb1b4bdda01257763f")
     .packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 with pkgs; [
