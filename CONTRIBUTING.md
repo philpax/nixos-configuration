@@ -20,7 +20,7 @@ The device needs a one-time `sudo frame/bootstrap.sh install` first. See [frame/
 
 `--dry-run` is read-only. Sync preserves unowned or modified objects and removes stale links only when they still match recorded ownership. `--force` backs up non-directory conflicts; directories are never recursively replaced. `--init-state` applies only to NixOS targets. Unresolved conflicts return a nonzero status.
 
-`./deploy.sh [host...]` deploys every machine in sequence: it pulls `main` over SSH, syncs, and rebuilds, with the local machine last. It asks for the shared sudo password once and types it into sudo prompts, and auto-confirms sync unless `--confirm-sync` is given. Unreachable machines are skipped and reported as offline in the summary; any other failed step offers retry, a shell on the host, a forced sync, continue, skip host, or quit. `--build` builds instead of switching, but sync still applies. `--channel nixos-YY.MM` points root's `nixos` channel on every NixOS machine at that channel and updates it before rebuilding; Frame keeps its pin. Without it, machines keep their channels, which `system.autoUpgrade` updates nightly. Host users and rebuild commands live in `HOSTS` in `deploy.py`.
+`./deploy.sh [host...]` deploys every machine in sequence: it pulls `main` over SSH, syncs, and rebuilds, with the local machine last. It asks for the shared sudo password once and types it into sudo prompts, and auto-confirms sync unless `--confirm-sync` is given. Unreachable machines are skipped and reported as offline in the summary; any other failed step offers retry, a shell on the host, a forced sync, continue, skip host, or quit. `--build` builds instead of switching, but sync still applies. `--channel nixos-YY.MM` points root's `nixos` channel on every machine at that channel and updates it before rebuilding; on Frame it also sets the `system-manager` channel to the matching branch. Without it, machines keep their channels, which `system.autoUpgrade` and Frame's `frame-upgrade` timer update nightly. Host users and rebuild commands live in `HOSTS` in `deploy.py`.
 
 Machines last synced before the target-first migration need [MIGRATION.md](MIGRATION.md).
 
@@ -44,7 +44,7 @@ Machine-specific configuration lives in `jinroh/`, `paprika/`, `patlabor/`, `min
 
 Modules must use `config.mainUser` and `config.users.users.${config.mainUser}.home` rather than hardcoded user names or home paths.
 
-`programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files, so they hold NixOS-only modules. Shared package functions belong in `packages/`. Overlays every machine applies are listed in `common-all/overlays/default.nix`. NixOS supplies its existing `pkgs`; Frame pins nixpkgs and system-manager in `frame/nixpkgs.json` and `frame/system-manager.json`.
+`programs/default.nix` and `services/default.nix` auto-import their directory's `.nix` files, so they hold NixOS-only modules. Shared package functions belong in `packages/`. Overlays every machine applies are listed in `common-all/overlays/default.nix`. NixOS supplies its existing `pkgs`; Frame builds against root's `nixos` and `system-manager` channels, set to the same release.
 
 Syncthing membership is declared in `common-all/syncthing-topology.nix`. Machines select `philpax.syncthing.device` and supply their folder paths; Frame runs the same NixOS module through system-manager. A null device ID marks an unprovisioned peer, excluded until the generated ID is recorded.
 
@@ -80,7 +80,7 @@ uv run ruff format --check
 uv run pytest -v
 ```
 
-Use `uv run ruff format` to format changes. CI runs lint and tests, and evaluates Frame's configuration on arm64 with `nix-instantiate frame`. Do not stage, commit, or deploy without operator consent.
+Use `uv run ruff format` to format changes. CI runs lint and tests, and evaluates Frame's configuration on arm64 with `nix-instantiate frame` against the release named in `.github/workflows/ci.yml`; update it when switching channels. Do not stage, commit, or deploy without operator consent.
 
 `uv run update-ai.py` regenerates provider configs from the Ananke definitions in `mindgame/services/ananke.nix` and `redline/ai/ananke.nix`. Run it before syncing model changes; `--check` detects drift.
 

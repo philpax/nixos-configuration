@@ -8,11 +8,15 @@ From a checkout with submodules initialised:
 
 ```bash
 sudo frame/bootstrap.sh install
+nix_channel=/nix/var/nix/profiles/default/bin/nix-channel
+sudo $nix_channel --add https://nixos.org/channels/nixos-26.05 nixos
+sudo $nix_channel --add https://github.com/numtide/system-manager/archive/release-26.05.tar.gz system-manager
+sudo $nix_channel --update
 ./sync.sh frame
 frame/rebuild.sh switch
 ```
 
-Bootstrap is idempotent. It keeps the store and profiles in `/home/nix`, mounted at `/nix`. `sync.json` selects the dotfile layers and excludes settings that would interfere with SteamOS. `nixpkgs.json` and `system-manager.json` pin the sources; system-manager's branch must match the nixpkgs release.
+Bootstrap is idempotent. It keeps the store and profiles in `/home/nix`, mounted at `/nix`. `sync.json` selects the dotfile layers and excludes settings that would interfere with SteamOS. nixpkgs and system-manager come from root's `nixos` and `system-manager` channels, which track the same release as the NixOS machines. system-manager's `release-YY.MM` branch must match `nixos-YY.MM`, and `main` matches `nixos-unstable`. `rebuild.sh` refuses to build until both channels exist. `./deploy.sh --channel nixos-YY.MM` switches both along with the other machines. A nightly `frame-upgrade` timer updates the channels and switches, as `system.autoUpgrade` does on NixOS.
 
 For later changes, run sync and rebuild again. `frame/rebuild.sh build` builds without activation. `frame/bootstrap.sh check` diagnoses bootstrap problems; rerunning `install` repairs them.
 

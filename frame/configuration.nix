@@ -61,6 +61,25 @@ in
     '';
   };
 
+  # Nightly upgrade, matching system.autoUpgrade on the NixOS machines: update
+  # root's channels, then rebuild from the checkout. system-manager's own
+  # system.autoUpgrade only supports flakes.
+  systemd.services.frame-upgrade = {
+    description = "Update channels and switch Frame's system-manager configuration";
+    restartIfChanged = false;
+    unitConfig.X-StopOnRemoval = false;
+    serviceConfig.Type = "oneshot";
+    script = ''
+      export PATH=/nix/var/nix/profiles/default/bin:/usr/bin:$PATH
+      nix-channel --update nixos system-manager
+      ${config.users.users.${config.mainUser}.home}/nixos-configuration/frame/rebuild.sh switch
+    '';
+    startAt = "04:40";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+  };
+  systemd.timers.frame-upgrade.timerConfig.Persistent = true;
+
   # The SteamOS kernel lacks hidp and hid_magicmouse, so the Magic Trackpad 2
   # needs this userspace driver; pairing is in its README.
   systemd.user.services.mt2-driver = {

@@ -163,11 +163,36 @@ def test_channel_runs_before_rebuild_only_when_requested():
     assert "channel" not in [c[1] for c in calls]
 
 
-def test_frame_keeps_its_pin_when_switching_channels():
-    session, calls, _ = make_session([Outcome(True)] * 4, [], channel="nixos-26.11")
+def test_frame_channel_step_sets_matching_system_manager_branch():
+    command = deploy.step_command(FRAME, "channel", action="switch", channel="nixos-26.05")
+    nix_channel = f"sudo {deploy.FRAME_NIX_CHANNEL}"
+    assert command == (
+        f"{nix_channel} --add https://nixos.org/channels/nixos-26.05 nixos"
+        f" && {nix_channel} --add"
+        " https://github.com/numtide/system-manager/archive/release-26.05.tar.gz system-manager"
+        f" && {nix_channel} --update nixos system-manager"
+    )
+    session, calls, _ = make_session([Outcome(True)] * 5, [], channel="nixos-26.05")
     deploy.deploy_host(session, FRAME)
-    assert "channel" not in [c[1] for c in calls]
-    assert session.results["frame"]["channel"] == deploy.PINNED
+    assert [c[1] for c in calls] == ["connect", "pull", "sync", "channel", "rebuild"]
+
+
+@pytest.mark.parametrize(
+    ("channel", "branch"),
+    [
+        ("nixos-26.05", "release-26.05"),
+        ("nixos-26.05-small", "release-26.05"),
+        ("nixos-unstable", "main"),
+        ("nixos-unstable-small", "main"),
+    ],
+)
+def test_system_manager_branch_follows_nixos_release(channel, branch):
+    assert deploy.system_manager_url(channel).endswith(f"/{branch}.tar.gz")
+
+
+def test_channels_without_a_system_manager_branch_are_refused():
+    with pytest.raises(ValueError):
+        deploy.system_manager_url("nixos-weird")
 
 
 def test_channel_cannot_be_combined_with_build():

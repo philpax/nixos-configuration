@@ -8,8 +8,9 @@ directly, and Ctrl-] detaches from a stuck step. Unreachable hosts are skipped
 and reported as offline; any other failed step offers a menu to retry, open a
 shell on the host, force the sync, continue, skip the host, or quit.
 
---channel switches root's nixos channel on NixOS machines before rebuilding;
-Frame builds against its own nixpkgs pin.
+--channel points root's nixos channel at the named channel and updates it
+before rebuilding. Frame also gets the matching system-manager branch as its
+system-manager channel.
 """
 
 from __future__ import annotations
@@ -55,16 +56,33 @@ HOSTS = (
 )
 STEPS = ("connect", "pull", "sync", "channel", "rebuild")
 OFFLINE = "offline"
-PINNED = "pinned"
-SUCCESS_STATES = {"ok", "forced", OFFLINE, PINNED}
+SUCCESS_STATES = {"ok", "forced", OFFLINE}
 CHANNEL_RE = re.compile(r"nixos-[a-z0-9][a-z0-9.-]*")
 CHANNEL_BASE = "https://nixos.org/channels/"
+SYSTEM_MANAGER_BASE = "https://github.com/numtide/system-manager/archive/"
+# bootstrap.sh installs Nix here, outside sudo's PATH on SteamOS.
+FRAME_NIX_CHANNEL = "/nix/var/nix/profiles/default/bin/nix-channel"
 
 
 def channel_url(channel: str) -> str:
     if not CHANNEL_RE.fullmatch(channel):
         raise ValueError(f"Not a NixOS channel name: {channel!r}")
     return CHANNEL_BASE + channel
+
+
+def system_manager_url(channel: str) -> str:
+    """Map a NixOS channel to system-manager's branch for the same release.
+
+    system-manager's main branch tracks nixos-unstable, and each release-YY.MM
+    branch tracks nixos-YY.MM.
+    """
+    if match := re.fullmatch(r"nixos-(\d\d\.\d\d)(-small)?", channel):
+        branch = f"release-{match.group(1)}"
+    elif re.fullmatch(r"nixos-unstable(-small)?", channel):
+        branch = "main"
+    else:
+        raise ValueError(f"No system-manager branch corresponds to {channel!r}")
+    return f"{SYSTEM_MANAGER_BASE}{branch}.tar.gz"
 
 
 def step_command(
@@ -80,9 +98,16 @@ def step_command(
     if step == "channel":
         if channel is None:
             raise ValueError("The channel step needs a channel")
+        if not host.frame:
+            return (
+                f"sudo nix-channel --add {channel_url(channel)} nixos"
+                " && sudo nix-channel --update nixos"
+            )
+        nix_channel = f"sudo {FRAME_NIX_CHANNEL}"
         return (
-            f"sudo nix-channel --add {channel_url(channel)} nixos"
-            " && sudo nix-channel --update nixos"
+            f"{nix_channel} --add {channel_url(channel)} nixos"
+            f" && {nix_channel} --add {system_manager_url(channel)} system-manager"
+            f" && {nix_channel} --update nixos system-manager"
         )
     if step == "rebuild":
         if host.frame:
@@ -270,11 +295,6 @@ def deploy_host(session: Session, host: Host) -> None:
     index, force = 0, False
     while index < len(steps):
         step = steps[index]
-        if step == "channel" and host.frame:
-            # Frame builds against frame/nixpkgs.json rather than a channel.
-            results[step] = PINNED
-            index += 1
-            continue
         command = step_command(
             host, step, action=session.action, force=force, channel=session.channel
         )
@@ -348,29 +368,28 @@ def default_choose(prompt: str, options: dict[str, str]) -> str:
             return answer
 
 
-def check_channel(channel: str) -> None:
-    """Fail early on a misspelt or retired channel, before touching any machine."""
+def url_exists(url: str) -> str | None:
+    """Return None if url answers a HEAD request, or the reason it does not."""
     # curl uses the system CA bundle, which uv's standalone Python does not find.
     completed = subprocess.run(
-        [
-            "curl",
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--head",
-            "--location",
-            "--max-time",
-            "15",
-            "--output",
-            "/dev/null",
-            channel_url(channel),
-        ],
+        ["curl", "--fail", "--silent", "--show-error", "--head", "--location"]
+        + ["--max-time", "15", "--output", "/dev/null", url],
         capture_output=True,
         text=True,
     )
-    if completed.returncode:
-        reason = completed.stderr.strip() or f"curl exit {completed.returncode}"
-        raise ValueError(f"{channel} is not a reachable published channel: {reason}")
+    if completed.returncode == 0:
+        return None
+    return completed.stderr.strip() or f"curl exit {completed.returncode}"
+
+
+def check_channel(channel: str) -> None:
+    """Fail early on a misspelt or retired channel, before touching any machine."""
+    for label, url in (
+        (channel, channel_url(channel)),
+        ("system-manager's matching branch", system_manager_url(channel)),
+    ):
+        if reason := url_exists(url):
+            raise ValueError(f"{label} is not available at {url}: {reason}")
 
 
 def ask_password() -> str:
@@ -416,7 +435,7 @@ def print_summary(session: Session, say: Callable[[str], None] = print) -> None:
         for step, state in steps.items():
             if state in {"ok", "forced"}:
                 color = green
-            elif state in {"skipped", PINNED}:
+            elif state == "skipped":
                 color = dim
             else:
                 color = red
@@ -436,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--channel",
         metavar="NAME",
-        help="switch NixOS machines to this channel (e.g. nixos-26.05) and update it first",
+        help="switch every machine to this channel (e.g. nixos-26.05) and update it first",
     )
     args = parser.parse_args(argv)
     if args.channel:
@@ -468,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     print(dim("Order: " + " -> ".join(host.destination for host in hosts)))
     print(dim("Ctrl-] detaches from a running step."))
     if args.channel:
-        print(dim(f"Switching NixOS machines to {args.channel}; Frame stays on its pin."))
+        print(dim(f"Switching every machine to {args.channel}."))
     session = Session(
         action="build" if args.build else "switch",
         channel=args.channel,

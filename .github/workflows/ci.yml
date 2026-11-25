@@ -78,4 +78,8 @@ jobs:
             sandbox = true
             require-sigs = true
       - name: Evaluate Frame's system-manager configuration
-        run: nix-instantiate frame
+        # Keep these in step with the release the machines' channels track.
+        run: >-
+          nix-instantiate frame
+          -I nixos=channel:nixos-26.05
+          -I system-manager=https://github.com/numtide/system-manager/archive/release-26.05.tar.gz

@@ -1,14 +1,9 @@
-# Frame's system-manager configuration, built without flakes. rebuild.sh
-# builds and activates it; see README.md.
+# Frame's system-manager configuration, built without flakes. nixpkgs and
+# system-manager come from root's `nixos` and `system-manager` channels, which
+# track the same release as the NixOS machines. rebuild.sh builds and activates
+# it; see README.md.
+{ nixpkgs ? <nixos>, systemManager ? <system-manager> }:
 let
-  fetchPinned = repo: file:
-    let pin = builtins.fromJSON (builtins.readFile file); in
-    builtins.fetchTarball {
-      url = "https://github.com/${repo}/archive/${pin.rev}.tar.gz";
-      inherit (pin) sha256;
-    };
-  nixpkgs = fetchPinned "NixOS/nixpkgs" ./nixpkgs.json;
-  systemManager = fetchPinned "numtide/system-manager" ./system-manager.json;
   pkgs = import nixpkgs { system = "aarch64-linux"; };
 in
 (import "${systemManager}/nix/lib.nix" {

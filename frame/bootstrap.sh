@@ -270,7 +270,7 @@ cmd_install() {
     systemctl stop nix-daemon.service nix-daemon.socket
     systemctl start nix-daemon.socket
 
-    log "installed; next: frame/rebuild.sh switch"
+    log "installed; next: add the nixos and system-manager channels (see README.md), then frame/rebuild.sh switch"
     cmd_check
 }
 
