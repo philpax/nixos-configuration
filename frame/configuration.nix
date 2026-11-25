@@ -3,7 +3,7 @@
 { config, pkgs, ... }:
 
 let
-  cursorPython = pkgs.python3.withPackages (python: [ python.python-xlib ]);
+  cursorPython = pkgs.python3.withPackages (python: [ (python.python-xlib or python.xlib) ]);
   gamescopeScroll = pkgs.writeShellScriptBin "gamescope" ''
     exec /usr/bin/gamescope --vr-scroll-speed 0.25 "$@"
   '';

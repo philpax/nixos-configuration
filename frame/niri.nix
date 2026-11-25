@@ -1,7 +1,7 @@
 # A nested desktop application, not a replacement for SteamOS's compositor.
 { config, lib, pkgs, ... }:
 let
-  python = pkgs.python3.withPackages (python: [ python.python-xlib ]);
+  python = pkgs.python3.withPackages (python: [ (python.python-xlib or python.xlib) ]);
   quickshell = builtins.head (builtins.filter
     (package: (package.pname or "") == "quickshell") config.environment.systemPackages);
   tools = with pkgs; [
