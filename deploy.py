@@ -7,6 +7,9 @@ pseudo-terminal passed through to this one: unexpected prompts can be answered
 directly, and Ctrl-] detaches from a stuck step. Unreachable hosts are skipped
 and reported as offline; any other failed step offers a menu to retry, open a
 shell on the host, force the sync, continue, skip the host, or quit.
+
+--channel switches root's nixos channel on NixOS machines before rebuilding;
+Frame builds against its own nixpkgs pin.
 """
 
 from __future__ import annotations
@@ -50,12 +53,23 @@ HOSTS = (
     Host("redline"),
     Host("frame", user="steamos", frame=True),
 )
-STEPS = ("connect", "pull", "sync", "rebuild")
+STEPS = ("connect", "pull", "sync", "channel", "rebuild")
 OFFLINE = "offline"
-SUCCESS_STATES = {"ok", "forced", OFFLINE}
+PINNED = "pinned"
+SUCCESS_STATES = {"ok", "forced", OFFLINE, PINNED}
+CHANNEL_RE = re.compile(r"nixos-[a-z0-9][a-z0-9.-]*")
+CHANNEL_BASE = "https://nixos.org/channels/"
 
 
-def step_command(host: Host, step: str, *, action: str, force: bool = False) -> str:
+def channel_url(channel: str) -> str:
+    if not CHANNEL_RE.fullmatch(channel):
+        raise ValueError(f"Not a NixOS channel name: {channel!r}")
+    return CHANNEL_BASE + channel
+
+
+def step_command(
+    host: Host, step: str, *, action: str, force: bool = False, channel: str | None = None
+) -> str:
     """Return the shell command for a step, run from the host's checkout."""
     if step == "connect":
         return "true"
@@ -63,6 +77,13 @@ def step_command(host: Host, step: str, *, action: str, force: bool = False) -> 
         return "git pull --ff-only"
     if step == "sync":
         return f"./sync.sh {host.name}" + (" --force" if force else "")
+    if step == "channel":
+        if channel is None:
+            raise ValueError("The channel step needs a channel")
+        return (
+            f"sudo nix-channel --add {channel_url(channel)} nixos"
+            " && sudo nix-channel --update nixos"
+        )
     if step == "rebuild":
         if host.frame:
             return f"frame/rebuild.sh {action}"
@@ -209,6 +230,7 @@ class Session:
     open_shell: Callable[[Session, Host], None]
     choose: Callable[[str, dict[str, str]], str]
     ask_password: Callable[[], str]
+    channel: str | None = None
     say: Callable[[str], None] = print
     results: dict[str, dict[str, str]] = field(default_factory=dict)
 
@@ -227,6 +249,7 @@ def menu_for(step: str) -> dict[str, str]:
     keys = {
         "pull": "rscnq",
         "sync": "rsfcnq",
+        "channel": "rscnq",
         "rebuild": "rscnq",
     }[step]
     return {key: MENU[key] for key in keys}
@@ -239,11 +262,22 @@ def deploy_host(session: Session, host: Host) -> None:
     """
     results = session.results.setdefault(host.name, {})
     local = host.name == session.local_name
-    steps = [step for step in STEPS if not (local and step == "connect")]
+    steps = [
+        step
+        for step in STEPS
+        if not (local and step == "connect") and (step != "channel" or session.channel)
+    ]
     index, force = 0, False
     while index < len(steps):
         step = steps[index]
-        command = step_command(host, step, action=session.action, force=force)
+        if step == "channel" and host.frame:
+            # Frame builds against frame/nixpkgs.json rather than a channel.
+            results[step] = PINNED
+            index += 1
+            continue
+        command = step_command(
+            host, step, action=session.action, force=force, channel=session.channel
+        )
         session.say(bold(cyan(f"\n==> {host.destination}: {step}")) + dim(f"  ({command})"))
         outcome = session.run_step(session, host, step, command)
         if outcome.bad_password:
@@ -314,6 +348,31 @@ def default_choose(prompt: str, options: dict[str, str]) -> str:
             return answer
 
 
+def check_channel(channel: str) -> None:
+    """Fail early on a misspelt or retired channel, before touching any machine."""
+    # curl uses the system CA bundle, which uv's standalone Python does not find.
+    completed = subprocess.run(
+        [
+            "curl",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--head",
+            "--location",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            channel_url(channel),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode:
+        reason = completed.stderr.strip() or f"curl exit {completed.returncode}"
+        raise ValueError(f"{channel} is not a reachable published channel: {reason}")
+
+
 def ask_password() -> str:
     return getpass.getpass("Shared sudo password: ")
 
@@ -355,7 +414,12 @@ def print_summary(session: Session, say: Callable[[str], None] = print) -> None:
             continue
         parts = []
         for step, state in steps.items():
-            color = green if state in {"ok", "forced"} else dim if state == "skipped" else red
+            if state in {"ok", "forced"}:
+                color = green
+            elif state in {"skipped", PINNED}:
+                color = dim
+            else:
+                color = red
             parts.append(f"{step} {color(state)}")
         say(f"  {name}: " + ", ".join(parts))
 
@@ -369,7 +433,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--confirm-sync", action="store_true", help="answer each sync confirmation yourself"
     )
+    parser.add_argument(
+        "--channel",
+        metavar="NAME",
+        help="switch NixOS machines to this channel (e.g. nixos-26.05) and update it first",
+    )
     args = parser.parse_args(argv)
+    if args.channel:
+        if args.build:
+            parser.error("--channel persists, so it cannot be combined with --build")
+        try:
+            check_channel(args.channel)
+        except ValueError as exc:
+            parser.error(str(exc))
     local_name = socket.gethostname()
     try:
         hosts = order_hosts(args.hosts, local_name)
@@ -391,8 +467,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print(dim("Order: " + " -> ".join(host.destination for host in hosts)))
     print(dim("Ctrl-] detaches from a running step."))
+    if args.channel:
+        print(dim(f"Switching NixOS machines to {args.channel}; Frame stays on its pin."))
     session = Session(
         action="build" if args.build else "switch",
+        channel=args.channel,
         confirm_sync=args.confirm_sync,
         local_name=local_name,
         password=password,

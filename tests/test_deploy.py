@@ -69,7 +69,7 @@ def test_responder_confirms_sync_only_when_asked():
     assert PromptResponder("pw", auto_confirm=False).feed(prompt) == b""
 
 
-def make_session(outcomes, choices, *, local_name="elsewhere"):
+def make_session(outcomes, choices, *, local_name="elsewhere", channel=None):
     calls, shells = [], []
     outcomes, choices = iter(outcomes), iter(choices)
 
@@ -87,6 +87,7 @@ def make_session(outcomes, choices, *, local_name="elsewhere"):
         choose=lambda prompt, options: next(choices),
         ask_password=lambda: "new",
         say=lambda text: None,
+        channel=channel,
     )
     return session, calls, shells
 
@@ -139,3 +140,36 @@ def test_offline_host_is_skipped_without_asking():
     lines = []
     deploy.print_summary(session, lines.append)
     assert "offline" in lines[-1] and "connect" not in lines[-1]
+
+
+def test_channel_step_switches_and_updates_root_nixos_channel():
+    command = deploy.step_command(REDLINE, "channel", action="switch", channel="nixos-26.11")
+    assert command == (
+        "sudo nix-channel --add https://nixos.org/channels/nixos-26.11 nixos"
+        " && sudo nix-channel --update nixos"
+    )
+    for bad in ("26.11", "nixos-26.11; rm -rf ~", "https://example.com/nixos"):
+        with pytest.raises(ValueError):
+            deploy.channel_url(bad)
+
+
+def test_channel_runs_before_rebuild_only_when_requested():
+    ok = Outcome(True)
+    session, calls, _ = make_session([ok] * 5, [], channel="nixos-26.11")
+    deploy.deploy_host(session, REDLINE)
+    assert [c[1] for c in calls] == ["connect", "pull", "sync", "channel", "rebuild"]
+    session, calls, _ = make_session([ok] * 4, [])
+    deploy.deploy_host(session, REDLINE)
+    assert "channel" not in [c[1] for c in calls]
+
+
+def test_frame_keeps_its_pin_when_switching_channels():
+    session, calls, _ = make_session([Outcome(True)] * 4, [], channel="nixos-26.11")
+    deploy.deploy_host(session, FRAME)
+    assert "channel" not in [c[1] for c in calls]
+    assert session.results["frame"]["channel"] == deploy.PINNED
+
+
+def test_channel_cannot_be_combined_with_build():
+    with pytest.raises(SystemExit):
+        deploy.main(["--build", "--channel", "nixos-26.11"])
