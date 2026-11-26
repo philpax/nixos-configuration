@@ -28,8 +28,12 @@ in
 
   hardware.graphics.enable = true;
 
-  # Desktop Mode in the headset view.
   environment.etc = {
+    # Read by `./deploy.sh --status`, the counterpart of NixOS's
+    # /run/current-system/nixos-version.
+    "frame/nixpkgs-version".text = pkgs.lib.version;
+
+    # Desktop Mode in the headset view.
     # KWin draws the cursor on a hardware plane the headset view does not show.
     "environment.d/90-kwin-software-cursor.conf".text = ''
       KWIN_FORCE_SW_CURSOR=1

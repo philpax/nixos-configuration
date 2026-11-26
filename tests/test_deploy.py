@@ -198,3 +198,43 @@ def test_channels_without_a_system_manager_branch_are_refused():
 def test_channel_cannot_be_combined_with_build():
     with pytest.raises(SystemExit):
         deploy.main(["--build", "--channel", "nixos-26.11"])
+
+
+def test_status_scripts_are_portable_to_fish():
+    for host in HOSTS:
+        script = deploy.status_script(host)
+        assert "\\" not in script
+        assert (deploy.FRAME_VERSION_FILE in script) == host.frame
+
+
+def strip(text):
+    return deploy.re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def test_status_cells_summarise_drift_and_failures():
+    facts = deploy.parse_status(
+        "channel=26.05.2.b\nrunning=26.05.1.a\nswitched=0\nLoadState=loaded\n"
+        "ExecMainStatus=4\nExecMainExitTimestamp=Wed 2026-11-25 04:40:25 CET\n"
+        "failed=a.service,b.service\n"
+    )
+    cells = [strip(cell) for cell in deploy.status_cells(facts)]
+    assert cells[0] == "26.05.2.b"
+    assert cells[1] == "26.05.1.a"
+    assert cells[3] == "exit 4 11-25 04:40"
+    assert cells[4] == "a.service, b.service"
+
+
+def test_status_cells_for_healthy_disabled_and_offline_hosts():
+    healthy = deploy.parse_status("channel=x\nrunning=x\nLoadState=not-found\nfailed=\n")
+    assert [strip(c) for c in deploy.status_cells(healthy)][1:] == [
+        "= channel",
+        "unknown",
+        "disabled",
+        "none",
+    ]
+    assert strip(deploy.status_cells(None)[0]) == "offline"
+
+
+def test_table_aligns_on_visible_width():
+    lines = deploy.render_table([[deploy.green("ok"), "x"], ["longer", "y"]])
+    assert [strip(line) for line in lines] == ["ok      x", "longer  y"]

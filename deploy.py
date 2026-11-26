@@ -24,7 +24,9 @@ import signal
 import socket
 import subprocess
 import sys
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -425,6 +427,124 @@ def local_repo_warnings() -> list[str]:
     return warnings
 
 
+# Written by frame/configuration.nix; a system-manager store path does not
+# reveal which nixpkgs built it.
+FRAME_VERSION_FILE = "/etc/frame/nixpkgs-version"
+
+
+def status_script(host: Host) -> str:
+    """Print key=value facts about a host without needing root or a terminal."""
+    if host.frame:
+        running, profile, upgrade = (
+            FRAME_VERSION_FILE,
+            "/nix/var/nix/profiles/system-manager-profiles/system-manager",
+            "frame-upgrade.service",
+        )
+    else:
+        running, profile, upgrade = (
+            "/run/current-system/nixos-version",
+            "/nix/var/nix/profiles/system",
+            "nixos-upgrade.service",
+        )
+    channel = "/nix/var/nix/profiles/per-user/root/channels/nixos"
+    return "; ".join(
+        [
+            f"echo channel=$(cat {channel}/.version {channel}/.version-suffix 2>/dev/null"
+            " | tr -d '[:space:]')",
+            f"echo running=$(cat {running} 2>/dev/null)",
+            f"echo switched=$(stat -c %Y {profile} 2>/dev/null)",
+            f"systemctl show {upgrade} -p LoadState -p ExecMainStatus -p ExecMainExitTimestamp",
+            "echo failed=$(systemctl --failed --no-legend --plain | cut -d' ' -f1 | paste -sd,)",
+        ]
+    )
+
+
+def parse_status(text: str) -> dict[str, str]:
+    facts = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep:
+            facts[key.strip()] = value.strip()
+    return facts
+
+
+def status_cells(facts: dict[str, str] | None) -> list[str]:
+    """Render one host's facts as table cells; None means unreachable."""
+    if facts is None:
+        return [yellow(OFFLINE), "", "", "", ""]
+    channel = facts.get("channel") or red("none")
+    running = facts.get("running", "")
+    if not running:
+        running_cell = dim("unknown")
+    elif running == facts.get("channel"):
+        running_cell = green("= channel")
+    else:
+        running_cell = yellow(running)
+    switched = facts.get("switched", "")
+    switched_cell = (
+        time.strftime("%Y-%m-%d %H:%M", time.localtime(int(switched)))
+        if switched.isdecimal()
+        else dim("unknown")
+    )
+    if facts.get("LoadState") != "loaded":
+        upgrade_cell = dim("disabled")
+    elif not facts.get("ExecMainExitTimestamp"):
+        upgrade_cell = dim("not run yet")
+    else:
+        # "Wed 2026-11-25 04:40:25 CET" -> "11-25 04:40"
+        parts = facts["ExecMainExitTimestamp"].split()
+        when = f"{parts[1][5:]} {parts[2][:5]}" if len(parts) >= 3 else ""
+        status = facts.get("ExecMainStatus", "")
+        upgrade_cell = green(f"ok {when}") if status == "0" else red(f"exit {status} {when}")
+    failed = facts.get("failed", "")
+    failed_cell = red(failed.replace(",", ", ")) if failed else green("none")
+    return [channel, running_cell, switched_cell, upgrade_cell, failed_cell]
+
+
+def visible_len(text: str) -> int:
+    return len(re.sub(r"\x1b\[[0-9;]*m", "", text))
+
+
+def render_table(rows: list[list[str]]) -> list[str]:
+    widths = [max(visible_len(row[i]) for row in rows) for i in range(len(rows[0]))]
+    return [
+        "  ".join(
+            cell + " " * (width - visible_len(cell)) for cell, width in zip(row, widths)
+        ).rstrip()
+        for row in rows
+    ]
+
+
+def fetch_status(host: Host, local_name: str) -> dict[str, str] | None:
+    local = host.name == local_name
+    if local:
+        argv = ["bash", "-c", status_script(host)]
+    else:
+        argv = command_argv(host, status_script(host), local=False, batch=True)
+        # command_argv changes into the checkout, which status does not need.
+        argv[-1] = f"bash -c {shlex.quote(status_script(host))}"
+    try:
+        completed = subprocess.run(
+            argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if completed.returncode == 255 and not local:
+        return None
+    return parse_status(completed.stdout)
+
+
+def print_status(hosts: list[Host], local_name: str) -> None:
+    with ThreadPoolExecutor(max_workers=len(hosts)) as pool:
+        facts = list(pool.map(lambda host: fetch_status(host, local_name), hosts))
+    header = [
+        bold(text) for text in ("host", "channel", "running", "switched", "upgrade", "failed units")
+    ]
+    rows = [header] + [[host.name, *status_cells(f)] for host, f in zip(hosts, facts)]
+    for line in render_table(rows):
+        print(line)
+
+
 def print_summary(session: Session, say: Callable[[str], None] = print) -> None:
     say(bold("\nSummary"))
     for name, steps in session.results.items():
@@ -457,7 +577,23 @@ def main(argv: list[str] | None = None) -> int:
         metavar="NAME",
         help="switch every machine to this channel (e.g. nixos-26.05) and update it first",
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="show each machine's channel, running version, and health, then exit",
+    )
     args = parser.parse_args(argv)
+    if args.status:
+        if args.build or args.channel or args.confirm_sync:
+            parser.error("--status only reports; it takes no other options")
+        names = set(args.hosts)
+        unknown = names - {host.name for host in HOSTS}
+        if unknown:
+            parser.error(f"Unknown host(s): {', '.join(sorted(unknown))}")
+        print_status(
+            [host for host in HOSTS if not names or host.name in names], socket.gethostname()
+        )
+        return 0
     if args.channel:
         if args.build:
             parser.error("--channel persists, so it cannot be combined with --build")
