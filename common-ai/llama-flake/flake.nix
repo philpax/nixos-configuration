@@ -14,7 +14,7 @@
   # shard registration. Applied inside `mkCuda`, so every capability variant
   # gets it.
   #
-  # patch-verified-rev: 1138b851fae633e9b2e74db0dac3623b7c6fac43
+  # patch-verified-rev: a07831a0081f00077b3cf676514c45e34167126c
   #
   # The line above is the last llama-cpp rev this patch was actually
   # confirmed to apply against — kept separate from `inputs.llama-cpp.url`
@@ -37,7 +37,7 @@
   # strings, so readFile-based interpolation is rejected by nix.)
   description = "Pinned upstream llama.cpp flake, shared across targets";
 
-  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/1138b851fae633e9b2e74db0dac3623b7c6fac43";
+  inputs.llama-cpp.url = "github:ggml-org/llama.cpp/a07831a0081f00077b3cf676514c45e34167126c";
 
   outputs = { llama-cpp, ... }:
     let
@@ -69,17 +69,8 @@
           llamaPackagesCuda = pkgsCuda.callPackage "${llama-cpp}/.devops/nix/scope.nix" {
             llamaVersion = "0.0.0";
           };
-
-          # Upstream's package.nix still asks for cudaPackages.cuda_cccl, which the
-          # pinned nixpkgs has renamed to cccl and kept only as a warning alias.
-          # Resolving it here keeps the eval quiet without touching the pin; the
-          # alias returns the same package, so the derivation is unchanged. Drop
-          # this once a bumped llama.cpp rev uses the new name.
-          cudaPackages = pkgsCuda.cudaPackages // {
-            cuda_cccl = pkgsCuda.cudaPackages.cccl;
-          };
         in
-        (llamaPackagesCuda.llama-cpp.override { inherit cudaPackages; }).overrideAttrs (old: {
+        llamaPackagesCuda.llama-cpp.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [ ./fattn-graph-reuse-fix.patch ];
         });
     in
